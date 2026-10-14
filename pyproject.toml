@@ -1,0 +1,42 @@
+[project]
+name = "ds-capstone"
+version = "0.1.0"
+description = "Data science capstone project"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "joblib",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "seaborn",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel",
+    "nbdime",
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+extend-exclude = [".claude"]
+
+[tool.ruff.lint]
+# E/W: style, F: likely bugs, I: import sorting, UP: modern syntax.
+select = ["E", "W", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebooks import the libraries you are about to use, so "unused import" is noise.
+"*.ipynb" = ["F401", "E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Makes `from src...` work without installing the project as a package.
+pythonpath = ["."]
