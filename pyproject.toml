@@ -3,7 +3,7 @@ name = "ds-capstone"
 version = "0.1.0"
 description = "Data science capstone project"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "joblib",
     "matplotlib",
@@ -12,6 +12,10 @@ dependencies = [
     "scikit-learn",
     "seaborn",
 ]
+
+[project.optional-dependencies]
+# The flashcards viewer: a separately licensed private package, see README "Third-party".
+viewer = ["sputnik"]
 
 [dependency-groups]
 dev = [
@@ -23,6 +27,9 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+sputnik = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git", tag = "v0.1.1" }
 
 [tool.ruff]
 line-length = 100
