@@ -5,6 +5,9 @@ on:
     types:
       - opened
 jobs:
+  track_pr:
+    if: vars.PROJECT_BOARD == 'on'
+    runs-on: ubuntu-latest
   track_issue:
     runs-on: ubuntu-latest
     steps:
