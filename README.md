@@ -143,3 +143,16 @@ what you found.
 - "What even is this tool": [TOOLS.md](TOOLS.md)
 - [scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html) for the modeling
 - [pandas documentation](https://pandas.pydata.org/docs/) for the data wrangling
+
+## Third-party: the flashcards viewer
+
+The optional viewer is **sputnik**, a separate private package by Artjom Adamow. It is not part
+of this repository and has its own license; nothing of its code is copied here. It is installed
+from its own repository, pinned to a release tag in `pyproject.toml`.
+
+You only need it to look at the flashcards. Everything else works without it:
+
+```bash
+uv sync --all-groups                 # the capstone, without the viewer
+uv sync --all-groups --extra viewer  # with the viewer (needs read access to the sputnik repository)
+```
