@@ -54,7 +54,8 @@ pipeline running end to end. Now you know your setup is fine.
 |---|---|
 | `notebooks/` | Your exploration and analysis. `EDA-and-modeling.ipynb` is an empty notebook with the sections already laid out. |
 | `src/` | Python code you want to reuse. See the table below. |
-| `tests/` | Checks that your code in `src/` does what you think. One example is included. |
+| `tests/` | Checks that your code in `src/` does what you think. One example is included. `tests/app/` holds the app's tests. |
+| `app/`, `start.py` | The guided learning app and its launcher. See [the app section](#the-guided-learning-app). |
 | `data/` | Your data files. Git ignores what you put here, so nothing large or private ends up on GitHub. |
 | `models/` | Trained models get saved here. Also ignored by Git. |
 | `images/` | Plots you want to keep, for example for your final presentation. |
@@ -86,6 +87,7 @@ You can use either column. They do exactly the same thing.
 | `make lint` | `uv run ruff check .` | Point out mistakes and messy code |
 | `make format` | `uv run ruff format .` | Tidy up the code formatting automatically |
 | `make clean` | | Delete temporary files |
+| | `uv run start.py` | Start the guided learning app |
 
 `make help` lists them too. `make` is not installed on Windows by default, so if the command is
 not found, just use the full version. It is exactly the same command.
@@ -144,15 +146,38 @@ what you found.
 - [scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html) for the modeling
 - [pandas documentation](https://pandas.pydata.org/docs/) for the data wrangling
 
-## Third-party: the flashcards viewer
+## The guided learning app
 
-The optional viewer is **sputnik**, a separate private package by Artjom Adamow. It is not part
-of this repository and has its own license; nothing of its code is copied here. It is installed
-from its own repository, pinned to a release tag in `pyproject.toml`.
+The app lives in `app/`, with its launcher `start.py` and its tests in `tests/app/`. They are
+developed in a separate workspace and arrive here as a whole with every update (a "train"), so
+don't edit them here: a fix comes with a later train. The course data the app reads
+(`data/topics.json`, `data/course/`, `data/images/`, `data/jupyter/`) comes the same way, and like
+the state it writes to `data/state/` it is ignored by Git.
 
-You only need it to look at the flashcards. Everything else works without it:
+Start it with:
 
 ```bash
-uv sync --all-groups                 # the capstone, without the viewer
+uv run start.py
+```
+
+- **Without the viewer** the standalone page starts: the models on a page of their own, from the
+  decks to their topics to the cards, with the dendrogram of the connections and the difficulty
+  model's metrics.
+- **With the viewer** it asks "Launch Sputnik? (y/n)": `y` (or just Enter) starts sputnik's 3D map
+  with the models behind its Helper button, `n` the standalone page. Delete `data/state/` for a
+  fresh start of the map.
+
+The viewer is an optional extra. You only need it for the map. Everything else works without it:
+
+```bash
+uv sync --all-groups                 # the capstone and the standalone page, without the viewer
 uv sync --all-groups --extra viewer  # with the viewer (needs read access to the sputnik repository)
 ```
+
+Code in `src/` and the notebooks may use `app.models`, `app.course_table` and `app.figures`.
+`app.glue` needs the viewer.
+
+**Licences.** `app/` and `start.py` are Artjom Adamow's code under the MIT licence in
+[LICENSE](LICENSE). The viewer, **sputnik**, is a separate private package by Artjom Adamow with
+its own licence. None of its code is in this repository. It is installed from its own repository,
+pinned to a release tag in `pyproject.toml`.
