@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 protocol_import.md
+# The app train's instructions for this side: rewritten by every train, kept locally only.
 migrate_train.md
 
 # C extensions
