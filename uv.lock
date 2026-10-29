@@ -572,7 +572,7 @@ requires-dist = [
     { name = "pandas" },
     { name = "scikit-learn" },
     { name = "seaborn" },
-    { name = "sputnik", marker = "extra == 'viewer'", git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.2.0" },
+    { name = "sputnik", marker = "extra == 'viewer'", git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.3.0" },
 ]
 provides-extras = ["viewer"]
 
@@ -2239,8 +2239,8 @@ wheels = [
 
 [[package]]
 name = "sputnik"
-version = "0.2.0"
-source = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.2.0#befe1663235562f57a5d6452994381188b82f586" }
+version = "0.3.0"
+source = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.3.0#836530d42ceed04f639deee77c7b108683a95f20" }
 dependencies = [
     { name = "dash" },
     { name = "dash-daq" },
