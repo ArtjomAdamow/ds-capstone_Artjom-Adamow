@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 protocol_import.md
+migrate_train.md
 
 # C extensions
 *.so
