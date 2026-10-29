@@ -1,0 +1,25 @@
+name: Tests
+# Runs on every push to main and on every pull request. The runner has no SSH key, so this also proves
+# that the capstone and the app install without the private sputnik repository (the viewer extra is
+# left out) and that the tests need no course data (data/ is not in the repository).
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0  # no moving major tag; pinned to a release
+        with:
+          enable-cache: true
+      # --locked: fail if uv.lock does not match pyproject.toml. Python comes from .python-version.
+      - name: Install without the viewer
+        run: uv sync --all-groups --locked
+      - name: Tests
+        run: uv run pytest
+      - name: Lint
+        run: uv run ruff check .
+      - name: Formatting
+        run: uv run ruff format --check .
