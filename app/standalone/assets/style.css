@@ -1,7 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 /* The standalone page (app.standalone): the viewer's theme, its tokens written anew here (no file of the
-   viewer is copied). The map on the left, the selected dot's panel or the dendrogram (window A) and D1's metrics
-   (window B) on the right. */
+   viewer is copied). On the left the map, a square of 12.5 % of the window's area (map_side.js sets its side), with
+   C1's readout under it; on the right the selected dot's ids or the dendrogram (window A) and D1's metrics
+   (window B). */
 
 :root {
   --ink: #f7f2e8;
@@ -12,6 +13,7 @@
   --hover: rgba(247, 242, 232, 0.08);
   --line: rgba(247, 242, 232, 0.16);
   --panel-min: 270px;
+  --map-side: 47vmin;  /* until map_side.js sets it: about 12.5 % of a 16:9 window's area */
 }
 
 * { box-sizing: border-box; }
@@ -28,24 +30,26 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .toolbar { padding: 12px 0; }
 .card-count { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.8rem; }
 
-.workspace { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.8fr); gap: 28px; align-items: start; }
+.workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); gap: 28px; align-items: start; }
 .map-column, .side-column { min-width: 0; }
 .side-column { display: flex; flex-direction: column; gap: 18px; }
-.map-frame { position: relative; width: 100%; height: 650px; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
+.map-frame { width: var(--map-side); max-width: 100%; aspect-ratio: 1; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
 #map { width: 100%; height: 100%; }
-.color-legend { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 4px 4px; color: var(--muted); font: 0.78rem 'DM Mono', monospace; }
-.legend-item { display: inline-flex; align-items: center; gap: 7px; }
-.legend-swatch { width: 11px; height: 11px; display: inline-block; border-radius: 50%; }
 
-/* Window A: the selected dot, or the dendrogram */
+/* C1's readout under the map; its table is window A's too (the selected dot's ids) */
+.readout-panel { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); color: var(--muted); font: 0.72rem/1.35 'DM Mono', monospace; }
+.readout-scope { margin: 6px 0 2px; color: var(--ink); }
+.readout-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.readout-table th { padding: 6px 0 1px; text-align: left; color: var(--ink); font-weight: normal; opacity: 0.85; }
+.readout-table td { padding: 0 16px 0 8px; }
+.readout-table .readout-value { padding: 0; text-align: right; color: var(--ink); }
+
+/* Window A: the selected dot's ids, or the dendrogram */
 .card-panel { min-height: var(--panel-min); padding: 30px; border: 1px solid var(--gold); background: rgba(16, 42, 67, 0.72); display: flex; flex-direction: column; justify-content: center; }
 .dot-panel-enter { cursor: pointer; }
 .dot-panel-enter:hover { background: rgba(16, 42, 67, 0.9); }
 .overview-panel { justify-content: flex-start; }
-.card-content { margin: 18px 0; font-size: clamp(1.2rem, 2vw, 1.8rem); line-height: 1.12; }
-.card-content p, .card-answer p { margin: 0; }
-.card-answer { margin: 10px 0 14px; color: var(--ink); font-size: 1rem; line-height: 1.45; }
-.card-level { color: var(--muted); font: 0.78rem 'DM Mono', monospace; }
+.id-table { width: auto; margin: 14px 0; color: var(--muted); font: 0.9rem/1.6 'DM Mono', monospace; }
 .deck-description { margin: 4px 0 8px; color: var(--muted); font-size: 0.95rem; line-height: 1.4; }
 .card-hint, .empty-state { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
 .dendrogram-graph { width: 100%; height: 320px; }
@@ -62,6 +66,5 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
   .app-shell { padding: 22px 16px 28px; }
   .topbar, .toolbar { align-items: flex-start; flex-direction: column; }
   .workspace { grid-template-columns: 1fr; }
-  .map-frame { height: 480px; }
   :root { --panel-min: 220px; }
 }

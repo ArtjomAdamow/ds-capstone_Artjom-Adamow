@@ -25,7 +25,7 @@ class ModeQuestionTest(unittest.TestCase):
                 mode, ask = self.choose(True, answer)
                 self.assertEqual(mode, wanted)
                 ask.assert_called_once_with(launch.LAUNCH_QUESTION)
-        self.assertEqual(launch.LAUNCH_QUESTION, "Launch Sputnik? (y/n): ")
+        self.assertEqual(launch.LAUNCH_QUESTION, "The optional interactive viewer Sputnik is available.\n Launch Sputnik? (y/n): ")
 
     def test_without_input_the_viewer_decides(self):
         self.assertEqual(self.choose(True)[0], launch.FULL)

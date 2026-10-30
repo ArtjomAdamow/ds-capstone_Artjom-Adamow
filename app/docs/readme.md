@@ -1,22 +1,21 @@
-# app: the models and the standalone page
+# app: the guided learning app
 
-The helper's own package, the capstone's main app. This readme covers the part that does not depend on the viewer: the models (`models/`, importing nothing of the flashcards package), the course table they read without the viewer's parser, the standalone page that shows them without the viewer, the launcher's mode question, the capstone's launcher `start.py`, their tests and their offline evaluation. The glue that puts the models behind the Helper button (`glue/`, over the flashcards package's public API) is described with the helper (`modules/helper/readme.md`). The concept, architecture and measured numbers are in `docs/draft/helper/`, what comes next in [roadmap.md](roadmap.md).
+The capstone's main app: the `models/`, the course table they read, the standalone page that shows them, the glue that puts them behind the optional viewer's Sputnik **Helper** button (`glue/`, the only part that imports the viewer), the launcher's mode question, the launcher `start.py` and their tests. What comes next is in [roadmap.md](roadmap.md).
 
-Run the commands below from the root of the main project repository.
+Development arrives in trains: `app/`, `start.py`, `tests/app/` and the course data in `data/` are replaced with each train, so they are never edited here; a fix comes with a later train.
+
+Run the commands below from the capstone's root.
 
 ## Structure
 
 ```text
-modules/helper/
-├── evaluate.py                # offline evaluation script (run in the module env)
-├── export_course.py           # writes the course table with the viewer's parser (this workspace only)
-├── start.py                   # the capstone's launcher, exported to its root next to app/ (below)
+├── start.py                   # the launcher (below)
 ├── app/
 │   ├── cards.py               # the card record the models read (the seven fields of Flashcard as a protocol), the stacks
 │   ├── course_table.py        # the course table: cards.csv, decks.csv, topics.csv, read with the csv module
 │   ├── figures.py             # the plotly figures the page and the glue's card panel share (plotly only)
-│   ├── launch.py              # the launcher's mode question: full (with the viewer) or standalone
-│   ├── models/                # nothing of the project: numpy, scipy, scikit-learn
+│   ├── launch.py              # the mode question: full (with the viewer) or standalone
+│   ├── models/                # nothing of the viewer: numpy, scipy, scikit-learn
 │   │   ├── similar.py              # card text, vectoriser, unit vectors, neighbours, deck vectors
 │   │   ├── topic_model.py          # T1: nearest centroid over the scripted topics (TopicSeed, TopicModel)
 │   │   ├── layout.py               # the layout step: SVD start, force layout on the sphere, measures
@@ -29,9 +28,10 @@ modules/helper/
 │   │   ├── app.py                  # Page (the fitted models, what each view shows), the app and its one callback
 │   │   ├── layout.py               # the map figure and the panels
 │   │   └── assets/style.css        # the viewer's theme tokens, written anew
+│   ├── glue/                  # the models on sputnik's map, over its public API: the Helper button and its dialog
 │   └── docs/                  # this readme, the roadmap, the analysis of the two emptied topics
-├── results/                   # evaluation results (git-ignored: derived course data)
-└── tests/                     # the model tests, the page's and the launchers' tests on model_support.py
+├── tests/app/                 # the model tests, the page's and the launchers' tests on model_support.py
+└── data/                      # git-ignored: topics.json, course/, images/, jupyter/ and the app's state in state/
 ```
 
 ## The models
@@ -42,19 +42,13 @@ modules/helper/
 
 ## The course table
 
-The models' input without the viewer's parser, three CSV files in one folder (`data/course/` here):
+The models' input without the viewer's parser, three CSV files in `data/course/`:
 
 - `cards.csv`: every card the parser keeps, in its order: `comb_id`, the deck's id and name, the scripted topic's id, name and rest flag, the stack, the authored difficulty, the question, the answer and the explanation;
 - `decks.csv`: every deck in deck id order with its description;
 - `topics.csv`: every deck's scripted topics in file order, the empty ones too (T1's seeds hold them, so an emptied topic keeps its dot).
 
-`course_table.load_table(folder)` reads them with the csv module into what the models take: the card records, the deck ids by name, the scripted topics as `TopicSeed`s, and the deck list. The ids agree with the viewer's, since the table is written with its parser:
-
-```bash
-.\modules\helper\.venv\Scripts\python.exe modules/helper/export_course.py [course file] [--out <folder>]
-```
-
-The course file is `data/topics.json` by default, the folder `data/course/`. Export again after the course file changes. The table travels into the capstone's git-ignored `data/` together with the course file, the images and the notebooks, whenever they change (`scripts/migrate_helper.py` of the flashcards workspace, `docs/draft/helper/protocol_export.md`).
+`course_table.load_table(folder)` reads them with the csv module into what the models take: the card records, the deck ids by name, the scripted topics as `TopicSeed`s, and the deck list. The ids agree with the viewer's, since the table is written with its parser from the same course file `data/topics.json`.
 
 ## The standalone page
 
@@ -64,52 +58,37 @@ The models on a page of their own, without the viewer, in its theme. It fits the
 - **Topics view** (Open on a selected deck): the deck's model topics on a ring around the centroid in file order (the model has no topic positions yet); an emptied topic is an open circle.
 - **Cards view** (Open on a selected topic): the topic's cards on the surface of its sphere, connected as far as the preset keeps them (parts of at most four cards), coloured by difficulty: easy blue, medium beige-brown, hard red-orange, predicted and unrated grey.
 - **Moving around:** a click selects a dot, Open (or a click on a selected deck's or topic's panel) enters it, Back goes up a level with the dot it came from selected.
-- **The panels:** on the left the selected dot (a deck's description, a topic's counts, a card's question and answer, a predicted quiz's level) or, with nothing selected, the dendrogram of the view's connections with the preset's cut-off line, its heights the real merge distances; on the right D1's metrics of the view (the course, the deck, the topic).
+- **The map** is a square of 12.5 % of the window's area (`assets/map_side.js` sets its side on load and on resize, at least 240 px), with the course model C1's readout under it: C1's own measures of the view. There is no difficulty colour legend in any view; a selected card's panel names its difficulty.
+- **The panels, ids only:** on the right the selected dot's ids and counts (a deck: `deck_id`, topics, cards; a topic: `deck_id`, `topic_id`, the rest flag, its cards by kind; a card: `comb_id`, `deck_id`, `topic_id`, the stack, the authored or predicted difficulty, whether T1 placed it between two topics) or, with nothing selected, the dendrogram of the view's connections with the preset's cut-off line, its heights the real merge distances, its leaves by id; under it D1's metrics of the view (all decks, a deck, a topic, named by ids).
+- **No learning material:** no card's question, answer or explanation and no deck's description, anywhere on the page; a card's hover is its comb_id. No topic name either: the map's hover and the line under the top bar give a topic's label, its `topic_id` and a hash of its name (`02-3fa9c1`), made at runtime and stored nowhere. The deck names stay in both.
 
-Start it with the helper's launcher: answer `n` at "Launch Sputnik? (y/n)", or skip the question:
+Start it with the launcher: answer `n` at "Launch Sputnik? (y/n)"; without sputnik installed it starts without asking.
 
-```bash
-.\modules\helper\.venv\Scripts\python.exe modules/helper/helper.py --mode standalone
-```
+## The launcher: start.py
 
-Without the course table the launcher stops with the export command. The mode question is `launch.py`'s: without the viewer (the package imported as `project`) the mode is standalone and nothing is asked; with it the launcher asks, and without input it starts the full app. `--mode full` without the viewer stops with the hint to install the viewer extra.
-
-## The capstone's launcher: start.py
-
-The capstone has no launcher of its own: `start.py` is developed here next to the package and exported with it into the capstone's root (`docs/draft/helper/protocol_export.md`). It takes no arguments; the folders and the commands are written in it. From the capstone's root:
+It takes no arguments; the folders and the commands are written in it:
 
 ```bash
 uv run start.py
 ```
 
-- **It searches for sputnik** (the viewer extra, imported as `project`). Found, it asks "Launch Sputnik? (y/n)": `y`, or no input, starts the full app, sputnik's map with the Helper button; `n` the standalone page. Not found, it starts the standalone page without asking and prints the command that installs the viewer (`uv sync --all-groups --extra viewer`).
+- **It searches for sputnik** (the viewer extra, imported as `project`). Found, it asks "Launch Sputnik? (y/n)": `y`, or no input, starts the full app, sputnik's map with the Helper button; `n` the standalone page. Not found, it starts the standalone page without asking and prints the command that installs the viewer (`uv sync --all-groups --extra viewer`). The question is `launch.py`'s (`choose_mode`).
 - **The standalone page** reads the course table in `data/course/` and stores nothing.
 - **The full app** reads the course file `data/topics.json` and the images in `data/images/`, and keeps its state in `data/state/`: the viewer's state file `user_state.json`, the derived course file `helper_topics.json` and the model state `model_state.json` (no backup question: delete the folder for a fresh start). It runs with Dash's debug reloader; the reloader's child asks nothing and runs the chosen mode.
-- **It stops with the command that fixes it** when a library is missing (`uv sync --all-groups`), the course data is missing (the migration copies it into `data/`), or the installed sputnik is older than `launch.VIEWER_RELEASE`, the release whose hooks the glue uses.
+- **It stops with the command that fixes it** when a library is missing (`uv sync --all-groups`), the course data is missing, or the installed sputnik is older than `launch.VIEWER_RELEASE`, the release whose hooks the glue uses.
 - Until the models are needed it imports only the standard library and `launch.py`, so it starts on any interpreter.
 
-The workspace's launcher is `modules/helper/helper.py` (`modules/helper/readme.md`): the module env, the delta layer and `temp/`.
+## The tests
 
-## The tests without the viewer
+The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `test_topic_model.py`, `test_course_model.py`, `test_difficulty_model.py`, `test_models_package.py`) are plain `unittest.TestCase` classes. They import `tests/app/model_support.py` only: the package on the path, the test course as a table of card records (three decks, 13 cards in seven scripted topics, one of them empty and one the rest topic; T1 keeps its scripted topics, so `moving_cards()` adds a card that makes T1 move another) and a course for the difficulty model (`difficulty_course()`, three decks of 12 rated quizzes, and `difficulty_report()`). They run in an env without the viewer; `test_models_package.py` checks that no model source imports it and runs the models in a process where it cannot be imported.
 
-The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `test_topic_model.py`, `test_course_model.py`, `test_difficulty_model.py`, `test_models_package.py`) are plain `unittest.TestCase` classes. They import `tests/model_support.py` only: the package on the path, the test course as a table of card records (three decks, 13 cards in seven scripted topics, one of them empty and one the rest topic; T1 keeps its scripted topics, so `moving_cards()` adds a card that makes T1 move another) and a course for the difficulty model (`difficulty_course()`, three decks of 12 rated quizzes, and `difficulty_report()`). They run in an env without the flashcards package; `test_models_package.py` checks that no model source imports it and runs the models in a process where it cannot be imported.
+The page's tests (`test_figures.py`, `test_standalone.py`) import `model_support.py` too, and nothing of the viewer: `test_standalone.py` writes the test course as a course table, drives the three views through the page's callback, runs the page in a process where the viewer cannot be imported (and checks that nothing of it or of the glue is loaded), and, when `data/course/` is there, serves the real course table.
 
-The page's tests (`test_figures.py`, `test_standalone.py`) import `model_support.py` too, and nothing of the viewer: `test_standalone.py` writes the test course as a course table, drives the three views through the page's callback, runs the page in a process where the viewer cannot be imported (and checks that nothing of it or of the glue is loaded), and, when `data/course/` is exported, serves the real course table.
+The launchers' tests import `model_support.py` too: `test_launch.py` the mode question (`launch.py`) with the viewer passed in or faked, `test_start.py` the launcher with its two runs mocked (the question only with sputnik found, the reloader's child, the stops with their commands, and a process without the models' libraries in which it loads and stops).
 
-The launchers' tests import `model_support.py` too: `test_launch.py` the mode question (`launch.py`) with the viewer passed in or faked, `test_start.py` the capstone's launcher with its two runs mocked (the question only with sputnik found, the reloader's child, the stops with their commands, and a process without the models' libraries in which it loads and stops).
-
-These eleven files and `model_support.py` are the tests exported with the package (into the capstone's `tests/app/`, `docs/draft/helper/protocol_export.md`). `model_support.py` finds the package from where it lies (the nearest folder above it that holds `app/`), and the real course table in `data/course/` next to the package or at the workspace's root, so they run unchanged in both places. Run them with the helper's tests (`modules/helper/readme.md`, "Run the tests").
-
-## Offline evaluation
+`model_support.py` finds the package from where it lies (the nearest folder above it that holds `app/`) and the real course table in `data/course/` next to it. None of the tests needs the course data or the viewer. Run them under either runner:
 
 ```bash
-.\modules\helper\.venv\Scripts\python.exe modules/helper/evaluate.py [--part similarity|difficulty|topics]
+uv run python -m pytest tests/app
+uv run python -m unittest discover -s tests/app
 ```
-
-The script measures the models of `app/models/`; it reads the course file with the project's parser through the glue (`glue/course.py`) and draws the random positions of B0 and the random layouts with the project's (`glue/positions.py`). The course table can replace the first, a draw of the models' own the second ([roadmap.md](roadmap.md), step 21).
-
-`--part topics` measures the topic model T1 against the scripted topics of `data/topics.json`: the agreement of the nearest centroid rule next to the neighbour rule, a logistic regression per deck and chance, over the course, by stack and per deck; the margin table (the cards kept at a threshold and their agreement), the coherence per topic, the moved cards and the emptied topics. One row per model and scope goes to `results/topics.csv`.
-
-`--part difficulty` measures only the difficulty model D1. It appends one row per feature set and label rule, plus the two baselines, to `results/difficulty.csv`: out of fold on the rated quizzes, as mean ± sd over the repeats, and the predicted levels of the unrated quizzes.
-
-`--part similarity` measures the random floor (B0), the TF-IDF variants (same-deck precision@5, coverage, distinct recommended cards) and the chosen model's map (trustworthiness and neighbour overlap of the deck layout, the within-topic overlap of the card layouts over the model's topics), appends one row per model and variant to `results/results.csv`, and writes the hand-check candidates for 20 NLP cards to `results/hand_check.md`, to be judged by hand: mark every relevant candidate with `x`, or the `none` line when nothing fits. Later runs keep the marks and add every variant's hand-judged precision@5 over the judged cards (`hand_precision` in the results). Without `--part` all three parts run. The rows note the course's decks ("decks 01 to 24"); older rows of the 48-deck course stay above them. The numbers are in `docs/draft/helper/concept.md`.

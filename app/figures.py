@@ -35,11 +35,12 @@ PREDICTED_COLOR = "#c98500"  # yellow: the predicted unrated quizzes (test)
 CUT_COLOR = "#e06c75"  # the cut-off line, as the viewer draws it
 FONT = {"color": INK, "family": "DM Mono, monospace", "size": 11}
 TABLE_ROWS = (("macro_f1", "macro-F1"), ("balanced_accuracy", "balanced accuracy"), ("kappa", "weighted kappa"), ("accuracy", "accuracy"))
-SURFACE_ALPHA = 0.5
+SURFACE_ALPHA = 0.2  # faint, so the cards and their connections stand out
 SURFACE_STEPS = 24  # the sphere's mesh: this many steps around and half as many from pole to pole
 ARC_STEP = math.radians(5)  # an arc is sampled every 5 degrees
 ARC_LIFT = 1.01  # the arcs sit a hair above the surface, clear of the mesh's facets
 LABEL_LENGTH = 18  # the dendrogram's leaf labels
+LABEL_MARGIN = (20, 5)  # the space under the dendrogram: a base and a step per character of its longest label
 CUT_LIFT = 0.04  # a cut-off line above the whole tree sits this share of its height above the top merge
 
 Point = tuple[float, float, float]
@@ -165,8 +166,7 @@ def shares_figure(report: DifficultyReport) -> go.Figure:
 
 
 def sphere_surface(color: str, radius: float = 1.0, steps: int = SURFACE_STEPS, opacity: float = SURFACE_ALPHA) -> go.Surface:
-    """The surface of the sphere the cards sit on, half transparent in one colour, neither selectable nor
-    hoverable."""
+    """The surface of the sphere the cards sit on, faint in one colour, neither selectable nor hoverable."""
     rings = max(2, steps // 2)
     polar = np.linspace(0.0, math.pi, rings + 1)[:, None]
     around = np.linspace(0.0, 2 * math.pi, steps + 1)[None, :]
@@ -263,12 +263,14 @@ def dendrogram_figure(
             )
         )
         meta = {"cut": height, "kept": kept}
+    ticks = [_short(label) for label in labels]
+    base, step = LABEL_MARGIN
     figure.update_layout(
-        height=320, meta=meta, margin={"l": 44, "r": 10, "t": 10, "b": 110},
+        height=320, meta=meta, margin={"l": 44, "r": 10, "t": 10, "b": base + step * max(len(tick) for tick in ticks)},
         paper_bgcolor="rgba(0, 0, 0, 0)", plot_bgcolor="rgba(0, 0, 0, 0)",
         font={"color": INK, "family": "DM Mono, monospace", "size": 12}, showlegend=False, dragmode=False,
         xaxis={
-            "tickvals": leaf_x, "ticktext": [_short(label) for label in labels], "tickangle": -60,
+            "tickvals": leaf_x, "ticktext": ticks, "tickangle": -60,
             "showgrid": False, "zeroline": False, "fixedrange": True,
         },
         yaxis={"title": {"text": "distance"}, "rangemode": "tozero", "gridcolor": GRID, "zeroline": False, "fixedrange": True},

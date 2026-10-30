@@ -4,8 +4,8 @@ parser is not there; it fits the course model and D1 at the start and stores not
 
 * `app`: `Page`, the fitted models and what the three views show of them; `create_app`, the Dash app with its one
   callback (the views' interaction only: select, Open, Back).
-* `layout`: the layout, the map figure and the panels (the dot's panel or the dendrogram, D1's metrics).
-* `assets/style.css`: the viewer's tokens, written anew.
+* `layout`: the layout, the map figure and the panels (the dot's ids or the dendrogram, D1's metrics).
+* `assets/style.css`: the viewer's tokens, written anew; `assets/map_side.js`: the square map's side.
 
 The launcher starts it with `main` (modules/helper/helper.py, the mode question of app.launch); it
 imports nothing of the viewer and nothing of the glue.

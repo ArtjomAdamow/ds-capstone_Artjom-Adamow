@@ -2,12 +2,20 @@
 viewer's in its theme (assets/style.css holds the tokens):
 
 * the top bar: the title, Back and Open;
-* the map (`map`): the decks on the sphere, a deck's topics on a ring around its centroid, a topic's cards on the
-  surface of its sphere; the model's connections below the preset gold and dashed (straight between decks, along
-  the surface between cards); the cards coloured by their authored difficulty, predicted and unrated ones grey;
-* window A (`dot-panel`): the selected dot's panel, a click on a deck's or a topic's enters it; with nothing
-  selected the dendrogram of the view's connections with the preset's cut-off line (figures.dendrogram_figure);
+* the map (`map`), a square of 12.5 % of the window's area (assets/map_side.js): the decks on the sphere, a deck's
+  topics on a ring around its faint centroid, a topic's cards on the faint surface of its sphere; the model's
+  connections below the preset gold and dashed (straight between decks, along the surface between cards); the cards
+  coloured by their authored difficulty, predicted and unrated ones grey, with no legend in any view (a selected
+  card's panel names its difficulty);
+* the course model C1's readout (`model-readout`) under the map: C1's own measures of the view;
+* window A (`dot-panel`): the selected dot's ids and counts, a click on a deck's or a topic's enters it; with
+  nothing selected the dendrogram of the view's connections with the preset's cut-off line, its leaves by id
+  (figures.dendrogram_figure);
 * window B (`metrics-panel`): the difficulty model D1's metrics of the view (the course, the deck, the topic).
+
+No learning material shows: no card's question, answer or explanation, no deck's description; a card is its
+comb_id. No topic's name shows either: its label is its topic id and a hash of the name (app.Page.topic_label). The
+decks' names stay as the map's hover labels.
 
 What the views show comes from app.Page; the view itself lives in the `view` store (app.HOME's keys).
 """
@@ -17,7 +25,7 @@ from typing import Optional
 import plotly.graph_objects as go
 from dash import dcc, html
 
-from ..cards import STACK_DIFFICULTY, STACK_QUIZ
+from ..cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE
 from ..figures import (
     GOLD, INK, MUTED, confusion_figure, metrics_subtitle, score_header, score_rows, shares_figure, sphere_surface,
     surface_arc,
@@ -36,26 +44,22 @@ DOT_SIZE = {DECKS_VIEW: 8, TOPICS_VIEW: 10, CARDS_VIEW: 9}
 SELECTED_SIZE = 14
 SELECTED_RING = "rgba(255, 255, 255, 0.55)"
 EMPTIED_SYMBOL = "circle-open"  # a topic the model left without cards
-CENTROID_GLOW = ((64, 0.08), (40, 0.14), (16, 0.3))  # (size, opacity) of the centroid's stacked markers
+CENTROID_GLOW = (32, 20, 8)  # the sizes of the centroid's stacked markers, outside in
+CENTROID_ALPHA = 0.4  # the centroid's opacity at its core, where all its markers overlap
 AXIS_RANGE = [-1.15, 1.15]
 DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
-LEGEND = (("easy", LEVEL_COLORS["easy"]), ("medium", LEVEL_COLORS["medium"]), ("hard", LEVEL_COLORS["hard"]), ("predicted or unrated", GREY))
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
+STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
 NO_LINKS = {
     DECKS_VIEW: "No connections between the decks.",
     TOPICS_VIEW: "No connections between topics: the model has no topic vectors yet.",
     CARDS_VIEW: "No connections: the model connects a topic of at least two cards.",
 }
 OVERVIEW_HINT = {
-    DECKS_VIEW: "Select a deck to see its description; Open enters it.",
-    TOPICS_VIEW: "Select a topic to see its cards' counts; Open enters it. Back goes up to the decks.",
-    CARDS_VIEW: "Select a card to read it. Back goes up to the topics.",
+    DECKS_VIEW: "Select a deck to see its ids; Open enters it.",
+    TOPICS_VIEW: "Select a topic to see its ids and its cards' counts; Open enters it. Back goes up to the decks.",
+    CARDS_VIEW: "Select a card to see its ids and its level. Back goes up to the topics.",
 }
-
-
-def _rgba(color: str, alpha: float) -> str:
-    red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
-    return f"rgba({red}, {green}, {blue}, {alpha})"
 
 
 # --- the map ---------------------------------------------------------------------------------------------------
@@ -118,16 +122,20 @@ def selected_trace(point, color: str) -> list[go.Scatter3d]:
 
 
 def centroid_traces() -> list[go.Scatter3d]:
-    """The deck's place among its topics, at the origin, neither selectable nor hoverable."""
+    """The deck's place among its topics, at the origin, faint, neither selectable nor hoverable: stacked markers of
+    one opacity each (a 3D marker ignores its colour's alpha), so that the core, where all overlap, has
+    CENTROID_ALPHA."""
+    layer = 1 - (1 - CENTROID_ALPHA) ** (1 / len(CENTROID_GLOW))
     return [
-        go.Scatter3d(x=[0], y=[0], z=[0], mode="markers", marker={"size": size, "color": _rgba(GREY, alpha), "line": {"width": 0}},
+        go.Scatter3d(x=[0], y=[0], z=[0], mode="markers", marker={"size": size, "color": GREY, "opacity": layer, "line": {"width": 0}},
                      hoverinfo="skip", showlegend=False, name="Centroid")
-        for size, alpha in CENTROID_GLOW
+        for size in CENTROID_GLOW
     ]
 
 
 def map_figure(page, state: dict) -> go.Figure:
-    """The map of the view in `state` (app.HOME's keys)."""
+    """The map of the view in `state` (app.HOME's keys). The hover labels: a deck's name, a topic's label (its id and
+    a hash of its name, app.Page.topic_label), a card's comb_id."""
     view, selected = state["view"], state.get("selected")
     figure = go.Figure()
     figure.add_trace(_anchor())
@@ -141,7 +149,7 @@ def map_figure(page, state: dict) -> go.Figure:
         figure.add_traces(centroid_traces())
         topics = page.topics(state["deck"])
         points = page.topic_points(state["deck"])
-        labels = {page.topic_dot(topic): topic.name for topic in topics}
+        labels = {page.topic_dot(topic): page.topic_label(topic) for topic in topics}
         colors = {dot: TOPIC_COLOR for dot in points}
         symbols = {page.topic_dot(topic): EMPTIED_SYMBOL for topic in topics if not topic.ids}
         links = None  # the model has no topic connections (step 19)
@@ -149,7 +157,7 @@ def map_figure(page, state: dict) -> go.Figure:
         topic = page.topic(state["deck"], state["topic"])
         figure.add_trace(sphere_surface(GREY))
         points = page.card_points(topic) if topic is not None else {}
-        labels = {card_id: page.card_by_id[card_id].question for card_id in points}
+        labels = {card_id: card_id for card_id in points}
         colors = {card_id: card_color(page.card_by_id[card_id]) for card_id in points}
         links = links_trace(points, page.card_links(topic), along_surface=True) if topic is not None else None
     if links is not None:
@@ -178,75 +186,80 @@ def card_color(card) -> str:
     return LEVEL_COLORS.get(card.difficulty, GREY)
 
 
-def color_legend() -> html.Div:
-    return html.Div(
-        [html.Div("Cards by difficulty", className="card-label")]
-        + [
-            html.Div([html.Span(className="legend-swatch", style={"backgroundColor": color}), html.Span(name)], className="legend-item")
-            for name, color in LEGEND
-        ],
-        className="color-legend",
+# --- the course model C1's readout under the map ------------------------------------------------------------------
+
+
+def model_readout(scope: str, sections) -> list:
+    """C1's measures of the view (app.Page.measures): what they cover, then one table of label and value per
+    section under its heading; a row's hint is its tooltip."""
+    rows = []
+    for heading, measures in sections:
+        rows.append(html.Tr(html.Th(heading, colSpan=2)))
+        rows += [
+            html.Tr([html.Td(label), html.Td(value, className="readout-value")], title=hint)
+            for label, value, hint in measures
+        ]
+    return [html.Div(scope, className="readout-scope"), html.Table(html.Tbody(rows), className="readout-table")]
+
+
+# --- window A: the selected dot's ids, or the dendrogram ---------------------------------------------------------
+
+
+def id_table(rows) -> html.Table:
+    """A selected dot's ids and counts, one row of label and value each, in the readout's table."""
+    return html.Table(
+        html.Tbody([html.Tr([html.Td(label), html.Td(value, className="readout-value")]) for label, value in rows]),
+        className="readout-table id-table",
     )
 
 
-# --- window A: the selected dot, or the dendrogram -------------------------------------------------------------
-
-
-def deck_panel(deck, topics: int) -> html.Div:
-    """A selected deck: its name and description; Open or a click on the panel enters it."""
+def deck_panel(deck_id: str, topics: int, cards: int) -> html.Div:
+    """A selected deck: its id, its model topics and their cards; Open or a click on the panel enters it."""
     return html.Div(
         [
             html.Div("Deck", className="card-label"),
-            html.Div(deck.name, className="card-content"),
-            dcc.Markdown(deck.description, className="deck-description"),
-            html.Div(f"{topics} topics of the model.", className="deck-description"),
+            id_table([("deck_id", deck_id), ("topics", topics), ("cards", cards)]),
             html.Div("Open, or a click on this frame, enters the deck. Back unselects it.", className="card-hint"),
         ],
         className="card-panel dot-panel-enter",
     )
 
 
-def topic_counts(topic, card_by_id) -> str:
+def topic_counts(topic, card_by_id) -> list[tuple[str, int]]:
     """A topic's size and mix of cards under the model's membership."""
     cards = [card_by_id[card_id] for card_id in topic.ids if card_id in card_by_id]
-    if not cards:
-        return "No cards: the model moved every card of this topic to another one."
     quizzes = sum(card.stack in QUIZ_STACKS for card in cards)
     rated = sum(card.difficulty is not None for card in cards)
-    return f"{len(cards)} cards: {len(cards) - quizzes} flashcards, {quizzes} quiz cards, {rated} of them with a difficulty."
+    return [("cards", len(cards)), ("flashcards", len(cards) - quizzes), ("quizzes", quizzes), ("rated", rated)]
 
 
 def topic_panel(topic, card_by_id, rest: bool = False) -> html.Div:
-    """A selected topic: its name and its counts; Open or a click on the panel enters it."""
+    """A selected topic: its ids, whether it is the deck's rest topic (the cards that fit no other) and its counts;
+    Open or a click on the panel enters it."""
+    rows = [("deck_id", topic.deck_id), ("topic_id", topic.topic_id), ("rest topic", "yes" if rest else "no")]
+    emptied = [] if topic.ids else [html.Div("No cards: the model moved every card of this topic to another one.", className="deck-description")]
     return html.Div(
-        [html.Div("Topic", className="card-label"), html.Div(topic.name, className="card-content")]
-        + ([html.Div("The deck's cards that fit no other topic.", className="deck-description")] if rest else [])
-        + [
-            html.Div(topic_counts(topic, card_by_id), className="deck-description"),
-            html.Div("Open, or a click on this frame, enters the topic. Back unselects it.", className="card-hint"),
-        ],
+        [html.Div("Topic", className="card-label"), id_table(rows + topic_counts(topic, card_by_id))]
+        + emptied
+        + [html.Div("Open, or a click on this frame, enters the topic. Back unselects it.", className="card-hint")],
         className="card-panel dot-panel-enter",
     )
 
 
-def card_panel(card, predicted: Optional[str] = None) -> html.Div:
-    """A selected card: its question with its answer, and its difficulty, authored or predicted by D1."""
+def card_panel(card, deck_id: str, topic_id: str, predicted: Optional[str] = None, between: bool = False) -> html.Div:
+    """A selected card: its ids, its stack, its difficulty, authored or predicted by D1, and whether T1 placed it
+    between two topics; not its text."""
     if card.difficulty:
-        level = [html.Div(f"Difficulty: {card.difficulty}", className="card-level")]
+        level = card.difficulty
     elif predicted:
-        level = [html.Div(f"Predicted by D1: {predicted}", className="card-level")]
+        level = f"{predicted} (predicted by D1)"
     else:
-        level = []
-    return html.Div(
-        [
-            html.Div("Question", className="card-label"),
-            dcc.Markdown(card.question, className="card-content"),
-            html.Div("Answer", className="card-label"),
-            dcc.Markdown(card.answer, className="card-answer"),
-        ]
-        + level,
-        className="card-panel",
-    )
+        level = "–"
+    rows = [
+        ("comb_id", card.id), ("deck_id", deck_id), ("topic_id", topic_id), ("stack", f"{card.stack} · {STACK_NAMES[card.stack]}"),
+        ("difficulty", level), ("between two topics", "yes" if between else "no"),
+    ]
+    return html.Div([html.Div("Card", className="card-label"), id_table(rows)], className="card-panel")
 
 
 def overview_panel(title: str, figure: Optional[go.Figure], view: str, subtitle: Optional[str] = None) -> html.Div:
@@ -330,8 +343,14 @@ def page_layout(home: dict) -> html.Main:
                 [
                     html.Div(
                         [
-                            html.Div(dcc.Graph(id="map", config={"displayModeBar": False, "scrollZoom": True}), className="map-frame"),
-                            color_legend(),
+                            html.Div(
+                                dcc.Graph(id="map", config={"displayModeBar": False, "scrollZoom": True}, responsive=True),
+                                className="map-frame",
+                            ),
+                            html.Div(
+                                [html.Div("Course model C1", className="card-label"), html.Div(id="model-readout")],
+                                className="readout-panel",
+                            ),
                         ],
                         className="map-column",
                     ),
