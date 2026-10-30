@@ -3,9 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Scripted train handling kept locally
 protocol_import.md
-# The app train's instructions for this side: rewritten by every train, kept locally only.
 migrate_train.md
+dispatch.py
 # App models directory
 app/models/
 
