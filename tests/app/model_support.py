@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 # The folder that holds the package app/ and start.py: modules/helper/ here, the root in the capstone, where these
-# files are exported to tests/app/ (docs/draft/helper/protocol_export.md); the nearest one above this file
+# files are exported to tests/app/ (tools/export/export.md); the nearest one above this file
 MODULE_DIR = next(folder for folder in Path(__file__).resolve().parents if (folder / "app" / "__init__.py").is_file())
 # The real course table (git-ignored data, the tests that read it skip without it): the capstone's data/ next to the
 # package, or this workspace's at the repository root

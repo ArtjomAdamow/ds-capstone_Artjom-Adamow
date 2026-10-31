@@ -1,6 +1,6 @@
 """Start the guided learning app: the capstone's launcher. It is developed with the package app/ in the flashcards
 workspace (modules/helper/start.py) and exported next to it into the capstone's root, where only the export changes
-it (docs/draft/helper/protocol_export.md). It takes no arguments: the folders and the commands are written below.
+it (tools/export/export.md). It takes no arguments: the folders and the commands are written below.
 From the capstone's root:
 
     uv run start.py
@@ -17,7 +17,7 @@ without asking and prints the command that installs the viewer.
                 state model_state.json
 
 data/ is git-ignored: the course data comes from the flashcards workspace with the helper's migration (its
-scripts/migrate_helper.py), as the package and this file do. A missing library, a missing
+tools/train.py), as the package and this file do. A missing library, a missing
 data file or a sputnik older than app.launch.VIEWER_RELEASE stops the start with the command that fixes it. Until
 then it imports only the standard library and app.launch, so it starts on any interpreter.
 
@@ -53,7 +53,7 @@ INSTALL_VIEWER = "uv sync --all-groups --extra viewer"
 START = "uv run start.py"
 DATA_HINT = (
     "The course data is not in the repository: it comes into data/ with the helper's migration from the flashcards "
-    "workspace (scripts/migrate_helper.py there)."
+    "workspace (tools/train.py there)."
 )
 
 LIBRARIES = ("numpy", "scipy", "sklearn", "dash", "plotly")  # what the models and the page import

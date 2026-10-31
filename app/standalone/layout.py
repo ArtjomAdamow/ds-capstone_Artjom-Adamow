@@ -5,17 +5,17 @@ viewer's in its theme (assets/style.css holds the tokens):
 * the map (`map`), a square of 12.5 % of the window's area (assets/map_side.js): the decks on the sphere, a deck's
   topics on a ring around its faint centroid, a topic's cards on the faint surface of its sphere; the model's
   connections below the preset gold and dashed (straight between decks, along the surface between cards); the cards
-  coloured by their authored difficulty, predicted and unrated ones grey, with no legend in any view (a selected
-  card's panel names its difficulty);
+  coloured by their authored difficulty, predicted and unrated ones grey;
 * the course model C1's readout (`model-readout`) under the map: C1's own measures of the view;
 * window A (`dot-panel`): the selected dot's ids and counts, a click on a deck's or a topic's enters it; with
   nothing selected the dendrogram of the view's connections with the preset's cut-off line, its leaves by id
   (figures.dendrogram_figure);
-* window B (`metrics-panel`): the difficulty model D1's metrics of the view (the course, the deck, the topic).
+* window B (`metrics-panel`): the difficulty model D1's metrics of the view (the course, the deck, the topic); in
+  the cards view the colour legend of the cards under its title.
 
 No learning material shows: no card's question, answer or explanation, no deck's description; a card is its
-comb_id. No topic's name shows either: its label is its topic id and a hash of the name (app.Page.topic_label). The
-decks' names stay as the map's hover labels.
+comb_id. The map's hover labels are ids too: a deck's id, a topic's label (its topic id and a hash of the name,
+app.Page.topic_label), a card's comb_id.
 
 What the views show comes from app.Page; the view itself lives in the `view` store (app.HOME's keys).
 """
@@ -48,6 +48,7 @@ CENTROID_GLOW = (32, 20, 8)  # the sizes of the centroid's stacked markers, outs
 CENTROID_ALPHA = 0.4  # the centroid's opacity at its core, where all its markers overlap
 AXIS_RANGE = [-1.15, 1.15]
 DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
+LEGEND = (("easy", LEVEL_COLORS["easy"]), ("medium", LEVEL_COLORS["medium"]), ("hard", LEVEL_COLORS["hard"]), ("predicted or unrated", GREY))
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
 STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
 NO_LINKS = {
@@ -134,7 +135,7 @@ def centroid_traces() -> list[go.Scatter3d]:
 
 
 def map_figure(page, state: dict) -> go.Figure:
-    """The map of the view in `state` (app.HOME's keys). The hover labels: a deck's name, a topic's label (its id and
+    """The map of the view in `state` (app.HOME's keys). The hover labels: a deck's id, a topic's label (its id and
     a hash of its name, app.Page.topic_label), a card's comb_id."""
     view, selected = state["view"], state.get("selected")
     figure = go.Figure()
@@ -142,7 +143,7 @@ def map_figure(page, state: dict) -> go.Figure:
     symbols = None
     if view == DECKS_VIEW:
         points = page.deck_points()
-        labels = {deck_id: page.deck_by_id[deck_id].name for deck_id in points}
+        labels = {deck_id: deck_id for deck_id in points}
         colors = {deck_id: DECK_COLOR for deck_id in points}
         links = links_trace(points, page.deck_links(), along_surface=False)
     elif view == TOPICS_VIEW:
@@ -293,18 +294,31 @@ def _graph(figure: go.Figure, class_name: str) -> dcc.Graph:
     return dcc.Graph(figure=figure, config={"displayModeBar": False}, className=class_name)
 
 
-def metrics_panel(report, scope: str) -> html.Div:
+def color_legend() -> html.Div:
+    """The cards' colours on the map: the authored levels, grey for a predicted or unrated card."""
+    return html.Div(
+        [html.Div("Cards by difficulty", className="card-label")]
+        + [
+            html.Div([html.Span(className="legend-swatch", style={"backgroundColor": color}), html.Span(name)], className="legend-item")
+            for name, color in LEGEND
+        ],
+        className="color-legend",
+    )
+
+
+def metrics_panel(report, scope: str, legend: bool = False) -> html.Div:
     """What D1 measured and predicted for the view's part of the course (`report`, the course's, a deck's or a
-    topic's), as the viewer's back of the card panel shows it; or why there is nothing to show."""
-    title = html.Div(f"Difficulty model D1 · {scope}", className="card-label")
+    topic's), as the viewer's back of the card panel shows it; or why there is nothing to show. With `legend` (the
+    cards view) the cards' colour legend follows the title."""
+    head = [html.Div(f"Difficulty model D1 · {scope}", className="card-label")] + ([color_legend()] if legend else [])
     if not report.measured:
-        children = [title, html.P(report.note or "No difficulty model.", className="empty-state")]
+        children = head + [html.P(report.note or "No difficulty model.", className="empty-state")]
         if report.predictions:  # a deck without rated quizzes still has its predicted ones
             children.append(_graph(shares_figure(report), "difficulty-shares"))
         return html.Div(children, className="tool-panel difficulty-panel")
     return html.Div(
-        [
-            title,
+        head
+        + [
             html.Div(metrics_subtitle(report), className="deck-description"),
             score_table(report),
             html.Div("With the deck shares every level keeps its true count, so macro-F1 equals the balanced accuracy.",

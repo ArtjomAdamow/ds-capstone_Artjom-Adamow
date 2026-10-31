@@ -1,5 +1,5 @@
 """The launcher's mode question (roadmap step 22), in the package, so both launchers ask it: modules/helper/helper.py
-here and start.py, the capstone's launcher exported with the package (docs/draft/helper/protocol_export.md): which
+here and start.py, the capstone's launcher exported with the package (tools/export/export.md): which
 of the two modes starts.
 
 * full (FULL): the viewer with the Helper button (the flashcards package, sputnik in the capstone);

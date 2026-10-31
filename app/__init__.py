@@ -1,4 +1,4 @@
-"""The helper's own package (docs/draft/helper/roadmap.md, step 21): what becomes the capstone's main app.
+"""The helper's own package (app/docs/roadmap.md, step 21): what becomes the capstone's main app.
 
 * `cards`: the card record the models read (the seven fields of the viewer's Flashcard, as a protocol).
 * `models`: the similarity pipeline, the layout step, the clustering, the topic model T1, the course model and the

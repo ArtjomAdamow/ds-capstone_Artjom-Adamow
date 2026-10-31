@@ -1,4 +1,4 @@
-# app: the guided learning app
+# app: guided learning
 
 The capstone's main app: the `models/`, the course table they read, the standalone page that shows them, the glue that puts them behind the optional viewer's Sputnik **Helper** button (`glue/`, the only part that imports the viewer), the launcher's mode question, the launcher `start.py` and their tests. What comes next is in [roadmap.md](roadmap.md).
 
@@ -29,14 +29,14 @@ Run the commands below from the capstone's root.
 │   │   ├── layout.py               # the map figure and the panels
 │   │   └── assets/style.css        # the viewer's theme tokens, written anew
 │   ├── glue/                  # the models on sputnik's map, over its public API: the Helper button and its dialog
-│   └── docs/                  # this readme, the roadmap, the analysis of the two emptied topics
+│   └── docs/                  # this readme and the roadmap
 ├── tests/app/                 # the model tests, the page's and the launchers' tests on model_support.py
 └── data/                      # git-ignored: topics.json, course/, images/, jupyter/ and the app's state in state/
 ```
 
 ## The models
 
-- **The topic model T1** takes the scripted topics as its input and decides every card's topic: the nearest of the deck's topic centroids by cosine, each centroid the mean of the topic's cards' vectors (leave-one-out, so a card never votes for itself). On the course 351 of the 1,064 cards (33 %) get another topic than the script; 2 topics end up empty ([T1_empties_analysis.md](T1_empties_analysis.md)).
+- **The topic model T1** takes the scripted topics as its input and decides every card's topic: the nearest of the deck's topic centroids by cosine, each centroid the mean of the topic's cards' vectors (leave-one-out, so a card never votes for itself). On the course 351 of the 1,064 cards (33 %) get another topic than the script; 2 topics end up empty.
 - **The difficulty model D1** rates the flattened quizzes that have no difficulty (56 in the course; flashcards are not rated). The levels are relative to the deck: each deck's quizzes keep the course's shares (8 easy, 3 medium and 1 hard of 12).
 - **The connections and their cut** (`models/clustering.py`): one connection per merge of the hierarchical clustering, in merge order, and `preset_rank`, the last merge whose connected parts stay within a size (five decks, four cards), which the page and the glue both use.
 
@@ -58,9 +58,9 @@ The models on a page of their own, without the viewer, in its theme. It fits the
 - **Topics view** (Open on a selected deck): the deck's model topics on a ring around the centroid in file order (the model has no topic positions yet); an emptied topic is an open circle.
 - **Cards view** (Open on a selected topic): the topic's cards on the surface of its sphere, connected as far as the preset keeps them (parts of at most four cards), coloured by difficulty: easy blue, medium beige-brown, hard red-orange, predicted and unrated grey.
 - **Moving around:** a click selects a dot, Open (or a click on a selected deck's or topic's panel) enters it, Back goes up a level with the dot it came from selected.
-- **The map** is a square of 12.5 % of the window's area (`assets/map_side.js` sets its side on load and on resize, at least 240 px), with the course model C1's readout under it: C1's own measures of the view. There is no difficulty colour legend in any view; a selected card's panel names its difficulty.
+- **The map** is a square of 12.5 % of the window's area (`assets/map_side.js` sets its side on load and on resize, at least 240 px), with the course model C1's readout under it: C1's own measures of the view. The difficulty colour legend shows in the cards view only, under the title of D1's metrics; a selected card's panel names its difficulty.
 - **The panels, ids only:** on the right the selected dot's ids and counts (a deck: `deck_id`, topics, cards; a topic: `deck_id`, `topic_id`, the rest flag, its cards by kind; a card: `comb_id`, `deck_id`, `topic_id`, the stack, the authored or predicted difficulty, whether T1 placed it between two topics) or, with nothing selected, the dendrogram of the view's connections with the preset's cut-off line, its heights the real merge distances, its leaves by id; under it D1's metrics of the view (all decks, a deck, a topic, named by ids).
-- **No learning material:** no card's question, answer or explanation and no deck's description, anywhere on the page; a card's hover is its comb_id. No topic name either: the map's hover and the line under the top bar give a topic's label, its `topic_id` and a hash of its name (`02-3fa9c1`), made at runtime and stored nowhere. The deck names stay in both.
+- **No learning material:** no card's question, answer or explanation and no deck's description, anywhere on the page; the map's hover is an id: a deck's `deck_id`, a card's `comb_id`. No topic name either: the map's hover and the line under the top bar give a topic's label, its `topic_id` and a hash of its name (`02-3fa9c1`), made at runtime and stored nowhere. The deck's name stays in the line under the top bar only.
 
 Start it with the launcher: answer `n` at "Launch Sputnik? (y/n)"; without sputnik installed it starts without asking.
 
@@ -74,7 +74,6 @@ uv run start.py
 
 - **It searches for sputnik** (the viewer extra, imported as `project`). Found, it asks "Launch Sputnik? (y/n)": `y`, or no input, starts the full app, sputnik's map with the Helper button; `n` the standalone page. Not found, it starts the standalone page without asking and prints the command that installs the viewer (`uv sync --all-groups --extra viewer`). The question is `launch.py`'s (`choose_mode`).
 - **The standalone page** reads the course table in `data/course/` and stores nothing.
-- **The full app** reads the course file `data/topics.json` and the images in `data/images/`, and keeps its state in `data/state/`: the viewer's state file `user_state.json`, the derived course file `helper_topics.json` and the model state `model_state.json` (no backup question: delete the folder for a fresh start). It runs with Dash's debug reloader; the reloader's child asks nothing and runs the chosen mode.
 - **It stops with the command that fixes it** when a library is missing (`uv sync --all-groups`), the course data is missing, or the installed sputnik is older than `launch.VIEWER_RELEASE`, the release whose hooks the glue uses.
 - Until the models are needed it imports only the standard library and `launch.py`, so it starts on any interpreter.
 

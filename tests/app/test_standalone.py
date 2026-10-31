@@ -1,8 +1,8 @@
 """The standalone page (app.standalone) on the test course as a course table, with nothing of the viewer:
 the three views through the callback (select, Open, a click on the panel, Back), the dot's ids in its panel, the
 dendrogram with the preset's line and its leaves by id, D1's metrics per view, the course model C1's readout per view
-under the square map, the cards coloured by difficulty with no legend in any view, the faint centroid and
-sphere, no learning material in any view, and that neither the page nor the table, the figures or the mode question
+under the square map, the cards coloured by difficulty with their legend in window B of the cards view only, the
+decks' hover by id, the faint centroid and sphere, no learning material in any view, and that neither the page nor the table, the figures or the mode question
 import the viewer or the glue (a subprocess with the viewer blocked). The real course's table serves the three views
 too (skipped without it)."""
 
@@ -126,6 +126,7 @@ class StandaloneTest(unittest.TestCase):
         self.assertEqual((result[OUT["open_disabled"]], result[OUT["back_disabled"]]), (True, True))
         decks = self.trace(result, "Decks")
         self.assertEqual(list(decks.customdata), ["01", "02", "03"])
+        self.assertEqual(list(decks.text), ["01", "02", "03"])  # the hover: the deck id, not its name
         self.assertEqual(
             [(x, y, z) for x, y, z in zip(decks.x, decks.y, decks.z)],
             [self.page.model.deck_points[deck_id] for deck_id in ("01", "02", "03")],
@@ -144,7 +145,7 @@ class StandaloneTest(unittest.TestCase):
         self.assertEqual(self.state["selected"], "02")
         self.assertFalse(result[OUT["open_disabled"]])
         self.assertEqual(id_rows(result[OUT["panel"]]), {"deck_id": "02", "topics": 2, "cards": 4})
-        self.assertNotIn("Beta", str(result[OUT["panel"]]))  # the name stays in the hover and the line under the top bar
+        self.assertNotIn("Beta", json.dumps(result, cls=PlotlyJSONEncoder))  # the name stays in the line under the top bar only
         self.assertIsNotNone(self.trace(result, "Selected"))
 
         result = self.call("open")
@@ -239,11 +240,17 @@ class StandaloneTest(unittest.TestCase):
         result = self.enter_topic("01", "01")
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(result[OUT["metrics"]]))
 
-    def test_no_view_has_a_difficulty_legend(self):
-        for result in (self.call(None), self.click("01"), self.call("open"), self.enter_topic("01", "02")):
-            self.assertEqual(len(result), len(OUT))  # no legend among the callback's outputs
+    def test_the_cards_view_has_the_difficulty_legend_in_window_b(self):
+        for result in (self.call(None), self.click("01"), self.call("open")):
             self.assertNotIn("Cards by difficulty", json.dumps(result, cls=PlotlyJSONEncoder))
-        self.assertTrue(self.trace(self.enter_topic("01", "02"), "Cards").marker.color)  # the cards keep their colours
+        result = self.enter_topic("01", "02")
+        self.assertEqual(len(result), len(OUT))  # no output of its own
+        metrics = result[OUT["metrics"]].children
+        self.assertEqual([child.className for child in metrics[:2]], ["card-label", "color-legend"])  # under the title
+        legend = {item.children[1].children: item.children[0].style["backgroundColor"] for item in metrics[1].children[1:]}
+        self.assertEqual(legend, {**LEVEL_COLORS, "predicted or unrated": GREY})
+        others = [result[OUT[name]] for name in ("figure", "panel", "readout")]
+        self.assertNotIn("Cards by difficulty", json.dumps(others, cls=PlotlyJSONEncoder))
 
     def test_the_readout_follows_the_view(self):
         self.assertIn("All 3 decks, 13 cards", str(self.call(None)[OUT["readout"]]))
@@ -362,13 +369,13 @@ class AppTest(unittest.TestCase):
         self.assertTrue(Path(app.config.assets_folder, "style.css").is_file())
         self.assertIn("--map-side", Path(app.config.assets_folder, "map_side.js").read_text(encoding="utf-8"))
 
-    def test_the_map_is_a_square_with_the_readout_under_it_and_no_legend(self):
+    def test_the_map_is_a_square_with_the_readout_under_it(self):
         layout = page_layout(HOME)
         self.assertTrue(layout["map"].responsive)  # plotly follows the frame when the window resizes
         style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
         self.assertIn(".map-frame { width: var(--map-side); max-width: 100%; aspect-ratio: 1;", style)
         column = layout.children[2].children[0]
-        self.assertEqual([getattr(child, "className", None) for child in column.children], ["map-frame", "readout-panel"])  # no legend
+        self.assertEqual([getattr(child, "className", None) for child in column.children], ["map-frame", "readout-panel"])  # the legend is window B's
 
     def test_main_without_a_table_stops_and_names_the_missing_files(self):
         with tempfile.TemporaryDirectory() as folder, self.assertRaises(SystemExit) as stop:

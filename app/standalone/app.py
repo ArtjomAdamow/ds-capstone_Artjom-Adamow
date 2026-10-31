@@ -16,10 +16,10 @@ neighbour measures, the connections the preset keeps and T1's margins, over the 
 needs the scripted topics as its reference (T1's agreement with them, the moved cards) is a comparison and is left
 out.
 
-The panels name the dots and the views by id (Page.scope): no learning material, no card's text and no deck's
-description. A topic's name, the one name that is no id, shows nowhere: the map's hover and the line under the top
-bar (Page.where) give its label instead (Page.topic_label: its topic id, then a hash of its name, made at runtime and
-stored nowhere). The deck's name stays in both.
+The panels and the map's hover name the dots and the views by id (Page.scope): no learning material, no card's text
+and no deck's description. A topic's name, the one name that is no id, shows nowhere: the map's hover and the line
+under the top bar (Page.where) give its label instead (Page.topic_label: its topic id, then a hash of its name, made
+at runtime and stored nowhere). The deck's name stays in the line under the top bar only.
 
 The callback (register_callback) keeps the view in the `view` store: a click on a dot selects it, Open or a click on
 a selected deck's or topic's panel enters it, Back goes up a level with the dot it came from selected (in the decks
@@ -237,7 +237,8 @@ class Page:
         return overview_panel(title, figure, view, subtitle)
 
     def metrics(self, state: dict):
-        """Window B: D1's metrics of the view: the course, the entered deck, or the entered topic."""
+        """Window B: D1's metrics of the view: the course, the entered deck, or the entered topic, the last with the
+        cards' colour legend."""
         if state["view"] == DECKS_VIEW:
             return metrics_panel(self.difficulty, self.scope(state))
         deck = self.deck_by_id.get(state["deck"])
@@ -245,7 +246,7 @@ class Page:
         topic = self.topic(state["deck"], state["topic"])
         if state["view"] == TOPICS_VIEW or topic is None:
             return metrics_panel(part, f"deck {state['deck']}")
-        return metrics_panel(part.for_topic(topic.name, topic.ids), self.scope(state))
+        return metrics_panel(part.for_topic(topic.name, topic.ids), self.scope(state), legend=True)
 
     def measures(self, state: dict) -> tuple[str, list]:
         """The map's readout: C1's own measures of the view, as (what they cover, [(heading, [(label, value, hint)])]),
