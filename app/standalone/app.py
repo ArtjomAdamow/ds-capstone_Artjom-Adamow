@@ -16,10 +16,10 @@ neighbour measures, the connections the preset keeps and T1's margins, over the 
 needs the scripted topics as its reference (T1's agreement with them, the moved cards) is a comparison and is left
 out.
 
-The panels and the map's hover name the dots and the views by id (Page.scope): no learning material, no card's text
-and no deck's description. A topic's name, the one name that is no id, shows nowhere: the map's hover and the line
-under the top bar (Page.where) give its label instead (Page.topic_label: its topic id, then a hash of its name, made
-at runtime and stored nowhere). The deck's name stays in the line under the top bar only.
+The panels, the map's hover and the line under the top bar (Page.where) name the dots and the views by id
+(Page.scope): no learning material, no card's text, no deck's description and no deck's name. A topic's name, the
+one name that is no id, shows nowhere either: the map's hover and the line under the top bar give its label instead
+(Page.topic_label: its topic id, then a hash of its name, made at runtime and stored nowhere).
 
 The callback (register_callback) keeps the view in the `view` store: a click on a dot selects it, Open or a click on
 a selected deck's or topic's panel enters it, Back goes up a level with the dot it came from selected (in the decks
@@ -183,16 +183,14 @@ class Page:
         return list(topic.ids) if topic is not None else []
 
     def where(self, state: dict) -> str:
-        """The line under the top bar: the number of decks, the entered deck's name, or the deck's name and the
+        """The line under the top bar, by ids: the number of decks, the entered deck's id, or the deck's id and the
         topic's label."""
         if state["view"] == DECKS_VIEW:
             return f"{len(self.deck_points())} decks"
-        deck = self.deck_by_id.get(state["deck"])
-        name = deck.name if deck else ""
         if state["view"] == TOPICS_VIEW:
-            return name
+            return f"deck {state['deck']}"
         topic = self.topic(state["deck"], state["topic"])
-        return f"{name} › {self.topic_label(topic) if topic else ''}"
+        return f"deck {state['deck']} › topic {self.topic_label(topic) if topic else ''}"
 
     def scope(self, state: dict) -> str:
         """The view's part of the course by ids, as the panels name it: all decks, a deck, or a deck's topic."""

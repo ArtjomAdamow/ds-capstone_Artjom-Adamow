@@ -1,8 +1,9 @@
 """The standalone page (app.standalone) on the test course as a course table, with nothing of the viewer:
 the three views through the callback (select, Open, a click on the panel, Back), the dot's ids in its panel, the
 dendrogram with the preset's line and its leaves by id, D1's metrics per view, the course model C1's readout per view
-under the square map, the cards coloured by difficulty with their legend in window B of the cards view only, the
-decks' hover by id, the faint centroid and sphere, no learning material in any view, and that neither the page nor the table, the figures or the mode question
+under the square map, the map's axes and ticks in every view, the cards coloured by difficulty with their legend in
+window B of the cards view only, the decks' hover and the line under the top bar by id, the faint centroid and sphere,
+no learning material and no deck's or topic's name in any view, and that neither the page nor the table, the figures or the mode question
 import the viewer or the glue (a subprocess with the viewer blocked). The real course's table serves the three views
 too (skipped without it)."""
 
@@ -25,7 +26,7 @@ from app.figures import GOLD
 from app.models.course_model import TopicLayout
 from app.standalone import main as standalone_main
 from app.standalone.app import ASSETS_DIR, CARD_PART, DECK_PART, HOME, Page, create_app, register_callback
-from app.standalone.layout import EMPTIED_SYMBOL, GREY, LEVEL_COLORS, page_layout
+from app.standalone.layout import AXIS_RANGE, AXIS_TICKS, EMPTIED_SYMBOL, GREY, LEVEL_COLORS, page_layout
 
 OUT = {"figure": 0, "panel": 1, "metrics": 2, "view": 3, "where": 4, "open_disabled": 5, "back_disabled": 6, "readout": 7}
 
@@ -145,12 +146,12 @@ class StandaloneTest(unittest.TestCase):
         self.assertEqual(self.state["selected"], "02")
         self.assertFalse(result[OUT["open_disabled"]])
         self.assertEqual(id_rows(result[OUT["panel"]]), {"deck_id": "02", "topics": 2, "cards": 4})
-        self.assertNotIn("Beta", json.dumps(result, cls=PlotlyJSONEncoder))  # the name stays in the line under the top bar only
+        self.assertNotIn("Beta", json.dumps(result, cls=PlotlyJSONEncoder))  # nor its name anywhere
         self.assertIsNotNone(self.trace(result, "Selected"))
 
         result = self.call("open")
         self.assertEqual(self.state, {"view": "topics", "deck": "02", "topic": None, "selected": None})
-        self.assertEqual(result[OUT["where"]], "Beta")
+        self.assertEqual(result[OUT["where"]], "deck 02")  # by id, not by name
         topics = self.trace(result, "Topics")
         self.assertEqual(list(topics.customdata), ["02:01", "02:02"])  # file order
         self.assertEqual(list(topics.text), [Page.topic_label(self.page.topic("02", topic_id)) for topic_id in ("01", "02")])
@@ -158,7 +159,7 @@ class StandaloneTest(unittest.TestCase):
             self.assertAlmostEqual((x * x + y * y) ** 0.5, 0.75)
             self.assertEqual(z, 0.0)
         centroid = [trace for trace in result[OUT["figure"]].data if trace.name == "Centroid"]
-        self.assertEqual([trace.marker.size for trace in centroid], [32, 20, 8])
+        self.assertEqual([trace.marker.size for trace in centroid], [16, 10, 4])
         self.assertEqual({trace.marker.color for trace in centroid}, {GREY})  # a 3D marker ignores a colour's alpha
         self.assertAlmostEqual(1 - math.prod(1 - trace.marker.opacity for trace in centroid), 0.4)  # at the core
         self.assertIsNone(self.trace(result, "Connections"))
@@ -187,8 +188,8 @@ class StandaloneTest(unittest.TestCase):
     def test_the_cards_view_shows_the_topics_cards_on_its_sphere_coloured_by_difficulty(self):
         result = self.enter_topic("01", "02")  # Dictionaries: the rated quiz and a flashcard of the quiz file
         self.assertEqual(self.state, {"view": "cards", "deck": "01", "topic": "02", "selected": None})
-        self.assertEqual(result[OUT["where"]], f"Alpha › {Page.topic_label(self.page.topic('01', '02'))}")
-        self.assertEqual(self.trace(result, "Surface").opacity, 0.2)
+        self.assertEqual(result[OUT["where"]], f"deck 01 › topic {Page.topic_label(self.page.topic('01', '02'))}")
+        self.assertEqual(self.trace(result, "Surface").opacity, 0.1)
         self.assertEqual(self.colors(result), {"301003": LEVEL_COLORS["easy"], "401005": GREY})
         topic = self.page.topic("01", "02")
         cards = self.trace(result, "Cards")
@@ -252,6 +253,14 @@ class StandaloneTest(unittest.TestCase):
         others = [result[OUT[name]] for name in ("figure", "panel", "readout")]
         self.assertNotIn("Cards by difficulty", json.dumps(others, cls=PlotlyJSONEncoder))
 
+    def test_every_view_shows_the_axes_with_their_ticks(self):
+        for result in (self.call(None), self.click("01"), self.call("open"), self.enter_topic("01", "02")):
+            scene = result[OUT["figure"]].layout.scene
+            for name, axis in (("x", scene.xaxis), ("y", scene.yaxis), ("z", scene.zaxis)):
+                self.assertTrue(axis.visible)
+                self.assertEqual((list(axis.range), list(axis.tickvals), axis.title.text), (AXIS_RANGE, AXIS_TICKS, name))
+                self.assertFalse(axis.showspikes)  # the hover stays the dot's id
+
     def test_the_readout_follows_the_view(self):
         self.assertIn("All 3 decks, 13 cards", str(self.call(None)[OUT["readout"]]))
         self.click("01")
@@ -296,12 +305,12 @@ class StandaloneTest(unittest.TestCase):
         other_run = subprocess.run([sys.executable, "-B", "-c", script, str(model_support.MODULE_DIR)], capture_output=True, text=True)
         self.assertEqual(other_run.stdout.strip(), label, other_run.stderr)  # made at runtime, the same on every run
 
-    def test_no_view_shows_learning_material_or_a_topics_name(self):
-        """No card's question, answer or explanation, no deck's description and no topic's name, in any view with
-        any dot selected: not in the panels, the readout, the line under the top bar, the map's hover nor the
+    def test_no_view_shows_learning_material_or_a_name(self):
+        """No card's question, answer or explanation, no deck's description and no deck's or topic's name, in any
+        view with any dot selected: not in the panels, the readout, the line under the top bar, the map's hover nor the
         dendrogram's leaves."""
         material = [text for card in self.table.cards for text in (card.question, card.answer, card.explain) if text]
-        material += [deck.description for deck in self.table.decks]
+        material += [text for deck in self.table.decks for text in (deck.description, deck.name)]
         material += [name for name, _rest in model_support.TOPIC_NAMES.values()]
         outputs = [self.call(None)]
         for deck in self.page.deck_points():

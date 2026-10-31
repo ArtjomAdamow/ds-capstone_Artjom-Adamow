@@ -5,7 +5,8 @@ viewer's in its theme (assets/style.css holds the tokens):
 * the map (`map`), a square of 12.5 % of the window's area (assets/map_side.js): the decks on the sphere, a deck's
   topics on a ring around its faint centroid, a topic's cards on the faint surface of its sphere; the model's
   connections below the preset gold and dashed (straight between decks, along the surface between cards); the cards
-  coloured by their authored difficulty, predicted and unrated ones grey;
+  coloured by their authored difficulty, predicted and unrated ones grey; in every view the axes with their ticks:
+  the map's own coordinates, the unit sphere's, in which the readout measures a dot's nearest;
 * the course model C1's readout (`model-readout`) under the map: C1's own measures of the view;
 * window A (`dot-panel`): the selected dot's ids and counts, a click on a deck's or a topic's enters it; with
   nothing selected the dendrogram of the view's connections with the preset's cut-off line, its leaves by id
@@ -14,8 +15,8 @@ viewer's in its theme (assets/style.css holds the tokens):
   the cards view the colour legend of the cards under its title.
 
 No learning material shows: no card's question, answer or explanation, no deck's description; a card is its
-comb_id. The map's hover labels are ids too: a deck's id, a topic's label (its topic id and a hash of the name,
-app.Page.topic_label), a card's comb_id.
+comb_id. The map's hover labels and the line under the top bar are ids too: a deck's id, a topic's label (its topic
+id and a hash of the name, app.Page.topic_label), a card's comb_id.
 
 What the views show comes from app.Page; the view itself lives in the `view` store (app.HOME's keys).
 """
@@ -27,7 +28,7 @@ from dash import dcc, html
 
 from ..cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE
 from ..figures import (
-    GOLD, INK, MUTED, confusion_figure, metrics_subtitle, score_header, score_rows, shares_figure, sphere_surface,
+    GOLD, GRID, INK, MUTED, confusion_figure, metrics_subtitle, score_header, score_rows, shares_figure, sphere_surface,
     surface_arc,
 )
 
@@ -44,9 +45,11 @@ DOT_SIZE = {DECKS_VIEW: 8, TOPICS_VIEW: 10, CARDS_VIEW: 9}
 SELECTED_SIZE = 14
 SELECTED_RING = "rgba(255, 255, 255, 0.55)"
 EMPTIED_SYMBOL = "circle-open"  # a topic the model left without cards
-CENTROID_GLOW = (32, 20, 8)  # the sizes of the centroid's stacked markers, outside in
+CENTROID_GLOW = (16, 10, 4)  # the sizes of the centroid's stacked markers, outside in
 CENTROID_ALPHA = 0.4  # the centroid's opacity at its core, where all its markers overlap
 AXIS_RANGE = [-1.15, 1.15]
+AXIS_TICKS = [-1, -0.5, 0, 0.5, 1]  # the unit sphere's coordinates
+AXIS_FONT = {"color": MUTED, "family": "DM Mono, monospace", "size": 10}
 DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
 LEGEND = (("easy", LEVEL_COLORS["easy"]), ("medium", LEVEL_COLORS["medium"]), ("hard", LEVEL_COLORS["hard"]), ("predicted or unrated", GREY))
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
@@ -64,6 +67,15 @@ OVERVIEW_HINT = {
 
 
 # --- the map ---------------------------------------------------------------------------------------------------
+
+
+def _axis(title: str) -> dict:
+    """An axis of the scene: the fixed range, its ticks and a faint grid, no spike lines on hover."""
+    return {
+        "visible": True, "range": AXIS_RANGE, "tickvals": AXIS_TICKS, "tickfont": AXIS_FONT,
+        "title": {"text": title, "font": AXIS_FONT}, "gridcolor": GRID, "zeroline": False, "showbackground": False,
+        "showspikes": False,
+    }
 
 
 def _anchor() -> go.Scatter3d:
@@ -173,8 +185,7 @@ def map_figure(page, state: dict) -> go.Figure:
         margin={"l": 0, "r": 0, "t": 10, "b": 0}, showlegend=False,
         scene={
             "aspectmode": "cube", "bgcolor": BACKGROUND, "camera": DEFAULT_CAMERA,
-            "xaxis": {"visible": False, "range": AXIS_RANGE}, "yaxis": {"visible": False, "range": AXIS_RANGE},
-            "zaxis": {"visible": False, "range": AXIS_RANGE},
+            "xaxis": _axis("x"), "yaxis": _axis("y"), "zaxis": _axis("z"),
         },
         meta={"view": view},
     )
