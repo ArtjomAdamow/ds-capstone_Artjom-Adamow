@@ -8,8 +8,9 @@ package's cards table instead, written by the same parser version, so the ids ag
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Optional
 
-from project.content.parser import CardsFile, read_decks
+from project.content.parser import CardsFile, Quiz, read_decks
 
 from ..cards import Card
 from ..models.topic_model import TopicSeed
@@ -46,3 +47,10 @@ def load_course(path: Path) -> Course:
     path = Path(path)
     cards_file = CardsFile(path)
     return Course(cards_file.load_decks(), deck_ids_of(path), scripted_topics(cards_file))
+
+
+def quiz_options(path: Path) -> Callable[[str], Optional[Quiz]]:
+    """A card's answer options by comb_id, from the course file: the viewer's Quiz (the option texts, their
+    feedback and the correct indices), or None for a card without them. For the hand-label form of evaluate.py,
+    until the course table carries the options (app roadmap step 15)."""
+    return CardsFile(Path(path)).quiz
