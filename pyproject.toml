@@ -38,7 +38,7 @@ sputnik = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git", tag = "v0.3.0
 line-length = 100
 # The app's files come from the export workspace with every train and keep its style, so they are
 # never linted or formatted here.
-extend-exclude = [".claude", "app", "start.py", "tests/app"]
+extend-exclude = [".claude", "app", "start.py", "tests/app", "evaluate.py"]
 
 [tool.ruff.lint]
 # E/W: style, F: likely bugs, I: import sorting, UP: modern syntax.
