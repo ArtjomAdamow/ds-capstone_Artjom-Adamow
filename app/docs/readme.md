@@ -10,6 +10,7 @@ Run the commands below from the capstone's root.
 
 ```text
 ├── start.py                   # the launcher (below)
+├── evaluate.py                # the offline evaluation of the models (below)
 ├── app/
 │   ├── cards.py               # the card record the models read (the seven fields of Flashcard as a protocol), the stacks
 │   ├── course_table.py        # the course table: cards.csv, decks.csv, topics.csv, read with the csv module
@@ -22,7 +23,7 @@ Run the commands below from the capstone's root.
 │   │   ├── clustering.py           # connections from scipy's clustering, in merge order; the cut-off preset's rank
 │   │   ├── course_model.py         # the fitted model: deck points and connections, the topics' layouts and connections
 │   │   ├── difficulty_model.py     # D1: the difficulty of the unrated quizzes, measured out of fold
-│   │   └── evaluation.py           # the offline measures and the judges of the topic model
+│   │   └── evaluation.py           # the offline measures and the judges of the topic model, for evaluate.py
 │   ├── standalone/            # the models' own page: Dash and plotly, nothing of the viewer or the glue
 │   │   ├── __init__.py             # main(course_dir): the page on the course table
 │   │   ├── app.py                  # Page (the fitted models, what each view shows), the app and its one callback
@@ -30,7 +31,8 @@ Run the commands below from the capstone's root.
 │   │   └── assets/style.css        # the viewer's theme tokens, written anew
 │   ├── glue/                  # the models on sputnik's map, over its public API: the Helper button and its dialog
 │   └── docs/                  # this readme and the roadmap
-├── tests/app/                 # the model tests, the page's and the launchers' tests on model_support.py
+├── tests/app/                 # the model tests, the page's, the launchers' and the evaluation's tests on model_support.py
+├── results/                   # written by evaluate.py: results.csv, difficulty.csv, topics.csv
 └── data/                      # git-ignored: topics.json, course/, images/, jupyter/ and the app's state in state/
 ```
 
@@ -77,6 +79,16 @@ uv run start.py
 - **It stops with the command that fixes it** when a library is missing (`uv sync --all-groups`), the course data is missing, or the installed sputnik is older than `launch.VIEWER_RELEASE`, the release whose hooks the glue uses.
 - Until the models are needed it imports only the standard library and `launch.py`, so it starts on any interpreter.
 
+## The offline evaluation
+
+`evaluate.py` measures the models on the course table and appends one row per model and variant to `results/` next to it (`--results` names another folder; `--table` another course table): `--part similarity` the similarity model's vectoriser variants (same-deck precision@5, coverage, each variant's own minimum score), the random floor of random positions on the sphere and the course model's map (trustworthiness and neighbour overlap of the deck layout and of the card layouts per topic, at a fixed small k with the lift over random) into `results.csv`; `--part difficulty` D1 out of fold with its baselines into `difficulty.csv`; `--part topics` T1 against the scripted topics into `topics.csv`. Without `--part` all three run; a results file whose columns grew is written again with its rows kept.
+
+```bash
+uv run evaluate.py --part similarity
+```
+
+The hand-judged measures (the relevance of the neighbours, the difficulty levels of the unrated quizzes) need the hand marks and labels, which stay in the workspace the trains come from, since their forms hold card text: here the `hand_` columns stay empty, no form is written and the run says so. It imports nothing of the viewer. What is measured and what the numbers say: [roadmap.md](roadmap.md), "The offline evaluation".
+
 ## The tests
 
 The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `test_topic_model.py`, `test_course_model.py`, `test_difficulty_model.py`, `test_models_package.py`) are plain `unittest.TestCase` classes. They import `tests/app/model_support.py` only: the package on the path, the test course as a table of card records (three decks, 13 cards in seven scripted topics, one of them empty and one the rest topic; T1 keeps its scripted topics, so `moving_cards()` adds a card that makes T1 move another) and a course for the difficulty model (`difficulty_course()`, three decks of 12 rated quizzes, and `difficulty_report()`). They run in an env without the viewer; `test_models_package.py` checks that no model source imports it and runs the models in a process where it cannot be imported.
@@ -84,6 +96,8 @@ The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `tes
 The page's tests (`test_figures.py`, `test_standalone.py`) import `model_support.py` too, and nothing of the viewer: `test_standalone.py` writes the test course as a course table, drives the three views through the page's callback, runs the page in a process where the viewer cannot be imported (and checks that nothing of it or of the glue is loaded), and, when `data/course/` is there, serves the real course table.
 
 The launchers' tests import `model_support.py` too: `test_launch.py` the mode question (`launch.py`) with the viewer passed in or faked, `test_start.py` the launcher with its two runs mocked (the question only with sputnik found, the reloader's child, the stops with their commands, and a process without the models' libraries in which it loads and stops).
+
+The evaluation's tests (`test_evaluate.py`) import `model_support.py` and `evaluate.py` next to the package: the results files, the hand marks and labels with their forms on the fixtures, the measures on a hand-made layout, the rows of the similarity part, and a run on the test course's table, with and without the hand files, in a process where the viewer cannot be imported.
 
 `model_support.py` finds the package from where it lies (the nearest folder above it that holds `app/`) and the real course table in `data/course/` next to it. None of the tests needs the course data or the viewer. Run them under either runner:
 

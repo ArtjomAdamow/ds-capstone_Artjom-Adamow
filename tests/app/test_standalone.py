@@ -21,7 +21,7 @@ from unittest import mock
 
 from plotly.utils import PlotlyJSONEncoder
 
-from app.course_table import flag, load_table, missing_files, write_table
+from app.course_table import load_table, missing_files
 from app.figures import GOLD
 from app.models.course_model import TopicLayout
 from app.standalone import main as standalone_main
@@ -48,28 +48,8 @@ def dendrogram(panel):
     return next(child.figure for child in panel.children if getattr(child, "className", None) == "dendrogram-graph")
 
 
-TOPIC_OF = {card_id: key for key, ids in model_support.SCRIPTED.items() for card_id in ids}
-DESCRIPTIONS = {"01": "Alpha's description.", "02": "Beta's description.", "03": "Gamma's description."}
-
-
-def write_test_table(folder: Path) -> Path:
-    """The test course of model_support as a course table, as export_course.py writes it from the course file."""
-    cards = []
-    for card in model_support.CARDS:
-        deck_id, topic_id = TOPIC_OF[card.id]
-        name, rest = model_support.TOPIC_NAMES[(deck_id, topic_id)]
-        cards.append({
-            "comb_id": card.id, "deck_id": deck_id, "deck": card.deck, "topic_id": topic_id, "topic_name": name,
-            "rest": flag(rest), "stack": card.stack, "difficulty": card.difficulty, "question": card.question,
-            "answer": card.answer, "explain": card.explain,
-        })
-    decks = [{"deck_id": deck_id, "name": name, "description": DESCRIPTIONS[deck_id]} for name, deck_id in model_support.DECK_IDS.items()]
-    topics = [
-        {"deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": flag(rest)}
-        for (deck_id, topic_id), (name, rest) in model_support.TOPIC_NAMES.items()
-    ]
-    write_table(folder, cards, decks, topics)
-    return folder
+# The test course as a course table (model_support writes it, as export_course.py does from the course file)
+TOPIC_OF, DESCRIPTIONS, write_test_table = model_support.TOPIC_OF, model_support.DESCRIPTIONS, model_support.write_test_table
 
 
 class RecordingApp:

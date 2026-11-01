@@ -9,13 +9,9 @@ the seed.
   helper passes no `deck_positions` to compose (deck_positions is here for the record and the tests).
 * The card state takes `card_positions`, limited to the decks with the model's topics (Helper.card_positions), so a
   deck checked again gets the model's positions back and every other deck the viewer's random ones.
-* random_points draws the viewer's random positions as plain points, for the evaluation's random floor and random
-  layouts (evaluate.py).
 """
 
 from typing import Collection, Mapping, Optional, Sequence
-
-import numpy as np
 
 from project.models import CardPosition
 from project.services.positions import surface_positions
@@ -50,8 +46,3 @@ def card_positions(
     ids; None for every deck); the other ids, unknown ids and the cards of a one-card topic are placed at random on
     the surface."""
     return positions_from(ids, model.card_points_of(decks), seed)
-
-
-def random_points(ids: Sequence[str], seed: int = 42) -> np.ndarray:
-    """The viewer's random positions on the surface as one (x, y, z) row per id."""
-    return np.array([[position.x, position.y, position.z] for position in surface_positions(list(ids), seed)]).reshape(len(ids), 3)

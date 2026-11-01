@@ -109,6 +109,35 @@ def course_model(cards=None, seeds=None, deck_ids=DECK_IDS, vectoriser=None) -> 
     return CourseModel(CARDS if cards is None else cards, deck_ids, SEEDS if seeds is None else seeds, vectoriser)
 
 
+# --- the test course as a course table ----------------------------------------------------------------------
+
+TOPIC_OF = {card_id: key for key, ids in SCRIPTED.items() for card_id in ids}  # card id -> (deck id, topic id)
+DESCRIPTIONS = {"01": "Alpha's description.", "02": "Beta's description.", "03": "Gamma's description."}
+
+
+def write_test_table(folder: Path) -> Path:
+    """The test course as a course table in `folder`, as export_course.py writes it from the course file (the
+    standalone page's and the evaluation's input)."""
+    from app.course_table import flag, write_table
+
+    cards = []
+    for card in CARDS:
+        deck_id, topic_id = TOPIC_OF[card.id]
+        name, rest = TOPIC_NAMES[(deck_id, topic_id)]
+        cards.append({
+            "comb_id": card.id, "deck_id": deck_id, "deck": card.deck, "topic_id": topic_id, "topic_name": name,
+            "rest": flag(rest), "stack": card.stack, "difficulty": card.difficulty, "question": card.question,
+            "answer": card.answer, "explain": card.explain,
+        })
+    decks = [{"deck_id": deck_id, "name": name, "description": DESCRIPTIONS[deck_id]} for name, deck_id in DECK_IDS.items()]
+    topics = [
+        {"deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": flag(rest)}
+        for (deck_id, topic_id), (name, rest) in TOPIC_NAMES.items()
+    ]
+    write_table(folder, cards, decks, topics)
+    return folder
+
+
 # --- a course for the difficulty model D1 -------------------------------------------------------------------
 
 TOPICS = {"Alpha": ("python", "list"), "Beta": ("git", "branch"), "Gamma": ("statistics", "sample")}
