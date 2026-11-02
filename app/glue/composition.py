@@ -17,17 +17,22 @@ viewer's own, and the Helper button reloads the viewer's topic index (TopicIndex
 
 The difficulty model D1 (models.difficulty_model) is fitted with the course model, and its metrics are the back of
 the card panel (the viewer's overview_back, difficulty_metrics): with nothing selected, Enter or a click on the
-panel turns it over, to the metrics of the course in the decks view, of the entered deck in the topics view, and
-of the entered topic's counts with the deck's metrics in the cards view (metrics_back).
+panel turns it over, to the scores of the course in the decks view, of the entered deck in the topics view, and
+of the entered topic's counts with the deck's metrics in the cards view (metrics_back); the confusion matrix and
+the shares of the levels go to the window under the card's window (the viewer's overview_window hook, app roadmap
+step 25; window_back). The viewer's newer hooks are used where the viewer has them (viewer_hooks: the window and
+the top bar links, a release after sputnik 0.3.0, the capstone's); on a viewer without the window the back keeps
+the figures, and links are passed where the top bar can take them.
 
 With Dash's reloader the launcher's parent process composes too, but never serves and never saves, so it composes
 the viewer's app on the raw course file without the models.
 """
 
+import inspect
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import Callable, Mapping, Optional, Sequence
 
 from project.composition import Composition, compose
 from project.services.actions import ModuleAction
@@ -39,7 +44,16 @@ from ..models.difficulty_model import DifficultyReport, fit_difficulty
 from .button import Helper
 from .course import load_course
 from .derived import DERIVED_NAME, MODEL_STATE_NAME, read_model_state
-from .difficulty_metrics import metrics_panel
+from .difficulty_metrics import metrics_panel, metrics_window
+
+LINKS_HOOK = "links"  # compose's top bar links (services.actions.TopBarLink)
+WINDOW_HOOK = "overview_window"  # compose's window under the card's window
+
+
+def viewer_hooks(compose_function: Optional[Callable] = None) -> set[str]:
+    """The newer hooks this viewer's compose takes (this module's `compose` unless one is given), among LINKS_HOOK
+    and WINDOW_HOOK (none on sputnik 0.3.0)."""
+    return {LINKS_HOOK, WINDOW_HOOK} & set(inspect.signature(compose_function or compose).parameters)
 
 
 @dataclass(frozen=True)
@@ -50,6 +64,9 @@ class ModelComposition:
     helper: Optional[Helper] = None  # the Helper button's models, with the model
     difficulty: Optional[DifficultyReport] = None  # D1's metrics and predictions, with the model
     derived_path: Optional[Path] = None  # the derived course file compose read (None without the model)
+    overview_back: Optional[Callable] = None  # the back of the card panel, as passed to compose (with the model)
+    overview_window: Optional[Callable] = None  # the window under it, where the viewer has the hook
+    links: tuple = ()  # the top bar links passed to compose (none where the viewer has no hook)
 
     @property
     def action(self) -> Optional[ModuleAction]:
@@ -110,6 +127,7 @@ def compose_model(
     model: Optional[CourseModel] = None,
     difficulty: Optional[DifficultyReport] = None,
     derived_path: Optional[Path] = None,
+    links: Sequence = (),
 ) -> ModelComposition:
     """Compose the viewer's app on the derived course file with the Helper button. A fresh card state starts as
     the viewer's (the scripted topics, random positions, nothing generated); a stored one reads the model's
@@ -118,24 +136,31 @@ def compose_model(
     model, the app is the viewer's on the raw course file (no Helper button, no back of the card panel), and
     nothing is written. D1 is fitted with the model unless given. `state_path` is the viewer's one state file;
     `derived_path` is where the derived course file and the model state go (the launcher's cards.py passes its
-    temp/); by default next to the requested state file."""
+    temp/); by default next to the requested state file. `links` are the viewer's TopBarLinks for its top bar
+    (the launcher's link to the models' page), passed where the viewer's compose takes them."""
     derived_path = Path(derived_path) if derived_path is not None else Path(state_path).with_name(DERIVED_NAME)
     fresh_cards = is_fresh(state_path)
+    hooks = viewer_hooks()
+    extra = {LINKS_HOOK: list(links)} if links and LINKS_HOOK in hooks else {}
     if fit and model is None:
         model = build_model(cards_path)
     if model is None:
-        composition = compose(base_dir, boot_id, cards_path, state_path)
-        return ModelComposition(composition=composition, model=None, fresh_cards=fresh_cards)
+        composition = compose(base_dir, boot_id, cards_path, state_path, **extra)
+        return ModelComposition(composition=composition, model=None, fresh_cards=fresh_cards, links=tuple(extra.get(LINKS_HOOK, ())))
     if difficulty is None:
         difficulty = build_difficulty(cards_path, model)
     model_state = derived_path.with_name(MODEL_STATE_NAME)
     helper = Helper(model, difficulty, cards_path, derived_path, model_state, {} if fresh_cards else read_model_state(model_state))
     helper.write_course()
+    windowed = WINDOW_HOOK in hooks
+    back = lambda state: metrics_back(state, difficulty, figures=not windowed)  # noqa: E731
+    window = (lambda state: window_back(state, difficulty)) if windowed else None
+    if windowed:
+        extra[WINDOW_HOOK] = window
     composition = compose(
         base_dir, boot_id, derived_path, state_path,
-        card_positions=helper.card_positions, action=helper.action,
-        overview_back=lambda state: metrics_back(state, difficulty),
-        refill_groups=helper.refill_groups, after_save=helper.write_state,
+        card_positions=helper.card_positions, action=helper.action, overview_back=back,
+        refill_groups=helper.refill_groups, after_save=helper.write_state, **extra,
     )
     router = composition.user_state
     helper.load_groups(router)  # the stored difficulty groups, the empty ones filled again
@@ -143,15 +168,28 @@ def compose_model(
     helper.preset_cutoffs(router)  # their views' presets and Display's check again
     return ModelComposition(
         composition=composition, model=model, fresh_cards=fresh_cards, helper=helper, difficulty=difficulty,
-        derived_path=derived_path,
+        derived_path=derived_path, overview_back=back, overview_window=window, links=tuple(extra.get(LINKS_HOOK, ())),
     )
 
 
-def metrics_back(state, difficulty: DifficultyReport):
-    """The back of the card panel: D1's metrics of the course in the decks view, of the entered deck in the topics
-    view, and of the entered topic (its counts and predictions with the deck's metrics) in the cards view."""
+def _scope(state) -> tuple:
+    """(deck, topic) of the view for the metrics: none in the decks view, the entered deck in the topics view, the
+    entered deck and topic in the cards view."""
     if state.view == DECKS:
-        return metrics_panel(difficulty)
+        return None, None
     if state.view == TOPICS:
-        return metrics_panel(difficulty, state.entered_name)
-    return metrics_panel(difficulty, state.entered_name, state.entered_topic_info)
+        return state.entered_name, None
+    return state.entered_name, state.entered_topic_info
+
+
+def metrics_back(state, difficulty: DifficultyReport, figures: bool = True):
+    """The back of the card panel: D1's scores of the course in the decks view, of the entered deck in the topics
+    view, and of the entered topic (its counts and predictions with the deck's metrics) in the cards view; with
+    `figures` the matrix and the shares too (a viewer without the window under the card's window)."""
+    return metrics_panel(difficulty, *_scope(state), figures=figures)
+
+
+def window_back(state, difficulty: DifficultyReport):
+    """The window under the card's window while the back is up: D1's confusion matrix and the shares of the levels
+    of the view's part."""
+    return metrics_window(difficulty, *_scope(state))

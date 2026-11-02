@@ -7,16 +7,23 @@ viewer's in its theme (assets/style.css holds the tokens):
   gold and dashed (straight between decks, along the surface between cards), the centroid of a deck and the axes with
   their ticks, the map's own coordinates, the unit sphere's; with T the centroid, the axes and T1's markers (a card's
   margin on a teal scale, a cross below the threshold, the diamonds of the moved cards, a topic's dot grown with its
-  share of cards between two topics); with D the cards coloured by their authored difficulty, predicted and unrated
-  ones grey; with every panel collapsed, or S expanded, grey dots at random positions, nothing else;
+  share of cards between two topics); with D the cards coloured as the viewer colours them after Helper: a rated quiz
+  by its level, a quiz D1 predicted in the predicted colour as a cross, a flashcard grey, with the legend inside the
+  map (plotly's, at the top left); with every panel collapsed, or S expanded, grey dots at random positions, nothing
+  else;
 * window A (`dot-panel`), under the map (beside it in portrait): the selected dot's ids and counts, a click on a
   deck's or a topic's enters it; with nothing selected the dendrogram of the view's membership with the preset's
   cut-off line, its leaves by id (figures.dendrogram_figure);
-* the model panels (`box-S` to `box-D`), a column right of both (under them in portrait): one per model letter, a
+* the difficulty window (`difficulty-window`), under window A, shown with D expanded only: D1's confusion matrix and
+  the shares of the levels of the view's part of the course (metrics_window);
+* the model panels (`box-S` to `box-D`), a column right of all three (under them in portrait): one per model letter, a
   row with its letter and name (`panel-S`, a click expands it and collapses any other) and a close box (`close-S`);
   expanded, the levels' sections (`content-S`): the level's live measures, the newest run's table of its results
-  file, one row per measure and one column per variant with the chosen one marked, and a collapsed "Columns" row
-  with what the measures mean.
+  file, one row per measure and one column per variant with the chosen one marked. A click on a row opens its
+  description under it (what the measure is, its range, from app/docs/columns.md), one row at a time: a click on
+  another row moves it, a click on the same row or the description's close box closes it. The click goes through the
+  hidden input `measure-click` (assets/measure_rows.js sets it), the one expanded row lives in the `view` store.
+  The panels' text is at double size (style.css, `--panel-font`).
 
 No learning material shows: no card's question, answer or explanation, no deck's description; a card is its
 comb_id. The map's hover labels and the line under the top bar are ids too: a deck's id, a topic's label (its topic
@@ -32,8 +39,8 @@ from dash import dcc, html
 
 from ..cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE
 from ..figures import (
-    CUT_COLOR, FONT, GOLD, GRID, INK, MUTED, confusion_figure, metrics_subtitle, score_header, score_rows, shares_figure,
-    sphere_surface, surface_arc,
+    CUT_COLOR, FONT, GOLD, GRID, INK, MUTED, PREDICTED_COLOR, confusion_figure, metrics_subtitle, score_header, score_rows,
+    shares_figure, sphere_surface, surface_arc,
 )
 from .results import Table
 
@@ -41,8 +48,14 @@ CARDS_VIEW = "cards"
 TOPICS_VIEW = "topics"
 DECKS_VIEW = "decks"
 BACKGROUND = "#102a43"
-GREY = "#7c8b99"  # the viewer's colour of a dot in no group: a predicted or unrated card, the cards' sphere
+GREY = "#7c8b99"  # the viewer's colour of a dot in no group: a flashcard, the cards' sphere
 LEVEL_COLORS = {"easy": "#4f7fcf", "medium": "#b8956a", "hard": "#ff5349"}  # blue, beige-brown, red-orange
+# The quizzes D1 predicted: the viewer's "Quiz difficulty: predicted" group (glue.difficulty_groups, the oldest group,
+# so its colour decides there too) and the predicted series of the shares figure share this amber
+PREDICTED_SYMBOL = "cross"
+PREDICTED = "predicted"
+FLASHCARD = "flashcard"
+UNRATED = "unrated quiz"  # an unrated quiz without a prediction (D1 without metrics)
 DECK_COLOR = MUTED  # the decks in one colour
 TOPIC_COLOR = MUTED
 LINK_WIDTH = 4
@@ -61,7 +74,16 @@ AXIS_RANGE = [-1.15, 1.15]
 AXIS_TICKS = [-1, -0.5, 0, 0.5, 1]  # the unit sphere's coordinates
 AXIS_FONT = {"color": MUTED, "family": "DM Mono, monospace", "size": 10}
 DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
-LEGEND = (("easy", LEVEL_COLORS["easy"]), ("medium", LEVEL_COLORS["medium"]), ("hard", LEVEL_COLORS["hard"]), ("predicted or unrated", GREY))
+# The classes of the cards view with D, in legend order: (name, colour, symbol)
+LEGEND = (
+    ("easy", LEVEL_COLORS["easy"], "circle"), ("medium", LEVEL_COLORS["medium"], "circle"), ("hard", LEVEL_COLORS["hard"], "circle"),
+    (PREDICTED, PREDICTED_COLOR, PREDICTED_SYMBOL), (FLASHCARD, GREY, "circle"), (UNRATED, GREY, "circle"),
+)
+LEGEND_STYLE = {
+    "title": {"text": "Cards by difficulty", "font": {"color": MUTED, "family": "DM Mono, monospace", "size": 11}},
+    "x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top", "bgcolor": "rgba(7, 24, 39, 0.65)", "bordercolor": "rgba(247, 242, 232, 0.16)",
+    "borderwidth": 1, "font": {"color": INK, "family": "DM Mono, monospace", "size": 11}, "itemclick": False, "itemdoubleclick": False,
+}
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
 STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
 PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty"}
@@ -77,7 +99,9 @@ OVERVIEW_HINT = {
     CARDS_VIEW: "Select a card to see its ids and its level. Back goes up to the topics.",
 }
 TOPICS_NOTE = "The model's connections are not drawn in this view: connections visualization is not yet decided in this view."
-COLUMNS_SUMMARY = "Columns"
+WINDOW_NOTE = "The confusion matrix and the shares of the levels are in the window under the dendrogram's window."
+ROW_HINT = "Click a row for what the measure is."
+NO_DESCRIPTION = "No description of this column yet."
 
 
 # --- the map ---------------------------------------------------------------------------------------------------
@@ -142,6 +166,23 @@ def dots_trace(points: Mapping, labels: Mapping, colors: Mapping, view: str, sym
     )
 
 
+def legend_traces(points: Mapping, classes: Mapping[str, str]) -> list[go.Scatter3d]:
+    """The legend inside the map with D: one entry per class the view holds, in LEGEND's order, each a marker in the
+    class's colour and symbol on one of its cards (under the dots trace, neither hoverable nor clickable), so plotly
+    draws the legend from real markers."""
+    traces = []
+    for name, color, symbol in LEGEND:
+        card_id = next((dot for dot in points if classes.get(dot) == name), None)
+        if card_id is None:
+            continue
+        x, y, z = points[card_id]
+        traces.append(go.Scatter3d(
+            x=[x], y=[y], z=[z], mode="markers", marker={"size": DOT_SIZE[CARDS_VIEW], "color": color, "symbol": symbol, "line": {"width": 0}},
+            hoverinfo="skip", showlegend=True, name=name,
+        ))
+    return traces
+
+
 def selected_trace(point, color: str) -> list[go.Scatter3d]:
     """The selected dot: a white ring behind it, the dot larger."""
     x, y, z = ([value] for value in point)
@@ -182,6 +223,7 @@ def map_figure(page, state: dict) -> go.Figure:
     symbols = None
     sizes = None
     links = None
+    legend = False
     if view == DECKS_VIEW:
         points = page.deck_points(state)
         labels = {deck_id: deck_id for deck_id in points}
@@ -204,7 +246,9 @@ def map_figure(page, state: dict) -> go.Figure:
         points = page.card_points(topic, state) if topic is not None else {}
         labels = {card_id: card_id for card_id in points}
         if panel == "D":
-            colors = {card_id: card_color(page.card_by_id[card_id]) for card_id in points}
+            colors, symbols, classes = page.d1_markers(points)
+            figure.add_traces(legend_traces(points, classes))
+            legend = bool(points)
         elif panel == "T" and topic is not None:
             colors, symbols, labels = page.t1_markers(topic, points)
         else:
@@ -220,7 +264,7 @@ def map_figure(page, state: dict) -> go.Figure:
     figure.update_layout(
         uirevision=f"standalone:{view}:{state.get('deck') or ''}:{state.get('topic') or ''}:{'model' if model else 'random'}",
         paper_bgcolor=BACKGROUND, plot_bgcolor=BACKGROUND, font={"color": INK, "family": "Georgia"},
-        margin={"l": 0, "r": 0, "t": 10, "b": 0}, showlegend=False,
+        margin={"l": 0, "r": 0, "t": 10, "b": 0}, showlegend=legend, legend=LEGEND_STYLE,
         scene={
             "aspectmode": "cube", "bgcolor": BACKGROUND, "camera": DEFAULT_CAMERA,
             "xaxis": _axis("x", model), "yaxis": _axis("y", model), "zaxis": _axis("z", model),
@@ -230,10 +274,20 @@ def map_figure(page, state: dict) -> go.Figure:
     return figure
 
 
-def card_color(card) -> str:
-    """A card's colour as the viewer shows it after Helper: its authored difficulty's, else grey (predicted or
-    unrated)."""
-    return LEVEL_COLORS.get(card.difficulty, GREY)
+def card_class(card, predicted: bool) -> str:
+    """A card's class on the map with D, as the viewer colours it after Helper: its authored level; a quiz D1
+    predicted "predicted" (the oldest group there, so its colour decides, not the predicted level's); a flashcard
+    "flashcard"; an unrated quiz without a prediction "unrated quiz"."""
+    if card.difficulty in LEVEL_COLORS:
+        return card.difficulty
+    if predicted:
+        return PREDICTED
+    return UNRATED if card.stack in QUIZ_STACKS else FLASHCARD
+
+
+def class_style(name: str) -> tuple[str, str]:
+    """A class's (colour, symbol) from LEGEND."""
+    return next((color, symbol) for class_name, color, symbol in LEGEND if class_name == name)
 
 
 # --- the readout tables (C1's measures, the dot's ids, S1's and T1's live measures) ---------------------------------
@@ -329,7 +383,7 @@ def overview_panel(title: str, figure: Optional[go.Figure], view: str, subtitle:
     )
 
 
-# --- D1's metrics (the D panel) ----------------------------------------------------------------------------------
+# --- D1's metrics: the scores in the D panel, the matrix and the shares in the difficulty window -------------------
 
 
 def score_table(report) -> html.Table:
@@ -346,28 +400,13 @@ def _graph(figure: go.Figure, class_name: str) -> dcc.Graph:
     return dcc.Graph(figure=figure, config={"displayModeBar": False}, className=class_name)
 
 
-def color_legend() -> html.Div:
-    """The cards' colours on the map with D: the authored levels, grey for a predicted or unrated card."""
-    return html.Div(
-        [html.Div("Cards by difficulty", className="card-label")]
-        + [
-            html.Div([html.Span(className="legend-swatch", style={"backgroundColor": color}), html.Span(name)], className="legend-item")
-            for name, color in LEGEND
-        ],
-        className="color-legend",
-    )
-
-
-def metrics_panel(report, scope: str, legend: bool = False) -> html.Div:
-    """What D1 measured and predicted for the view's part of the course (`report`, the course's, a deck's or a
-    topic's), as the viewer's back of the card panel shows it; or why there is nothing to show. With `legend` (the
-    cards view) the cards' colour legend follows the title."""
-    head = [html.Div(f"Difficulty model D1 · {scope}", className="card-label")] + ([color_legend()] if legend else [])
+def metrics_panel(report, scope: str) -> html.Div:
+    """What D1 measured for the view's part of the course (`report`, the course's, a deck's or a topic's), in the D
+    panel: the title, what was measured, the score table and where the matrix and the shares are; or why there is
+    nothing to show."""
+    head = [html.Div(f"Difficulty model D1 · {scope}", className="card-label")]
     if not report.measured:
-        children = head + [html.P(report.note or "No difficulty model.", className="empty-state")]
-        if report.predictions:  # a deck without rated quizzes still has its predicted ones
-            children.append(_graph(shares_figure(report), "difficulty-shares"))
-        return html.Div(children, className="tool-panel difficulty-panel")
+        return html.Div(head + [html.P(report.note or "No difficulty model.", className="empty-state")], className="tool-panel difficulty-panel")
     return html.Div(
         head
         + [
@@ -375,13 +414,33 @@ def metrics_panel(report, scope: str, legend: bool = False) -> html.Div:
             score_table(report),
             html.Div("With the deck shares every level keeps its true count, so macro-F1 equals the balanced accuracy.",
                      className="card-hint"),
+            html.Div(WINDOW_NOTE, className="card-hint"),
+        ],
+        className="tool-panel difficulty-panel",
+    )
+
+
+def metrics_window(report, scope: str) -> html.Div:
+    """The difficulty window, under the dendrogram's window with D expanded: the confusion matrix (the rated
+    quizzes' true and predicted level) and the shares of the levels of the view's part; a part without metrics its
+    predicted shares only (a deck without rated quizzes), a part without quizzes its note."""
+    children = [html.Div(f"Difficulty model D1 · {scope}", className="card-label")]
+    if report.measured:
+        children += [
             html.Div("Rated quizzes: true and predicted level", className="card-label metrics-heading"),
             _graph(confusion_figure(report), "difficulty-confusion"),
             html.Div("Shares of the levels", className="card-label metrics-heading"),
             _graph(shares_figure(report), "difficulty-shares"),
-        ],
-        className="tool-panel difficulty-panel",
-    )
+        ]
+    elif report.predictions:
+        children += [html.Div("Shares of the levels", className="card-label metrics-heading"), _graph(shares_figure(report), "difficulty-shares")]
+    else:
+        children.append(html.P(report.note or "No difficulty model.", className="empty-state"))
+    return html.Div(children, className="card-panel difficulty-window")
+
+
+def window_class(expanded: bool) -> str:
+    return f"window-d {'expanded' if expanded else 'collapsed'}"
 
 
 # --- T1's markers: the legend and the histogram (the T panel) ------------------------------------------------------
@@ -414,14 +473,39 @@ def margin_histogram(margins: Sequence[float], threshold: float) -> go.Figure:
 # --- the model panels ---------------------------------------------------------------------------------------------
 
 
-def results_table(table: Table) -> html.Div:
-    """A level's results of the newest run: the heads (the chosen variant marked), one row per measure; the
+def measure_key(prefix: str, columns: Sequence[str]) -> str:
+    """A row's key in the `view` store: the panel's letter and the table's place, then the row's first column."""
+    return f"{prefix}:{columns[0]}"
+
+
+def description_row(entry: Optional[tuple[str, str, str]], width: int) -> html.Tr:
+    """The open description under a row: the column names, what the measure is and its range (app/docs/columns.md),
+    with the close box; one line when the glossary has no entry."""
+    if entry is None:
+        text = [html.Div(NO_DESCRIPTION)]
+    else:
+        names, meaning, span = entry
+        text = [html.Div(names, className="measure-names"), html.Div(meaning), html.Div(f"Range: {span}", className="measure-range")]
+    return html.Tr(
+        html.Td([html.Button("×", className="measure-close", title="Close"), html.Div(text, className="measure-text")], colSpan=width),
+        className="measure-description",
+    )
+
+
+def results_table(table: Table, prefix: str, expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
+    """A level's results of the newest run: the heads (the chosen variant marked), one row per measure, clickable
+    (its key in `data-measure`; assets/measure_rows.js sends it), the open row's description under it; the
     bookkeeping as the subtitle."""
     header = html.Tr([html.Th("")] + [html.Th(head, className="chosen" if chosen else None) for head, chosen in zip(table.heads, table.chosen)])
-    rows = [
-        html.Tr([html.Td(label, className="score-label")] + [html.Td(value, className="chosen" if chosen else None) for value, chosen in zip(values, table.chosen)])
-        for label, values in table.rows
-    ]
+    rows = []
+    for (label, values), columns in zip(table.rows, table.row_columns):
+        key = measure_key(prefix, columns)
+        rows.append(html.Tr(
+            [html.Td(label, className="score-label")] + [html.Td(value, className="chosen" if chosen else None) for value, chosen in zip(values, table.chosen)],
+            className="measure-row open" if key == expanded else "measure-row", title=ROW_HINT, **{"data-measure": key},
+        ))
+        if key == expanded:
+            rows.append(description_row(glossary.get(columns[0]), len(table.heads) + 1))
     return html.Div(
         [
             html.Div(table.title, className="card-label metrics-heading"),
@@ -432,27 +516,15 @@ def results_table(table: Table) -> html.Div:
     )
 
 
-def glossary_details(rows: Sequence[tuple[str, str, str]]) -> html.Details:
-    """The collapsed "Columns" row: what the shown measures mean, from app/docs/columns.md."""
-    body = html.Table(
-        [html.Thead(html.Tr([html.Th("Column"), html.Th("What it measures"), html.Th("Range")]))]
-        + [html.Tbody([html.Tr([html.Td(names, className="score-label"), html.Td(meaning), html.Td(span)]) for names, meaning, span in rows])],
-        className="glossary-table",
-    )
-    return html.Details([html.Summary(COLUMNS_SUMMARY), body], className="columns")
-
-
-def level_section(title: str, description: str, live: Sequence, tables: Optional[Sequence[Table]],
-                  glossary: Sequence[tuple[str, str, str]], hint: str) -> html.Div:
+def level_section(title: str, description: str, live: Sequence, tables: Optional[Sequence[Table]], hint: str,
+                  letter: str, expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
     """A level's section of its model's panel: its name and what it is, its live measures, its results tables with
-    the "Columns" row, or the hint how to make a results file."""
+    the one open row's description, or the hint how to make a results file."""
     body = [html.Div(title, className="card-label section-title"), html.Div(description, className="deck-description")] + list(live)
     if tables is None:
         body.append(html.P(hint, className="empty-state"))
     else:
-        body += [results_table(table) for table in tables]
-        if glossary:
-            body.append(glossary_details(glossary))
+        body += [results_table(table, f"{letter}:{index}", expanded, glossary) for index, table in enumerate(tables)]
     return html.Div(body, className="level-section")
 
 
@@ -480,7 +552,8 @@ def box_class(expanded: bool) -> str:
 
 
 def page_layout(home: dict) -> html.Main:
-    """The page; the callback fills the map, window A and the panels at load."""
+    """The page; the callback fills the map, window A, the difficulty window and the panels at load. The hidden
+    input `measure-click` carries a click on a results row (assets/measure_rows.js) to the callback."""
     return html.Main(
         [
             html.Header(
@@ -504,11 +577,13 @@ def page_layout(home: dict) -> html.Main:
                         className="map-frame",
                     ),
                     html.Div(id="dot-panel", n_clicks=0, className="window-a"),
+                    html.Div(id="difficulty-window", className=window_class(False)),
                     html.Div(model_panel_boxes(), id="model-panels", className="model-panels"),
                 ],
                 className="workspace",
             ),
             dcc.Store(id="view", data=dict(home)),
+            dcc.Input(id="measure-click", value="", type="text", className="measure-click"),
         ],
         className="app-shell",
     )

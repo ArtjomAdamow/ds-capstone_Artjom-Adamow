@@ -1,10 +1,12 @@
 """Difficulty groups: the course's easy, medium and hard as generated card groups of the card state ("Quiz: easy",
-"Quiz: medium", "Quiz: hard"), and the grey group of the predicted quizzes ("Quiz difficulty: predicted").
+"Quiz: medium", "Quiz: hard"), and the amber group of the predicted quizzes ("Quiz difficulty: predicted").
 
 Every card with a difficulty is a member of its difficulty's group; unrated cards are in none and keep the grey of
-a card without a group. A quiz that the difficulty model D1 rated (models.difficulty_model) gets two memberships:
-the grey group "Quiz difficulty: predicted" and the group of its predicted level, the same groups (and colours) as the
-rated cards. A card can also be in any of the user's groups.
+a card without a group, so in the cards view the flashcards alone are grey once Helper has run. A quiz that the
+difficulty model D1 rated (models.difficulty_model) gets two memberships: the amber group "Quiz difficulty:
+predicted" (PREDICTED_COLOR, the colour of the predicted series in the shares figure and of a predicted card on the
+standalone page's map, written there anew) and the group of its predicted level, the same groups (and colours) as
+the rated cards. A card can also be in any of the user's groups.
 
 The groups are this module's records (GROUP_IDS, `difficulty-<key>`, apart from the user's "group-<n>"), of the cards
 view's kind and of this maker's origin (ORIGIN): the viewer lists them in the cards view only, keeps them read only
@@ -15,19 +17,23 @@ smuggle another group in.
 
 They are always the oldest groups: every fill gives them the lowest ranks ("Quiz difficulty: predicted" first, then
 easy, medium and hard) and the first places after the viewer's predefined groups of the topic dots
-(project.content.topic_groups), which keep theirs. A predicted card therefore shows grey, a rated card its
-difficulty colour, unless Focus unchecks them; and a group missing from the state comes back as the oldest when the
-Helper button generates it again. A generated group left without members (its decks unchecked) is filled again from
-the loaded cards (refill_empty), so the same set of generated groups stays.
+(project.content.topic_groups), which keep theirs. A predicted card therefore shows the predicted colour (the oldest
+group's), a rated card its difficulty colour, unless Focus unchecks them; and a group missing from the state comes
+back as the oldest when the Helper button generates it again. A generated group left without members (its decks
+unchecked) is filled again from the loaded cards (refill_empty), so the same set of generated groups stays.
 """
 
-from dataclasses import asdict
+from dataclasses import asdict, fields, replace
 from typing import Iterable, Mapping
 
 from project.models import USER_ORIGIN, CardGroup
 from project.services.views import CARDS
 
 ORIGIN = "difficulty_model"  # the maker of these groups (CardGroup.origin)
+# The predicted quizzes' marker on the map: a cross (CardGroup.symbol, a viewer newer than sputnik 0.3.0; a viewer
+# without the field draws circles), as the standalone page draws them
+PREDICTED_SYMBOL = "cross"
+HAS_SYMBOL = any(item.name == "symbol" for item in fields(CardGroup))
 
 # difficulty -> (group name, colour)
 DIFFICULTY_GROUPS = {
@@ -36,9 +42,11 @@ DIFFICULTY_GROUPS = {
     "hard": ("Quiz: hard", "#ff5349"),  # Red-Orange
 }
 GROUP_NAMES = [name for name, _ in DIFFICULTY_GROUPS.values()]
-# The predicted cards: the no-group grey, so a predicted card looks unrated until Focus unchecks this group
+# The predicted cards: the amber of figures.PREDICTED_COLOR, so a predicted card shows as predicted, not as its
+# level, until Focus unchecks this group; the flashcards alone keep the no-group grey
 PREDICTED = "predicted"
-PREDICTED_GROUP = ("Quiz difficulty: predicted", "#7c8b99")
+PREDICTED_COLOR = "#c98500"
+PREDICTED_GROUP = ("Quiz difficulty: predicted", PREDICTED_COLOR)
 # key (PREDICTED or a difficulty) -> group id, the oldest first
 GROUP_IDS = {key: f"difficulty-{key}" for key in (PREDICTED, *DIFFICULTY_GROUPS)}
 GENERATED_IDS = list(GROUP_IDS.values())
@@ -49,9 +57,11 @@ def _age(group) -> tuple:
 
 
 def _record(key: str, members: Iterable[str]) -> CardGroup:
-    """The group of a key as this maker makes it (its id, name, colour, kind and origin), with these members."""
+    """The group of a key as this maker makes it (its id, name, colour, kind, origin and, for the predicted group on
+    a viewer with group symbols, the cross), with these members."""
     name, color = PREDICTED_GROUP if key == PREDICTED else DIFFICULTY_GROUPS[key]
-    return CardGroup(GROUP_IDS[key], name, color, list(members), kind=CARDS, origin=ORIGIN)
+    symbol = {"symbol": PREDICTED_SYMBOL} if key == PREDICTED and HAS_SYMBOL else {}
+    return CardGroup(GROUP_IDS[key], name, color, list(members), kind=CARDS, origin=ORIGIN, **symbol)
 
 
 def _group(core, key: str):
@@ -169,8 +179,5 @@ def restore_groups(core, groups: Iterable[CardGroup], loaded_ids) -> None:
     loaded = set(loaded_ids)
     core.groups[:] = [group for group in core.groups if group.origin != ORIGIN]
     for group in groups:
-        core.groups.append(CardGroup(
-            group.id, group.name, group.color, [card_id for card_id in group.card_ids if card_id in loaded],
-            kind=group.kind, origin=group.origin,
-        ))
+        core.groups.append(replace(group, card_ids=[card_id for card_id in group.card_ids if card_id in loaded]))
     make_oldest(core)

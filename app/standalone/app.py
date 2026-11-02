@@ -12,7 +12,10 @@ shows of the models:
 
 * every panel collapsed, or S or D expanded: the scripted topics' membership, random positions on the sphere
   (evaluation.random_directions over the view's sorted ids with a fixed seed, the same for every panel), no
-  connections, centroid or axes; D colours the cards by their authored difficulty;
+  connections, centroid or axes; D colours the cards as the viewer does after Helper (a rated quiz by its level, a
+  quiz D1 predicted in the predicted colour as a cross, a flashcard grey; Page.d1_markers), with the legend inside the
+  map, and opens the difficulty window under the dendrogram's window with D1's confusion matrix and the shares of the
+  levels of the view's part (Page.difficulty_window);
 * C: T1's membership at C1's positions (the decks', the cards' directions), the connections below the preset, the
   centroid and the axes;
 * T: the same positions, the centroid and the axes, no connections, and T1's markers: a card's margin on a teal
@@ -26,9 +29,10 @@ not hold is unselected. The dendrogram's window shows the tree of the view's mem
 every panel state (a scripted topic's by clustering.merge_links on its cards).
 
 A panel's sections, one per level (S1, C1, T1, D1): the level's live measures of the view (C1's own measures,
-Page.measures: the layouts' neighbour measures, the connections the preset keeps and T1's margins; D1's metrics;
+Page.measures: the layouts' neighbour measures, the connections the preset keeps and T1's margins; D1's scores;
 S1's vocabulary, minimum score and coverage; T1's agreement with the scripted topics, the moved cards and the
-margins of the view), the newest run's table of its results file (standalone.results) and the "Columns" row.
+margins of the view) and the newest run's table of its results file (standalone.results), whose rows open their
+description on a click, one at a time (the `measure` key of the `view` store: the row's key, or None).
 
 The panels, the map's hover and the line under the top bar (Page.where) name the dots and the views by id
 (Page.scope): no learning material, no card's text, no deck's description and no deck's name. A topic's name, the
@@ -38,11 +42,13 @@ that names a deck or a topic shows the id or the label (results.Results.by_ids).
 
 The callback (register_callback) keeps the view in the `view` store: a click on a dot selects it, Open or a click on
 a selected deck's or topic's panel enters it, Back goes up a level with the dot it came from selected (in the decks
-view it unselects); a panel's row expands it and collapses any other, its close box collapses it. No keys, groups,
-editing, progress, quiz or image window.
+view it unselects); a panel's row expands it and collapses any other, its close box collapses it; a results row's
+click (the hidden input `measure-click`, a JSON of the row's key and a sequence number) opens its description or
+closes the open one. No keys, groups, editing, progress, quiz or image window.
 """
 
 import hashlib
+import json
 import math
 from pathlib import Path
 from typing import Optional
@@ -61,10 +67,11 @@ from ..models.evaluation import random_directions
 from ..models.layout import as_dense, fibonacci_sphere
 from .layout import (
     CARDS_VIEW, CROSS_SYMBOL, DECKS_VIEW, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, PANEL_LETTERS,
-    TOPICS_NOTE, TOPICS_VIEW, box_class, card_panel, deck_panel, level_section, map_figure, margin_color, margin_histogram,
-    metrics_panel, model_readout, overview_panel, page_layout, t1_legend, topic_panel,
+    TOPICS_NOTE, TOPICS_VIEW, box_class, card_class, card_panel, class_style, deck_panel, level_section, map_figure, margin_color,
+    margin_histogram, metrics_panel, metrics_window, model_readout, overview_panel, page_layout, t1_legend, topic_panel,
+    window_class,
 )
-from .results import Results, course_note, glossary_rows, read_glossary
+from .results import Results, course_note, read_glossary
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"  # next to evaluate.py: modules/helper/ here, the capstone's root
@@ -76,8 +83,10 @@ RANDOM_SEED = 42  # the random positions of the scripted topics: one draw per vi
 MARGIN_PERCENTILE = 95  # the top of the teal scale: the course's 95th percentile of the margins
 SIMILAR_MEMBERS = 5  # a moved-out card sits at the mean direction of this many most similar members of its topic
 MODEL_PANELS = ("C", "T")  # the panels whose map shows T1's membership at C1's positions
-HOME = {"view": DECKS_VIEW, "deck": None, "topic": None, "selected": None, "panel": None}
+HOME = {"view": DECKS_VIEW, "deck": None, "topic": None, "selected": None, "panel": None, "measure": None}
 ENTER_TRIGGERS = ("open", "dot-panel")
+MEASURE_INPUT = "measure-click"  # the hidden input a results row's click sets (assets/measure_rows.js)
+RESULTS_FILES = {"S": "results.csv", "C": "results.csv", "T": "topics.csv", "D": "difficulty.csv"}
 Key = tuple[str, str]  # (deck id, topic id)
 # The readout's hints, a row's tooltip
 TRUSTWORTHINESS = "scikit-learn's trustworthiness of the map for the text vectors: 1 when none of a dot's k nearest on the map is a stranger by text."
@@ -311,6 +320,19 @@ class Page:
             rows.append(("scripted topic", self.label_in_deck(topic.deck_id, self.topic_model.scripted_of.get(card_id, ""))))
         return rows
 
+    # --- D1's markers ------------------------------------------------------------------------------------------
+
+    def d1_markers(self, points: dict[str, Point]) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+        """With D: every drawn card's colour, symbol and class (layout.card_class: its authored level, "predicted"
+        for a quiz D1 predicted, a cross in the predicted colour, "flashcard" or "unrated quiz" grey)."""
+        colors: dict[str, str] = {}
+        symbols: dict[str, str] = {}
+        classes: dict[str, str] = {}
+        for card_id in points:
+            classes[card_id] = card_class(self.card_by_id[card_id], card_id in self.difficulty.predictions)
+            colors[card_id], symbols[card_id] = class_style(classes[card_id])
+        return colors, symbols, classes
+
     # --- the connections and the trees -------------------------------------------------------------------------
 
     def deck_links(self) -> list[tuple[str, str]]:
@@ -410,17 +432,28 @@ class Page:
             figure = dendrogram_figure(merges, ids, {}, kept)  # no labels: the leaves by id
         return overview_panel(title, figure, view, subtitle)
 
-    def metrics(self, state: dict):
-        """D1's metrics of the view: the course, the entered deck, or the entered topic under its membership, the
-        last with the cards' colour legend."""
+    def metrics_report(self, state: dict) -> tuple[DifficultyReport, str]:
+        """D1's report of the view (the course, the entered deck, or the entered topic under its membership) with
+        the scope it names."""
         if state["view"] == DECKS_VIEW:
-            return metrics_panel(self.difficulty, self.scope(state))
+            return self.difficulty, self.scope(state)
         deck = self.deck_by_id.get(state["deck"])
         part = self.difficulty.for_deck(deck.name if deck else "")
         topic = self.entered(state)
         if state["view"] == TOPICS_VIEW or topic is None:
-            return metrics_panel(part, f"deck {state['deck']}")
-        return metrics_panel(part.for_topic(topic.name, topic.ids), self.scope(state), legend=True)
+            return part, f"deck {state['deck']}"
+        return part.for_topic(topic.name, topic.ids), self.scope(state)
+
+    def metrics(self, state: dict):
+        """D1's scores of the view in the D panel (the matrix and the shares are the difficulty window's)."""
+        return metrics_panel(*self.metrics_report(state))
+
+    def difficulty_window(self, state: dict) -> tuple[list, str]:
+        """The difficulty window's content and class: with D expanded, D1's confusion matrix and the shares of the
+        levels of the view's part; otherwise empty and collapsed."""
+        if state.get("panel") != "D":
+            return [], window_class(False)
+        return [metrics_window(*self.metrics_report(state))], window_class(True)
 
     def measures(self, state: dict) -> tuple[str, list]:
         """C1's readout: C1's own measures of the view, as (what they cover, [(heading, [(label, value, hint)])]),
@@ -499,12 +532,13 @@ class Page:
         contents = [sections[letter](state) if letter == expanded else [] for letter in PANEL_LETTERS]
         return contents, [box_class(letter == expanded) for letter in PANEL_LETTERS]
 
-    def _tables(self, letter: str, state: dict):
-        """A level's tables of the newest run, their glossary rows and the hint: (tables, glossary, hint)."""
+    def _section(self, letter: str, title: str, live: list, state: dict):
+        """A level's section: its title and description, the live measures, its tables of the newest run with the
+        one open row's description (the glossary), or the hint how to make the results file."""
         deck_id = state.get("deck") if letter == "T" and state["view"] != DECKS_VIEW else None
         tables = self.results.tables(letter, deck_id)
-        measures = [name for table in tables or [] for name in table.measures]
-        return tables, glossary_rows(measures, self.glossary), self.results.hint({"S": "results.csv", "C": "results.csv", "T": "topics.csv", "D": "difficulty.csv"}[letter])
+        hint = self.results.hint(RESULTS_FILES[letter])
+        return level_section(title, DESCRIPTIONS[title[:2]], live, tables, hint, letter, state.get("measure"), self.glossary)
 
     def _section_S(self, state: dict) -> list:
         index = self.model.index
@@ -519,13 +553,13 @@ class Page:
                 ("distinct neighbours", f"{len(distinct):,}", "How many different cards appear as some card's neighbour."),
             ]),
         ])
-        return [level_section("S1 · similarity", DESCRIPTIONS["S1"], live, *self._tables("S", state))]
+        return [self._section("S", "S1 · similarity", live, state)]
 
     def _section_C(self, state: dict) -> list:
         live = model_readout(*self.measures(state))
         if state["view"] == TOPICS_VIEW:
             live = live + [html.Div(TOPICS_NOTE, className="card-hint")]
-        return [level_section("C1 · course model", DESCRIPTIONS["C1"], live, *self._tables("C", state))]
+        return [self._section("C", "C1 · course model", live, state)]
 
     def _section_T(self, state: dict) -> list:
         ids = self.view_ids(state)
@@ -551,10 +585,10 @@ class Page:
             dcc.Graph(figure=margin_histogram(margins, self.topic_model.margin), config={"displayModeBar": False}, className="margin-histogram"),
             t1_legend(self.margin_scale, self.topic_model.margin),
         ]
-        return [level_section("T1 · topics", DESCRIPTIONS["T1"], live, *self._tables("T", state))]
+        return [self._section("T", "T1 · topics", live, state)]
 
     def _section_D(self, state: dict) -> list:
-        return [level_section("D1 · difficulty", DESCRIPTIONS["D1"], [self.metrics(state)], *self._tables("D", state))]
+        return [self._section("D", "D1 · difficulty", [self.metrics(state)], state)]
 
     # --- the moves ---------------------------------------------------------------------------------------------
 
@@ -581,10 +615,23 @@ class Page:
     def can_enter(self, state: dict) -> bool:
         return self.enter(state) is not state
 
-    def step(self, state: Optional[dict], trigger: Optional[str], click_data: Optional[dict] = None) -> dict:
+    @staticmethod
+    def measure_of(value) -> Optional[str]:
+        """The row's key in the hidden input's value (a JSON of `measure` and `seq`, assets/measure_rows.js); None
+        for the close box or anything else."""
+        try:
+            parsed = json.loads(value) if isinstance(value, str) else None
+        except ValueError:
+            return None
+        measure = parsed.get("measure") if isinstance(parsed, dict) else None
+        return measure if isinstance(measure, str) and measure else None
+
+    def step(self, state: Optional[dict], trigger: Optional[str], click_data: Optional[dict] = None, measure=None) -> dict:
         """The view after a trigger: a click on the map selects a dot of the view, Open or a click on the dot's
-        panel enters, Back goes up, a panel's row expands it (and collapses any other), its close box collapses it.
-        A selected dot the view no longer holds is unselected."""
+        panel enters, Back goes up, a panel's row expands it (and collapses any other, and closes an open
+        description), its close box collapses it, a results row's click opens its description (and closes the open
+        one; the same row's or the close box's click closes it). A selected dot the view no longer holds is
+        unselected."""
         state = {**HOME, **(state if isinstance(state, dict) else {})}
         if state["view"] not in (DECKS_VIEW, TOPICS_VIEW, CARDS_VIEW) or state["panel"] not in (None, *PANEL_LETTERS):
             state = dict(HOME)
@@ -598,9 +645,15 @@ class Page:
         elif trigger == "back":
             state = self.back(state)
         elif isinstance(trigger, str) and trigger.startswith("panel-") and trigger[6:] in PANEL_LETTERS:
+            if state["panel"] != trigger[6:]:
+                state["measure"] = None
             state["panel"] = trigger[6:]
         elif isinstance(trigger, str) and trigger.startswith("close-") and trigger[6:] == state["panel"]:
             state["panel"] = None
+            state["measure"] = None
+        elif trigger == MEASURE_INPUT:
+            key = self.measure_of(measure)
+            state["measure"] = None if key is None or key == state["measure"] else key
         if state.get("selected") is not None and state["selected"] not in self.dots(state):
             state["selected"] = None
         return state
@@ -608,7 +661,9 @@ class Page:
 
 def register_callback(app: Dash, page: Page):
     """The page's one callback; returns the function (for tests). Its outputs: the map, window A, the view, the
-    line under the top bar, Open's and Back's disabled state, then the four panels' contents and their classes."""
+    line under the top bar, Open's and Back's disabled state, the four panels' contents and their classes, then the
+    difficulty window's content and class. Its inputs end with the hidden input of a results row's click and the
+    view's state."""
 
     @app.callback(
         Output("map", "figure"),
@@ -619,19 +674,23 @@ def register_callback(app: Dash, page: Page):
         Output("back", "disabled"),
         *[Output(f"content-{letter}", "children") for letter in PANEL_LETTERS],
         *[Output(f"box-{letter}", "className") for letter in PANEL_LETTERS],
+        Output("difficulty-window", "children"),
+        Output("difficulty-window", "className"),
         Input("map", "clickData"),
         Input("open", "n_clicks"),
         Input("back", "n_clicks"),
         Input("dot-panel", "n_clicks"),
         *[Input(f"panel-{letter}", "n_clicks") for letter in PANEL_LETTERS],
         *[Input(f"close-{letter}", "n_clicks") for letter in PANEL_LETTERS],
+        Input(MEASURE_INPUT, "value"),
         State("view", "data"),
     )
     def update(click_data, open_clicks, back_clicks, panel_clicks, *rest):
         from dash import ctx
 
-        state = page.step(rest[-1], ctx.triggered_id, click_data)
+        state = page.step(rest[-1], ctx.triggered_id, click_data, measure=rest[-2])
         contents, classes = page.panels(state)
+        window, window_class_name = page.difficulty_window(state)
         return (
             map_figure(page, state),
             page.dot_panel(state),
@@ -641,6 +700,8 @@ def register_callback(app: Dash, page: Page):
             state["view"] == DECKS_VIEW and not state.get("selected"),
             *contents,
             *classes,
+            window,
+            window_class_name,
         )
 
     return update

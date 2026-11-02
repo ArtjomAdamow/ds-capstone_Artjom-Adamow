@@ -2,12 +2,14 @@
 the three views through the callback (select, Open, a click on the panel, Back), the four model panels (one
 expanded at a time, the close box), the map per panel (random positions and the scripted topics with every panel
 collapsed, C1's positions with the connections, the centroid and the axes with C, T1's markers with T, the difficulty
-colours with D), the dot's ids in its panel, the dendrogram of the view's membership with the preset's line and its
-leaves by id, D1's metrics and the colour legend in the D panel, C1's readout in the C panel, the results tables of
-the newest run with their floor and the "Columns" rows, the decks' hover and the line under the top bar by id, no
-learning material and no deck's or topic's name in any view or panel, and that neither the page nor the table, the
-figures or the mode question import the viewer or the glue (a subprocess with the viewer blocked). The real course's
-table serves the three views too (skipped without it)."""
+colours with D, the predicted quizzes as crosses in the predicted colour and the legend inside the map), the dot's
+ids in its panel, the dendrogram of the view's membership with the preset's line and its leaves by id, D1's scores
+in the D panel and its matrix and shares in the difficulty window under window A, C1's readout in the C panel, the
+results tables of the newest run with their floor, a row's description opened by a click (one at a time, the close
+box), the decks' hover and the line under the top bar by id, no learning material and no deck's or topic's name in
+any view or panel, and that neither the page nor the table, the figures or the mode question import the viewer or
+the glue (a subprocess with the viewer blocked). The real course's table serves the three views too (skipped
+without it)."""
 
 import model_support
 
@@ -24,22 +26,51 @@ from unittest import mock
 from plotly.utils import PlotlyJSONEncoder
 
 from app.course_table import load_table, missing_files
-from app.figures import GOLD
+from app.figures import GOLD, PREDICTED_COLOR
 from app.models.course_model import TopicLayout
 from app.models.topic_model import FOCUS_MARGIN
 from app.standalone import main as standalone_main
-from app.standalone.app import ASSETS_DIR, CARD_PART, DECK_PART, HOME, PANEL_LETTERS, Page, create_app, register_callback
+from app.standalone.app import (
+    ASSETS_DIR, CARD_PART, DECK_PART, HOME, MEASURE_INPUT, PANEL_LETTERS, Page, create_app, register_callback,
+)
 from app.standalone.layout import (
     AXIS_RANGE, AXIS_TICKS, CROSS_SYMBOL, EMPTIED_SYMBOL, GREY, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR,
-    MOVED_OUT_SYMBOL, TOPICS_NOTE, box_class, margin_color, page_layout,
+    MOVED_OUT_SYMBOL, PREDICTED_SYMBOL, TOPICS_NOTE, WINDOW_NOTE, box_class, margin_color, page_layout, window_class,
 )
-from app.standalone.results import NO_FOLDER, Results, course_note, glossary_rows, read_glossary
+from app.standalone.results import NO_FOLDER, Results, course_note, read_glossary
 
 OUT = {"figure": 0, "panel": 1, "view": 2, "where": 3, "open_disabled": 4, "back_disabled": 5}
 for _index, _letter in enumerate(PANEL_LETTERS):
     OUT[f"content_{_letter}"] = 6 + _index
     OUT[f"class_{_letter}"] = 6 + len(PANEL_LETTERS) + _index
-INPUTS = 4 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the four rows and the four close boxes
+OUT["window_d"] = 6 + 2 * len(PANEL_LETTERS)  # the difficulty window's content, then its class
+OUT["class_d"] = OUT["window_d"] + 1
+INPUTS = 5 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the four rows, the four close boxes, the measure input
+
+
+def measure_value(key) -> str:
+    """What assets/measure_rows.js writes into the hidden input: the row's key (None for the close box) and a
+    sequence number."""
+    measure_value.seq = getattr(measure_value, "seq", 0) + 1
+    return json.dumps({"measure": key, "seq": measure_value.seq})
+
+
+def measure_keys(content) -> list[str]:
+    """The rows' keys of a panel's content, in order."""
+    found = []
+
+    def walk(component):
+        children = getattr(component, "children", None)
+        key = getattr(component, "data-measure", None)
+        if key is not None:
+            found.append(key)
+        for child in children if isinstance(children, list) else ([children] if children is not None else []):
+            if hasattr(child, "children"):
+                walk(child)
+
+    for component in content if isinstance(content, list) else [content]:
+        walk(component)
+    return found
 
 
 def readout_values(page: Page, state: dict) -> tuple[str, dict]:
@@ -81,9 +112,9 @@ class PageDriver(unittest.TestCase):
         self.update = register_callback(RecordingApp(), self.page)
         self.state = None
 
-    def call(self, trigger, click=None):
+    def call(self, trigger, click=None, measure=0):
         with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
-            result = self.update(click, *([0] * (INPUTS - 1)), self.state)
+            result = self.update(click, *([0] * (INPUTS - 2)), measure, self.state)
         self.state = result[OUT["view"]]
         return result
 
@@ -96,8 +127,17 @@ class PageDriver(unittest.TestCase):
     def close(self, letter):
         return self.call(f"close-{letter}")
 
+    def describe(self, key):
+        """A click on a results row (its key), or on the open description's close box (None)."""
+        return self.call(MEASURE_INPUT, measure=measure_value(key))
+
     def trace(self, result, name):
         return next((trace for trace in result[OUT["figure"]].data if trace.name == name), None)
+
+    def legend(self, result) -> list[str]:
+        """The legend inside the map: its entries' names, in order; none without it."""
+        figure = result[OUT["figure"]]
+        return [trace.name for trace in figure.data if trace.showlegend] if figure.layout.showlegend else []
 
     def colors(self, result):
         trace = self.trace(result, "Cards")
@@ -208,7 +248,7 @@ class StandaloneTest(PageDriver):
         self.assertIsNotNone(self.trace(result, "Selected"))
 
         result = self.call("open")
-        self.assertEqual(self.state, {"view": "topics", "deck": "02", "topic": None, "selected": None, "panel": None})
+        self.assertEqual(self.state, {**HOME, "view": "topics", "deck": "02"})
         self.assertEqual(result[OUT["where"]], "deck 02")  # by id, not by name
         topics = self.trace(result, "Topics")
         self.assertEqual(list(topics.customdata), ["02:01", "02:02"])  # file order
@@ -260,17 +300,23 @@ class StandaloneTest(PageDriver):
 
     def test_the_cards_view_follows_the_panel_grey_at_random_coloured_with_d_placed_and_connected_with_c(self):
         result = self.enter_topic("01", "02")  # Dictionaries: the rated quiz and a flashcard of the quiz file
-        self.assertEqual(self.state, {"view": "cards", "deck": "01", "topic": "02", "selected": None, "panel": None})
+        self.assertEqual(self.state, {**HOME, "view": "cards", "deck": "01", "topic": "02"})
         self.assertEqual(result[OUT["where"]], f"deck 01 › topic {Page.topic_label(self.page.topic('01', '02'))}")
         self.assertEqual(self.trace(result, "Surface").opacity, 0.1)
         self.assertEqual(self.colors(result), {"301003": GREY, "401005": GREY})  # no colours without D
+        self.assertEqual(self.legend(result), [])
         self.assertEqual(self.points(result, "Cards"), Page.random_points(["301003", "401005"]))
         self.assertIsNone(self.trace(result, "Connections"))
         result = self.expand("D")
-        self.assertEqual(self.colors(result), {"301003": LEVEL_COLORS["easy"], "401005": GREY})
+        self.assertEqual(self.colors(result), {"301003": LEVEL_COLORS["easy"], "401005": GREY})  # the rated quiz, the flashcard
+        self.assertEqual(self.symbols(result), {"301003": "circle", "401005": "circle"})
+        self.assertEqual(self.legend(result), ["easy", "flashcard"])  # inside the map: the classes the view holds
+        legend = result[OUT["figure"]].layout.legend
+        self.assertEqual((legend.x, legend.y, legend.itemclick), (0.01, 0.99, False))
         self.assertEqual(self.points(result, "Cards"), Page.random_points(["301003", "401005"]))  # the same draw as with none
         self.assertIsNone(self.trace(result, "Connections"))
         result = self.expand("C")
+        self.assertEqual(self.legend(result), [])
         topic = self.page.topic("01", "02")
         self.assertEqual(self.points(result, "Cards"), {card_id: topic.positions[card_id] for card_id in topic.ids})
         self.assertEqual(self.colors(result), {"301003": GREY, "401005": GREY})
@@ -329,7 +375,7 @@ class StandaloneTest(PageDriver):
         self.enter_topic("02", "01")
         self.expand("D")
         self.call("back")
-        self.assertEqual(self.state, {"view": "topics", "deck": "02", "topic": None, "selected": "02:01", "panel": "D"})
+        self.assertEqual(self.state, {**HOME, "view": "topics", "deck": "02", "selected": "02:01", "panel": "D"})
         self.call("back")
         self.assertEqual(self.state, {**HOME, "selected": "02", "panel": "D"})
         result = self.call("back")
@@ -343,20 +389,27 @@ class StandaloneTest(PageDriver):
         self.call("map", {"points": [{"x": 0}]})  # the surface or a connection: no id
         self.assertEqual(self.state, HOME)
 
-    def test_the_metrics_and_the_legend_live_in_the_d_panel_and_follow_the_view(self):
+    def test_the_scores_live_in_the_d_panel_and_the_difficulty_window_opens_with_it_and_follows_the_view(self):
+        result = self.call(None)
+        self.assertEqual((result[OUT["window_d"]], result[OUT["class_d"]]), ([], window_class(False)))  # collapsed without D
         result = self.expand("D")
         self.assertIn("Difficulty model D1 · all decks", str(result[OUT["content_D"]]))
         self.assertIn(self.page.difficulty.note, str(result[OUT["content_D"]]))  # the test course is too small for D1
-        self.assertNotIn("Cards by difficulty", dumped(result))
+        self.assertEqual(result[OUT["class_d"]], window_class(True))
+        self.assertIn("Difficulty model D1 · all decks", str(result[OUT["window_d"]]))
+        self.assertIn(self.page.difficulty.note, str(result[OUT["window_d"]]))  # nothing measured: the note, no figure
+        self.assertNotIn("Graph", str(result[OUT["window_d"]]))
+        self.assertNotIn("color-legend", dumped(result))  # no legend in a panel or a window: the map carries it
         self.click("01")
-        self.assertIn("Difficulty model D1 · deck 01", str(self.call("open")[OUT["content_D"]]))
+        result = self.call("open")
+        self.assertIn("Difficulty model D1 · deck 01", str(result[OUT["content_D"]]))
+        self.assertIn("Difficulty model D1 · deck 01", str(result[OUT["window_d"]]))
         result = self.enter_topic("01", "01")
         self.assertEqual(self.state["panel"], "D")
-        content = str(result[OUT["content_D"]])
-        self.assertIn("Difficulty model D1 · deck 01 › topic 01", content)
-        self.assertIn("color-legend", content)  # the legend under the metrics' title, in the cards view
-        others = [result[OUT[name]] for name in ("figure", "panel", "content_S", "content_C", "content_T")]
-        self.assertNotIn("Cards by difficulty", dumped(others))
+        self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(result[OUT["content_D"]]))
+        self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(result[OUT["window_d"]]))
+        result = self.expand("S")
+        self.assertEqual((result[OUT["window_d"]], result[OUT["class_d"]]), ([], window_class(False)))  # another panel: collapsed
 
     def test_the_axes_show_with_the_models_positions_only(self):
         for letter, visible in ((None, False), ("S", False), ("C", True), ("T", True), ("D", False)):
@@ -479,7 +532,7 @@ class MovingCourseTest(PageDriver):
         result = self.enter_topic("03", "02")  # Tests, scripted: 103003 and 103005
         self.assertEqual(list(self.trace(result, "Cards").customdata), ["103003", "103005"])
         result = self.expand("T")  # T1's membership: the p value moved in
-        self.assertEqual(self.state, {"view": "cards", "deck": "03", "topic": "02", "selected": None, "panel": "T"})
+        self.assertEqual(self.state, {**HOME, "view": "cards", "deck": "03", "topic": "02", "panel": "T"})
         self.assertEqual(set(self.trace(result, "Cards").customdata), {moved, "103003", "103005"})
         self.assertEqual(self.symbols(result)[moved], MOVED_IN_SYMBOL)
         self.assertEqual(self.colors(result)[moved], MOVED_IN_COLOR)
@@ -489,9 +542,8 @@ class MovingCourseTest(PageDriver):
         self.assertEqual(rows["scripted topic"], Page.topic_label(self.page.topic("03", "01")))
         self.assertIn("runner-up topic", rows)
         result = self.close("T")  # back to the scripted membership: the view stays, the card that left is unselected
-        self.assertEqual(self.state, {"view": "cards", "deck": "03", "topic": "02", "selected": None, "panel": None})
+        self.assertEqual(self.state, {**HOME, "view": "cards", "deck": "03", "topic": "02"})
         self.assertEqual(list(self.trace(result, "Cards").customdata), ["103003", "103005"])
-        self.assertIn("No connections", str(result[OUT["panel"]]) + "connections") if False else None
         result = self.click("103003")
         self.expand("C")
         self.assertEqual(self.state["selected"], "103003")  # a card held by both memberships stays selected
@@ -649,25 +701,62 @@ class ResultsTest(unittest.TestCase):
         for columns in (evaluate.COLUMNS, evaluate.TOPICS_COLUMNS, evaluate.DIFFICULTY_COLUMNS):
             for column in columns:
                 self.assertEqual(column in glossary, column not in bookkeeping, column)
-        rows = glossary_rows(["lift_k2", "overlap_k3", "overlap_k2", "nothing"], glossary)
-        self.assertEqual([names for names, _meaning, _span in rows], ["lift_k2, lift_k3", "overlap_k2, overlap_k3"])  # each once
-        self.assertIn("(overlap − random) / (1 − random)", rows[0][1])
+        self.assertEqual(glossary["lift_k2"], glossary["lift_k3"])  # one row for the columns of one measure
+        self.assertEqual(glossary["lift_k2"][0], "lift_k2, lift_k3")
+        self.assertIn("(overlap − random) / (1 − random)", glossary["lift_k2"][1])
+        (table,) = self.page.results.tables("D")
+        self.assertEqual(table.row_columns[0], ["macro_f1", "macro_f1_sd"])  # the columns behind a row, its description's key
 
-    def test_the_panels_show_the_tables_by_ids_with_the_columns_row(self):
+    def test_the_panels_show_the_tables_by_ids_and_a_click_on_a_row_opens_its_description(self):
         update = register_callback(RecordingApp(), self.page)
-        with mock.patch("dash.ctx", SimpleNamespace(triggered_id="panel-S")):
-            result = update(None, *([0] * (INPUTS - 1)), None)
+        state = None
+
+        def call(trigger, measure=0):
+            nonlocal state
+            with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
+                result = update(None, *([0] * (INPUTS - 2)), measure, state)
+            state = result[OUT["view"]]
+            return result
+
+        result = call("panel-S")
         content = dumped(result[OUT["content_S"]])
         self.assertIn("chosen: uni+bigrams", content)
         self.assertIn("B0 random positions (mean of 2 seeds)", content)
-        self.assertIn("Columns", content)
-        self.assertIn("precision_at_5", content)
-        with mock.patch("dash.ctx", SimpleNamespace(triggered_id="panel-C")):
-            result = update(None, *([0] * (INPUTS - 1)), result[OUT["view"]])
+        self.assertNotIn("Columns", content)  # no separate row of the columns: each row opens its own description
+        self.assertNotIn("measure-description", content)
+        keys = measure_keys(result[OUT["content_S"]])
+        self.assertEqual(keys, ["S:0:precision_at_5", "S:0:kept_precision"])  # the panel, the table, the row's first column
+        result = call(MEASURE_INPUT, measure_value("S:0:precision_at_5"))
+        self.assertEqual(state["measure"], "S:0:precision_at_5")
+        content = dumped(result[OUT["content_S"]])
+        self.assertEqual(content.count("measure-description"), 1)
+        self.assertIn(read_glossary()["precision_at_5"][1], content)  # what the measure is, from columns.md
+        self.assertIn("Range:", content)
+        self.assertIn("measure-close", content)
+        self.assertIn("measure-row open", content)
+        result = call(MEASURE_INPUT, measure_value("S:0:kept_precision"))  # another row: the description moves
+        self.assertEqual(state["measure"], "S:0:kept_precision")
+        content = dumped(result[OUT["content_S"]])
+        self.assertEqual(content.count("measure-description"), 1)
+        self.assertIn(read_glossary()["kept_precision"][1], content)
+        self.assertNotIn(read_glossary()["precision_at_5"][1], content)
+        call(MEASURE_INPUT, measure_value("S:0:kept_precision"))  # the open row again: closed
+        self.assertIsNone(state["measure"])
+        call(MEASURE_INPUT, measure_value("S:0:kept_precision"))
+        result = call(MEASURE_INPUT, measure_value(None))  # the close box
+        self.assertIsNone(state["measure"])
+        self.assertNotIn("measure-description", dumped(result[OUT["content_S"]]))
+        call(MEASURE_INPUT, measure_value("S:0:kept_precision"))
+        result = call("panel-C")  # another panel: the open description goes
+        self.assertIsNone(state["measure"])
         content = dumped(result[OUT["content_C"]])
         self.assertNotIn("Alpha", content)
         self.assertNotIn("Lists", content)
-        self.assertIn("lift_k2, lift_k3", content)  # the glossary's row
+        self.assertIn("C:0:lift_k2", measure_keys(result[OUT["content_C"]]))
+        result = call(MEASURE_INPUT, measure_value("C:0:lift_k2"))
+        self.assertIn("lift_k2, lift_k3", dumped(result[OUT["content_C"]]))  # the glossary's names for the row's columns
+        self.assertIsNone(Page.measure_of("not json"))
+        self.assertIsNone(Page.measure_of(0))
 
     def test_without_a_file_or_a_folder_the_section_says_how_to_make_one(self):
         results = Results(self.folder / "nowhere", self.note)
@@ -693,24 +782,39 @@ class MeasuredMetricsTest(unittest.TestCase):
     def graphs(self, panel):
         return [child.className for child in panel.children if type(child).__name__ == "Graph"]
 
-    def test_the_metrics_panels_draw_the_shared_figures(self):
+    def test_the_scores_are_the_d_panels_and_the_matrix_and_the_shares_the_difficulty_windows(self):
         panel = self.page.metrics(HOME)
         self.assertIn("All decks: 36 rated quizzes", str(panel))
-        self.assertEqual(self.graphs(panel), ["difficulty-confusion", "difficulty-shares"])
+        self.assertEqual(self.graphs(panel), [])  # no figure in the panel
+        self.assertIn(WINDOW_NOTE, str(panel))  # it says where they are
+        (window,), class_name = self.page.difficulty_window({**HOME, "panel": "D"})
+        self.assertEqual(class_name, window_class(True))
+        self.assertEqual(self.graphs(window), ["difficulty-confusion", "difficulty-shares"])
+        self.assertNotIn("color-legend", str(window))  # the legend is the map's
         deck = self.page.metrics({**HOME, "view": "topics", "deck": "01"})
         self.assertIn("This deck: its 12 rated quizzes", str(deck))
         topic = self.page.metrics({**HOME, "view": "cards", "deck": "01", "topic": "01"})
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(topic))
         self.assertIn("This topic:", str(topic))
+        (window,), _class = self.page.difficulty_window({**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D"})
+        self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(window))
 
-    def test_a_predicted_card_says_so_and_stays_grey_with_d(self):
+    def test_a_predicted_card_says_so_and_is_a_cross_in_the_predicted_colour_with_d(self):
         panel = self.page.dot_panel({**HOME, "view": "cards", "deck": "01", "topic": "01", "selected": "201002"})
         self.assertEqual(id_rows(panel)["difficulty"], "hard (predicted by D1)")
         state = {**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D"}
         from app.standalone.layout import map_figure
 
-        cards = next(trace for trace in map_figure(self.page, state).data if trace.name == "Cards")
-        self.assertEqual(dict(zip(cards.customdata, cards.marker.color))["201002"], GREY)
+        figure = map_figure(self.page, state)
+        cards = next(trace for trace in figure.data if trace.name == "Cards")
+        colors = dict(zip(cards.customdata, cards.marker.color))
+        symbols = dict(zip(cards.customdata, cards.marker.symbol))
+        self.assertEqual((colors["201002"], symbols["201002"]), (PREDICTED_COLOR, PREDICTED_SYMBOL))  # as predicted, not as hard
+        self.assertEqual((colors["101001"], symbols["101001"]), (GREY, "circle"))  # a flashcard
+        self.assertEqual(PREDICTED_SYMBOL, "cross")
+        self.assertTrue(figure.layout.showlegend)
+        self.assertEqual([trace.name for trace in figure.data if trace.showlegend], ["predicted", "flashcard"])
+        self.assertEqual(PREDICTED_COLOR, "#c98500")  # the viewer's predicted group's colour too (test_difficulty_groups.py)
 
 
 class AppTest(unittest.TestCase):
@@ -721,16 +825,26 @@ class AppTest(unittest.TestCase):
         self.assertEqual(len(app.callback_map), 1)
         self.assertTrue(Path(app.config.assets_folder, "style.css").is_file())
         self.assertIn("--map-side", Path(app.config.assets_folder, "map_side.js").read_text(encoding="utf-8"))
+        rows = Path(app.config.assets_folder, "measure_rows.js").read_text(encoding="utf-8")
+        self.assertIn(f'"{MEASURE_INPUT}"', rows)  # the hidden input the rows' clicks set
+        self.assertIn("set_props", rows)
+        self.assertIn(".measure-close", rows)
 
-    def test_the_map_is_a_square_with_window_a_and_the_panels_beside_it(self):
+    def test_the_map_is_a_square_with_window_a_the_difficulty_window_and_the_panels_beside_them(self):
         layout = page_layout(HOME)
         self.assertTrue(layout["map"].responsive)  # plotly follows the frame when the window resizes
         style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
         self.assertIn(".map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1;", style)
+        self.assertIn("grid-template-rows: auto auto auto 1fr;", style)  # the last row takes the panels' height: no gap under the map
+        self.assertIn(".model-panels { grid-column: 2; grid-row: 1 / span 4;", style)
+        self.assertIn(".window-d.collapsed { display: none; }", style)
+        self.assertIn("--panel-font: 2;", style)  # the panels' text at double size
         self.assertIn("@media (orientation: portrait)", style)  # window A beside the map, the panels under both
         workspace = layout.children[2]
-        self.assertEqual([child.className for child in workspace.children], ["map-frame", "window-a", "model-panels"])
-        boxes = workspace.children[2].children
+        self.assertEqual([child.className for child in workspace.children], ["map-frame", "window-a", window_class(False), "model-panels"])
+        self.assertEqual(workspace.children[2].id, "difficulty-window")
+        self.assertEqual((layout.children[-1].id, layout.children[-1].value), (MEASURE_INPUT, ""))
+        boxes = workspace.children[3].children
         self.assertEqual([box.id for box in boxes], [f"box-{letter}" for letter in PANEL_LETTERS])
         self.assertEqual({box.className for box in boxes}, {box_class(False)})
         head = boxes[0].children[0]
@@ -748,6 +862,11 @@ class AppTest(unittest.TestCase):
             standalone_main(write_test_table(Path(folder)), Path(folder) / "results")
         run.assert_called_once_with(debug=False)
         self.assertIn("results", printed.call_args[0][0])
+
+    def test_main_takes_the_port_the_launcher_gives_the_page_next_to_the_viewer(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch("dash.Dash.run") as run, mock.patch("builtins.print"):
+            standalone_main(write_test_table(Path(folder)), None, port=8051)
+        run.assert_called_once_with(debug=False, port=8051)
 
 
 NO_VIEWER = """
@@ -806,12 +925,12 @@ class RealTableTest(unittest.TestCase):
             with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
                 result = update(click, *([0] * (INPUTS - 1)), state)
             state = result[OUT["view"]]
-        self.assertEqual(state, {"view": "cards", "deck": deck, "topic": topic.topic_id, "selected": None, "panel": "T"})
+        self.assertEqual(state, {**HOME, "view": "cards", "deck": deck, "topic": topic.topic_id, "panel": "T"})
         self.assertIn("dendrogram-graph", str(result[OUT["panel"]]))
         self.assertEqual(len(page.deck_links()), 9)  # the decks' tree is cut after 9 of its 23 merges
         self.assertEqual(len(page.model.deck_links), 23)
         self.assertEqual(readout_values(page, {})[1][("Decks (k = 3)", "connections kept")], "9 of 23")
-        if RESULTS_DIR.is_dir():
+        if (RESULTS_DIR / "topics.csv").is_file():  # a checkout that never ran evaluate.py holds only the hand files
             content = dumped(result[OUT["content_T"]])
             self.assertIn("T1 next to the judges, deck 01", content)  # the entered deck's row, by id
             for deck_row in page.table.decks:

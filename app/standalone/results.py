@@ -10,8 +10,9 @@ label, and the glossary of the measure columns (app/docs/columns.md).
 * `Table`: the heads (one per variant, the floor among them), the rows (a measure and its value per head; a measure
   with its sd reads "mean ± sd", a difference with its interval "diff [low, high]", a share with its count
   "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
-  (the run and the bookkeeping the heads share) and the measure columns shown, for the glossary.
-* `read_glossary`, `glossary_rows`: the rows of app/docs/columns.md, by column name, for the measures a table shows.
+  (the run and the bookkeeping the heads share), the measure columns shown and the columns behind each row, for the
+  row's description.
+* `read_glossary`: the rows of app/docs/columns.md by column name, what a row of a table means when it is clicked.
 """
 
 import csv
@@ -69,7 +70,8 @@ class Table:
     rows: list[tuple[str, list[str]]]  # (the measure's label, its value under every head)
     chosen: list[bool]  # per head
     subtitle: str
-    measures: list[str] = field(default_factory=list)  # the file's columns behind the rows, for the glossary
+    measures: list[str] = field(default_factory=list)  # the file's columns behind the rows, in row order
+    row_columns: list[list[str]] = field(default_factory=list)  # per row, its columns (the glossary's key is the first)
 
 
 def read_rows(path: Path) -> list[dict]:
@@ -124,12 +126,14 @@ def transpose(title: str, rows: Sequence[Mapping[str, str]], heads: Sequence[str
     """The table: a measure every row of `rows` left empty is no row; the heads and cells pass through `by_ids`."""
     kept_rows: list[tuple[str, list[str]]] = []
     kept_measures: list[str] = []
+    row_columns: list[list[str]] = []
     for measure in measures:
         values = [by_ids(cell(row, measure)) for row in rows]
         if any(values):
             kept_rows.append((label(measure), values))
             kept_measures += names_of(measure)
-    return Table(title, [by_ids(head) for head in heads], kept_rows, list(chosen), by_ids(subtitle_of(rows)), kept_measures)
+            row_columns.append(names_of(measure))
+    return Table(title, [by_ids(head) for head in heads], kept_rows, list(chosen), by_ids(subtitle_of(rows)), kept_measures, row_columns)
 
 
 def subtitle_of(rows: Sequence[Mapping[str, str]]) -> str:
@@ -268,13 +272,3 @@ def read_glossary(path: Path = GLOSSARY_PATH) -> dict[str, tuple[str, str, str]]
         for name in cells[0].split(","):
             entries[name.strip()] = (cells[0], cells[1], cells[2])
     return entries
-
-
-def glossary_rows(measures: Sequence[str], glossary: Mapping[str, tuple[str, str, str]]) -> list[tuple[str, str, str]]:
-    """The glossary's rows of these measures, in their order, each once."""
-    rows: list[tuple[str, str, str]] = []
-    for name in measures:
-        entry = glossary.get(name)
-        if entry is not None and entry not in rows:
-            rows.append(entry)
-    return rows
