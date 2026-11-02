@@ -179,5 +179,5 @@ Code in `src/` and the notebooks may use `app.models`, `app.course_table` and `a
 
 **Licences.** `app/` and `start.py` are Artjom Adamow's code under the MIT licence in
 [LICENSE](LICENSE). The viewer, **sputnik**, is a separate private package by Artjom Adamow with
-its own licence. None of its code is in this repository. It is installed from its own repository,
+its own licence. None of its code is in this repository. It is installed as an optional extra from its own repository,
 pinned to a release tag in `pyproject.toml`.
