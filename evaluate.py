@@ -37,7 +37,7 @@ Every run appends one row per model and variant to the results folder (`--result
 this file): results.csv (B0, S1, C1), difficulty.csv (D1) and topics.csv (T1). A results file whose columns grew is
 written again with its rows kept. `--part similarity`, `--part difficulty` or `--part topics` runs one part only.
 
-The hand side lives in the flashcards workspace only, since its forms hold card text: the hand marks of the
+The hand side is judged in the flashcards workspace, since its forms hold card text: the hand marks of the
 similarity part in hand_marks.csv (card, candidate, relevant, judged, judge, note) with their judging form
 hand_check.md (about 20 cards of decks 17 and 24 with the top-5 neighbours of every variant combined, each to be
 marked relevant or not), and the hand labels of D1 in hand_labels.csv (card, level, judged, judge, note) with their
@@ -46,9 +46,14 @@ or hard by the rule of models/difficulty.md, "The hand-labelled sample"). Each f
 written again and written after it, so a changed form, a removed variant or a changed sample loses no judgement;
 `--judge` names who marked. With the marks, every variant's row carries its hand-judged precision@1, @3 and @5 over
 the judged cards and the paired difference of its precision@5 to the chosen variant, bootstrapped over the cards.
-Where a results folder holds neither a file nor its form (the capstone), that side's columns stay empty, the form is
-not written and one line says so. The form's quiz options come from the viewer's parser (app.glue.course) where the
-course file data/topics.json and the viewer are there, else the form lists the answer.
+The marks and the labels travel to the capstone without their notes, the forms do not: where a results folder holds
+a file without its form, the hand columns are computed from the file alone and nothing is written back; where it
+holds neither, that side's columns stay empty, the form is not written and one line says so. The form's quiz options
+come from the viewer's parser (app.glue.course) where the course file data/topics.json and the viewer are there, else
+the form lists the answer.
+
+Every row of a run carries the run's start time to the minute (`run`), next to its date, so the standalone page
+reads the newest run of each file (app/standalone/results.py; what the columns mean: app/docs/columns.md).
 """
 
 from __future__ import annotations
@@ -60,7 +65,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from itertools import combinations
 from pathlib import Path
 from typing import Callable, Optional
@@ -89,7 +94,7 @@ SEEDS = (42, 1, 2, 3, 4)
 FIXED_K = (2, 3)  # the fixed small k of the card layouts' overlap
 HAND_CHECK_DECKS = {"NLP Fundamentals": 4, "LLM Foundations & Embeddings": 3}  # deck -> every n-th card
 COLUMNS = [
-    "date", "model", "variant", "params", "seed", "precision_at_5", "kept_precision", "coverage", "distinct", "min_score",
+    "date", "run", "model", "variant", "params", "seed", "precision_at_5", "kept_precision", "coverage", "distinct", "min_score",
     "hand_precision", "hand_p1", "hand_p3", "hand_diff", "hand_diff_low", "hand_diff_high", "judged_cards",
     "trust_decks", "overlap_decks", "overlap_cards", "overlap_k2", "lift_k2", "overlap_k3", "lift_k3", "trust_cards",
     "overlap_17", "overlap_24", "seconds", "notes",
@@ -97,7 +102,7 @@ COLUMNS = [
 MARK_COLUMNS = ["card", "candidate", "relevant", "judged", "judge", "note"]
 RELEVANT = "x"
 DIFFICULTY_COLUMNS = [
-    "date", "model", "variant", "features", "label_rule", "folds", "repeats", "seed",
+    "date", "run", "model", "variant", "features", "label_rule", "folds", "repeats", "seed",
     "macro_f1", "macro_f1_sd", "balanced_accuracy", "balanced_accuracy_sd", "kappa", "kappa_sd", "accuracy", "accuracy_sd",
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated",
     "predicted_easy", "predicted_medium", "predicted_hard",
@@ -111,9 +116,10 @@ LABEL_HEADING = re.compile(r"^### (\S+) \(")
 LEVEL_MARK = re.compile(r"^- \[[xX]\] (easy|medium|hard)\b")
 NOTE_LINE = re.compile(r"^- note:\s?(.*)$")
 TOPICS_COLUMNS = [
-    "date", "model", "scope", "cards", "topics", "agreement", "kept_share", "coherence_median", "coherence_below_half",
+    "date", "run", "model", "scope", "cards", "topics", "agreement", "kept_share", "coherence_median", "coherence_below_half",
     "coherence_at_one", "moved", "emptied", "seconds", "notes",
 ]
+RUN_FORMAT = "%Y-%m-%dT%H:%M"  # the run column: the run's start time to the minute
 MARGINS = (0.0, 0.02, 0.05, 0.10, 0.15)  # the margin table of models/topic.md
 CANDIDATE = re.compile(r"^- \[([xX ])\] (\S+) \(")
 NONE_RELEVANT = re.compile(r"^- \[[xX]\] none\b")  # judged: no candidate of this card is relevant
@@ -215,6 +221,13 @@ def scope_note(deck_ids: dict[str, str]) -> str:
     """The decks of the course, for the notes column: "decks 01 to 24"."""
     ids = sorted(deck_ids.values())
     return f"decks {ids[0]} to {ids[-1]}" if ids else "no decks"
+
+
+def stamped(rows: list[dict], run_key: str) -> list[dict]:
+    """The rows with the run column set to the run's key (the start time, RUN_FORMAT)."""
+    for row in rows:
+        row["run"] = run_key
+    return rows
 
 
 # --- D1 -------------------------------------------------------------------------------
@@ -429,7 +442,7 @@ def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: st
     for deck in deck_order:
         ids = [card_id for card_id in all_ids if by_id[card_id].deck == deck]
         topics = len([seed for seed in seeds if seed.deck == deck])
-        scope = f"deck {deck_ids.get(deck, '')} {deck}"
+        scope = f"deck {deck_ids.get(deck, deck)}"  # by id: the rows travel and the standalone page shows them
         values = (model.agreement_of(ids), agree(nearest, ids), agree(logistic, ids), chance_of(ids))
         for name, value in zip(("T1", "1-NN", "LR", "chance"), values):
             rows.append(topic_row(today, name, scope, len(ids), value, note, topics=topics))
@@ -892,38 +905,46 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
 # --- the run --------------------------------------------------------------------------
 
 
-def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", today: Optional[str] = None) -> None:
-    """The evaluation on the course table in `table_dir`, its rows into `results_dir`: one part or all three. The
-    hand side of a part runs where its file or its form is in `results_dir`; elsewhere the hand columns stay empty
-    and no form is written."""
+def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", today: Optional[str] = None,
+        run_key: Optional[str] = None) -> None:
+    """The evaluation on the course table in `table_dir`, its rows into `results_dir`: one part or all three, every
+    row stamped with the run's key (`run_key`, by default the start time to the minute). The hand side of a part
+    runs where its file or its form is in `results_dir`: with the form, the file is kept and the form written again;
+    with the file alone (the capstone), the hand columns are computed and nothing is written back; with neither,
+    the hand columns stay empty and no form is written."""
     files = result_files(results_dir)
     table = course_table.load_table(table_dir)
     cards, deck_ids, seeds = table.cards, table.deck_ids, table.seeds
     by_id = {card.id: card for card in cards}
     note = scope_note(deck_ids)
     today = today or date.today().isoformat()
-    with_marks = files.hand_marks.exists() or files.hand_check.exists()
-    with_labels = files.hand_labels.exists() or files.hand_labels_form.exists()
+    run_key = run_key or datetime.now().strftime(RUN_FORMAT)
+    marks_form, labels_form = files.hand_check.exists(), files.hand_labels_form.exists()
+    with_marks = files.hand_marks.exists() or marks_form
+    with_labels = files.hand_labels.exists() or labels_form
     marks = merge_marks(read_marks(files.hand_marks), read_hand_check(files.hand_check), today, judge) if with_marks else {}
     labels = merge_labels(read_labels(files.hand_labels), read_label_form(files.hand_labels_form), today, judge) if with_labels else {}
     print(f"{len(cards)} cards in {len(deck_ids)} decks ({table_dir}, {note}); hand-check marks for {len(marks)} cards, "
-          f"hand labels for {len(labels)} quizzes; the rows go to {results_dir}")
+          f"hand labels for {len(labels)} quizzes; the rows go to {results_dir} (run {run_key})")
 
     # T1: the topic model, into its own file
     if part in ("all", "topics"):
-        topics = evaluate_topics(cards, seeds, deck_ids, today, note)
+        topics = stamped(evaluate_topics(cards, seeds, deck_ids, today, note), run_key)
         write_rows(topics, files.topics, TOPICS_COLUMNS)
         print(f"{len(topics)} rows appended to {files.topics}")
     # D1: the difficulty model, into its own file, with the hand labels kept and their form written again
     if part in ("all", "difficulty"):
-        difficulty = evaluate_difficulty(cards, today, note, labels)
+        difficulty = stamped(evaluate_difficulty(cards, today, note, labels), run_key)
         write_rows(difficulty, files.difficulty, DIFFICULTY_COLUMNS)
         print(f"{len(difficulty)} rows appended to {files.difficulty}")
-        if with_labels:
+        if labels_form:
             write_labels(labels, files.hand_labels)
             unrated, reference = write_hand_labels_form(cards, quiz_options_of(table_dir), labels, today, note, files.hand_labels_form)
             print(f"hand labels: {unrated} unrated quizzes and {reference} rated ones judged blind in {files.hand_labels_form}; "
                   f"{len(labels)} judged, kept in {files.hand_labels}")
+        elif with_labels:
+            print(f"hand labels: {len(labels)} judged quizzes read from {files.hand_labels}; no {files.hand_labels_form.name} "
+                  f"in {results_dir}: nothing written back")
         else:
             print(f"hand labels: no {files.hand_labels.name} in {results_dir}: the hand columns stay empty and "
                   f"{files.hand_labels_form.name} is not written")
@@ -931,12 +952,15 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
         return
 
     rows, indexes = evaluate_similarity(cards, seeds, deck_ids, today, note, relevant_of(marks))
-    write_rows(rows, files.results)
-    if with_marks:
+    write_rows(stamped(rows, run_key), files.results)
+    if marks_form:
         write_marks(marks, files.hand_marks)
         listed = write_hand_check(cards, by_id, indexes, today, marks, note, files.hand_check)
         print(f"{len(rows)} rows appended to {files.results}; hand check for {listed} cards in {files.hand_check}"
               + (f" ({len(marks)} judged, the marks kept in {files.hand_marks})" if marks else " (no marks yet)"))
+    elif with_marks:
+        print(f"{len(rows)} rows appended to {files.results}; hand check: the marks of {len(marks)} cards read from "
+              f"{files.hand_marks}; no {files.hand_check.name} in {results_dir}: nothing written back")
     else:
         print(f"{len(rows)} rows appended to {files.results}; hand check: no {files.hand_marks.name} in {results_dir}: "
               f"the hand columns stay empty and {files.hand_check.name} is not written")

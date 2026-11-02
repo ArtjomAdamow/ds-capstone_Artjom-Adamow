@@ -191,6 +191,14 @@ class TestCourseTest(unittest.TestCase):
         self.assertEqual((model.topic_of[model_support.MOVED], model.moved), ("02", 1))
         self.assertEqual(model.members[("Gamma", "02")], [model_support.MOVED, "103003", "103005"])
 
+    def test_the_runner_up_topic_is_kept_next_to_the_margin(self):
+        model = model_support.course_model().topic_model
+        self.assertEqual(model.second_of[model_support.HIDDEN], "02")  # between Lists and Dictionaries: Dictionaries is second
+        self.assertEqual(set(model.second_of), set(model.topic_of))
+        self.assertTrue(all(second != model.topic_of[card_id] for card_id, second in model.second_of.items() if second))
+        moving = model_support.course_model(model_support.moving_cards(), model_support.seeds_of(model_support.MOVING_SCRIPTED)).topic_model
+        self.assertEqual(moving.second_of[model_support.MOVED], "01")  # the scripted topic is the runner-up of the moved card
+
 
 class TopicJudgesTest(unittest.TestCase):
     """The judges of the T1 measurement in models.evaluation."""

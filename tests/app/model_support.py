@@ -115,14 +115,17 @@ TOPIC_OF = {card_id: key for key, ids in SCRIPTED.items() for card_id in ids}  #
 DESCRIPTIONS = {"01": "Alpha's description.", "02": "Beta's description.", "03": "Gamma's description."}
 
 
-def write_test_table(folder: Path) -> Path:
+def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
     """The test course as a course table in `folder`, as export_course.py writes it from the course file (the
-    standalone page's and the evaluation's input)."""
+    standalone page's and the evaluation's input); or another course with its scripted topics (the moving course:
+    `moving_cards()` with MOVING_SCRIPTED)."""
     from app.course_table import flag, write_table
 
+    records = CARDS if cards is None else cards
+    topic_of = TOPIC_OF if scripted is None else {card_id: key for key, ids in scripted.items() for card_id in ids}
     cards = []
-    for card in CARDS:
-        deck_id, topic_id = TOPIC_OF[card.id]
+    for card in records:
+        deck_id, topic_id = topic_of[card.id]
         name, rest = TOPIC_NAMES[(deck_id, topic_id)]
         cards.append({
             "comb_id": card.id, "deck_id": deck_id, "deck": card.deck, "topic_id": topic_id, "topic_name": name,

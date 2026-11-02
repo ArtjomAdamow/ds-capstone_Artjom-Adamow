@@ -43,6 +43,7 @@ ROOT = Path(__file__).resolve().parent  # the capstone's root: start.py sits nex
 DATA_DIR = ROOT / "data"
 COURSE_FILE = DATA_DIR / "topics.json"  # the course file, version 3: the full app's input
 TABLE_DIR = DATA_DIR / "course"  # the course table: the standalone page's input
+RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the standalone page's panels read them
 STATE_FILE = DATA_DIR / "state" / "user_state.json"  # the viewer's state file; the derived course file and the
 # model state go next to it (app.glue.composition)
 RELOADER = True  # the full app restarts on code changes; the reloader's child fits the models and serves
@@ -97,7 +98,7 @@ def run_standalone(table_dir: Path = TABLE_DIR) -> None:
         raise SystemExit(f"No course table in {table_dir} ({names} missing). {DATA_HINT}")
     from app.standalone import main as standalone_main
 
-    standalone_main(table_dir)
+    standalone_main(table_dir, RESULTS_DIR)
 
 
 def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE) -> None:

@@ -481,15 +481,36 @@ class RunTest(unittest.TestCase):
         self.assertEqual(len(rows), 15)
         hand_columns = [column for column in evaluate.COLUMNS if column.startswith("hand") or column == "judged_cards"]
         self.assertTrue(all(row[column] == "" for row in rows for column in hand_columns))
+        self.assertEqual(len({row["run"] for row in rows}), 1)  # every row of the run carries its key
+        self.assertRegex(rows[0]["run"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")  # the start time to the minute
         self.assertFalse(self.files.hand_check.exists())
         self.assertFalse(self.files.hand_marks.exists())
-        evaluate.run(self.table, self.results, "difficulty", today=TODAY)
-        self.assertTrue(all(row["hand_judged"] == "" for row in read_csv(self.files.difficulty)))
+        evaluate.run(self.table, self.results, "difficulty", today=TODAY, run_key="2026-11-02T09:00")
+        self.assertTrue(all(row["hand_judged"] == "" and row["run"] == "2026-11-02T09:00" for row in read_csv(self.files.difficulty)))
         self.assertFalse(self.files.hand_labels_form.exists())
         self.assertFalse(self.files.hand_labels.exists())
         evaluate.run(self.table, self.results, "topics", today=TODAY)
-        self.assertEqual(read_csv(self.files.topics)[0]["model"], "T1")
+        topics = read_csv(self.files.topics)
+        self.assertEqual(topics[0]["model"], "T1")
+        self.assertEqual({row["scope"] for row in topics if row["scope"].startswith("deck ")}, {"deck 01", "deck 02", "deck 03"})  # by id
+        self.assertTrue(all(name not in row["scope"] for row in topics for name in model_support.DECK_IDS))
         self.assertEqual(sorted(path.name for path in self.results.iterdir()), ["difficulty.csv", "results.csv", "topics.csv"])
+
+    def test_with_the_marks_alone_the_hand_columns_are_computed_and_nothing_is_written_back(self):
+        """The capstone: the marks and the labels travel without their notes, the forms stay behind."""
+        self.results.mkdir()
+        marks = "card,candidate,relevant,judged,judge\n101001,201002,x,2026-10-30,Y\n101001,101004,,2026-10-30,Y\n"
+        labels = "card,level,judged,judge\n201002,medium,2026-10-31,Y\n"
+        self.files.hand_marks.write_text(marks, encoding="utf-8")
+        self.files.hand_labels.write_text(labels, encoding="utf-8")
+        evaluate.run(self.table, self.results, "all", "Z", TODAY)
+        rows = [row for row in read_csv(self.files.results) if row["model"] == "S1"]
+        self.assertEqual([row["judged_cards"] for row in rows], ["1"] * 7)
+        self.assertTrue(all(row["hand_precision"] != "" and row["hand_diff_low"] != "" for row in rows))
+        self.assertEqual(self.files.hand_marks.read_text(encoding="utf-8"), marks)  # never written back
+        self.assertEqual(self.files.hand_labels.read_text(encoding="utf-8"), labels)
+        self.assertFalse(self.files.hand_check.exists())  # no form
+        self.assertFalse(self.files.hand_labels_form.exists())
 
     def test_with_the_forms_the_marks_and_the_labels_are_kept_in_their_files(self):
         self.results.mkdir()

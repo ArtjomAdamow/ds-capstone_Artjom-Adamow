@@ -1,8 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 /* The standalone page (app.standalone): the viewer's theme, its tokens written anew here (no file of the
-   viewer is copied). On the left the map, a square of 12.5 % of the window's area (map_side.js sets its side), with
-   C1's readout under it; on the right the selected dot's ids or the dendrogram (window A) and D1's metrics
-   (window B, in the cards view with the cards' colour legend). */
+   viewer is copied). The map, a square of 12.5 % of the window's area (map_side.js sets its side); the dendrogram's
+   window (window A) under it in landscape, beside it at its height in portrait; the model panels a column right of
+   both in landscape, under both at the window's width in portrait. The page scrolls as a document. */
 
 :root {
   --ink: #f7f2e8;
@@ -30,16 +30,16 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .toolbar { padding: 12px 0; }
 .card-count { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.8rem; }
 
-.workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); gap: 28px; align-items: start; }
-.map-column, .side-column { min-width: 0; }
-.side-column { display: flex; flex-direction: column; gap: 18px; }
-.map-frame { width: var(--map-side); max-width: 100%; aspect-ratio: 1; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
+/* The workspace: landscape, the map with window A under it on the left, the model panels on the right */
+.workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); grid-template-rows: auto auto; gap: 28px; align-items: start; }
+.map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
 #map { width: 100%; height: 100%; }
+.window-a { grid-column: 1; grid-row: 2; min-width: 0; }
+.model-panels { grid-column: 2; grid-row: 1 / span 2; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
-/* C1's readout under the map; its table is window A's too (the selected dot's ids) */
-.readout-panel { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); color: var(--muted); font: 0.72rem/1.35 'DM Mono', monospace; }
-.readout-scope { margin: 6px 0 2px; color: var(--ink); }
-.readout-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+/* The readout tables: C1's measures, S1's and T1's live measures, the selected dot's ids */
+.readout-scope { margin: 6px 0 2px; color: var(--ink); font: 0.72rem/1.35 'DM Mono', monospace; }
+.readout-table { width: 100%; border-collapse: collapse; white-space: nowrap; color: var(--muted); font: 0.72rem/1.35 'DM Mono', monospace; }
 .readout-table th { padding: 6px 0 1px; text-align: left; color: var(--ink); font-weight: normal; opacity: 0.85; }
 .readout-table td { padding: 0 16px 0 8px; }
 .readout-table .readout-value { padding: 0; text-align: right; color: var(--ink); }
@@ -54,20 +54,58 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .card-hint, .empty-state { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
 .dendrogram-graph { width: 100%; height: 320px; }
 
-/* Window B: D1's metrics; in the cards view the cards' colour legend under its title */
-.tool-panel { padding: 18px 22px; border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); }
+/* The model panels: a row each, expanded one at a time */
+.model-panel { border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); }
+.model-panel.expanded { border-color: var(--gold); }
+.panel-head { display: flex; align-items: stretch; }
+.panel-row { flex: 1; border: none; background: transparent; color: var(--gold); padding: 12px 16px; text-align: left; font: 500 0.78rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+.panel-row:hover { background: var(--hover); }
+.panel-close { border: none; border-left: 1px solid var(--line); background: transparent; color: var(--muted); width: 44px; font: 1.1rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.panel-close:hover { color: var(--ink); background: var(--hover); }
+.model-panel.collapsed .panel-close { display: none; }
+.model-panel.collapsed .panel-content { display: none; }
+.panel-content { padding: 4px 16px 18px; border-top: 1px solid var(--line); }
+.level-section + .level-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.section-title { margin-top: 12px; }
+.results-block { margin-top: 14px; }
+.results-scroll { overflow-x: auto; }
+
+/* D1's metrics; the cards' colour legend under its title in the cards view */
+.tool-panel { padding: 14px 0 6px; }
 .color-legend { display: flex; align-items: center; gap: 6px 18px; flex-wrap: wrap; margin: 10px 0 6px; color: var(--muted); font: 0.78rem 'DM Mono', monospace; }
 .legend-item { display: inline-flex; align-items: center; gap: 7px; }
 .legend-swatch { width: 11px; height: 11px; display: inline-block; border-radius: 50%; }
+.legend-glyph { font-size: 1rem; line-height: 1; }
+.t1-legend { flex-direction: column; align-items: flex-start; gap: 4px; }
+.margin-scale { width: 90px; height: 10px; display: inline-block; background: linear-gradient(90deg, #ccfbf1, #14b8a6); }
+.margin-histogram { width: 100%; height: 150px; margin-top: 8px; }
 .metrics-heading { margin-top: 10px; }
 .difficulty-scores { margin: 6px 0; border-collapse: collapse; font: 0.8rem 'DM Mono', monospace; }
 .difficulty-scores th, .difficulty-scores td { padding: 2px 10px 2px 0; text-align: right; color: var(--muted); font-weight: normal; }
 .difficulty-scores .score-label { text-align: left; }
-.difficulty-scores .score-model { color: var(--ink); }
+.difficulty-scores .score-model, .results-table .chosen { color: var(--ink); }
+.results-table th { vertical-align: bottom; white-space: normal; max-width: 150px; line-height: 1.25; }
+.results-table th.chosen { font-weight: 600; }
+.results-table td { white-space: nowrap; }
+
+/* The "Columns" row: what the measures mean */
+details.columns { margin-top: 10px; }
+details.columns summary { cursor: pointer; color: var(--gold); font: 0.72rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.glossary-table { margin: 8px 0 4px; border-collapse: collapse; font-size: 0.82rem; line-height: 1.4; color: var(--muted); }
+.glossary-table th { padding: 2px 12px 4px 0; text-align: left; color: var(--ink); font-weight: normal; }
+.glossary-table td { padding: 3px 12px 3px 0; vertical-align: top; }
+.glossary-table td.score-label { font: 0.78rem 'DM Mono', monospace; color: var(--ink); white-space: nowrap; }
+
+/* Portrait: window A beside the map at its height, the panels under both */
+@media (orientation: portrait) {
+  .window-a { grid-column: 2; grid-row: 1; height: var(--map-side); overflow-y: auto; }
+  .model-panels { grid-column: 1 / -1; grid-row: 2; }
+}
 
 @media (max-width: 820px) {
   .app-shell { padding: 22px 16px 28px; }
   .topbar, .toolbar { align-items: flex-start; flex-direction: column; }
   .workspace { grid-template-columns: 1fr; }
+  .map-frame, .window-a, .model-panels { grid-column: 1; grid-row: auto; height: auto; }
   :root { --panel-min: 220px; }
 }

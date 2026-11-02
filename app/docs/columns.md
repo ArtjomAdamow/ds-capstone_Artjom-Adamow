@@ -1,0 +1,56 @@
+# The columns of the results files
+
+What the measure columns of `results/` mean: `results.csv` (B0, S1, C1), `topics.csv` (T1) and `difficulty.csv` (D1), written by `evaluate.py`. The standalone page reads this file: a model's panel shows the rows of the measures its table shows under a collapsed "Columns" row (`app/standalone/results.py`). The bookkeeping columns (`date`, `run`, `model`, `variant`, `scope`, `params`, `features`, `label_rule`, `folds`, `repeats`, `seed`, `seconds`, `notes`) have no row here: they name the run and the row. How each measure is made: `docs/draft/helper/models/`, one file per model, "How it is judged".
+
+Columns of one measure share a row: a value with its sd or its interval, k = 2 with k = 3.
+
+## results.csv
+
+| Column | What it measures | Range |
+|---|---|---|
+| precision_at_5 | Of each card's five neighbour slots, the share whose card is of the card's own deck, averaged over all cards; an empty slot (no fifth neighbour above the minimum score) counts as a miss. A cheap check that the vectors capture topics; some cross-deck neighbours are good ones, so 1 is not the goal. | 0 to 1, higher is better. B0's row is the floor: the same measure for the five nearest cards at random positions on the sphere, the mean over its seeds. |
+| kept_precision | Of the neighbour slots the variant fills, at most five per card and only above its minimum score, the share whose card is of the same deck as the card itself. Unlike precision_at_5, an empty slot is not a miss, so a variant that keeps fewer, surer neighbours scores higher here and lower there. | 0 to 1, higher is better. |
+| coverage | The share of cards with at least one neighbour above the variant's minimum score. | 0 to 1, higher is better. |
+| distinct | How many different cards appear as some card's neighbour at all; a low count means hub cards that show up everywhere. | 0 to the number of cards, higher is better. |
+| min_score | The variant's own minimum score: the 10th percentile of the cosine of every card's fifth neighbour. A neighbour below it is dropped. | 0 to 1; a setting of the variant, not a score. |
+| hand_precision, hand_p1, hand_p3 | Hand-judged precision@5, @1 and @3: over the judged cards of the hand check (every n-th card of decks 17 and 24), the mean share of the variant's top 5, 1 or 3 neighbours that were marked relevant by the judging rule; a candidate not judged counts as not relevant. | 0 to 1, higher is better. |
+| hand_diff, hand_diff_low, hand_diff_high | The variant's hand precision@5 minus the chosen variant's, paired over the judged cards, with its 95 % bootstrap interval (5,000 draws over the cards); the chosen variant's own row reads 0. An interval that excludes 0 is a difference the sample resolves. | −1 to 1; 0 is the chosen variant. |
+| judged_cards | How many hand-judged cards the hand columns are computed over. | A count. |
+| trust_decks | scikit-learn's trustworthiness of the deck layout for the deck vectors at k = 3: 1 when none of a deck's three nearest decks on the map is a stranger by text, lower the more strangers intrude. | 0 to 1, higher is better; the random row is the floor. |
+| overlap_decks | The share of a deck's three most similar decks by text that are also its three nearest on the map, averaged over the decks. | 0 to 1, higher is better; the random row is the floor. |
+| overlap_cards | The within-topic overlap at k = min(5, n − 1), averaged over the model's topics with two cards or more: the share of a card's k most similar cards of its topic that are also its k nearest on the topic's sphere. With k most of a small topic it is high for every layout, random included. | 0 to 1, higher is better. |
+| overlap_k2, overlap_k3 | The within-topic overlap at the fixed k = 2 or 3, over the topics with k + 2 cards or more (with k + 1 cards every other card is a neighbour, and the overlap is 1 for any layout). | 0 to 1, higher is better; the random row is the floor. |
+| lift_k2, lift_k3 | How far the layout's within-topic overlap at k = 2 or 3 lies above random positions on the way to 1: (overlap − random) / (1 − random). 0 is the random floor, 1 a layout that keeps every card's two or three most similar cards as its nearest on the map. Measured over the topics with k + 2 cards or more, where the overlap is not 1 by construction. | 0 to 1, higher is better; below 0 the layout is worse than random. |
+| trust_cards | The mean trustworthiness of the topic layouts at the layout's k, over the topics where scikit-learn defines it (more than 2k cards: 11 or more). | 0 to 1, higher is better; the random row is the floor. |
+| overlap_17, overlap_24 | overlap_cards over the topics of deck 17 and of deck 24 alone, the hand-check decks. | 0 to 1, higher is better. |
+
+## topics.csv
+
+| Column | What it measures | Range |
+|---|---|---|
+| cards | How many cards the row covers: the course, a stack, a deck, or the cards kept at the row's margin. | A count. |
+| topics | How many scripted topics the row's scope has, the empty ones too. | A count. |
+| agreement | The share of the scope's cards whose model topic is their scripted topic (one minus the Hamming loss). In the rows 1-NN, LR and chance the same share for the neighbour rule (the nearest other card of the deck), a logistic regression per deck (leave-one-out) and an assignment drawn by the topic sizes. The script is the model's input, not the truth, so 1 is not the goal. | 0 to 1, higher means closer to the script; the chance row is the floor. |
+| kept_share | The share of the course's cards with a margin of at least the row's threshold (the margin rows); 1 for the whole course. | 0 to 1. |
+| coherence_median | The median over the scripted topics of a topic's coherence: the share of its scripted cards whose nearest centroid is the topic itself. | 0 to 1, higher is better. |
+| coherence_below_half | How many scripted topics keep fewer than half of their scripted cards. | A count, lower is better. |
+| coherence_at_one | How many scripted topics keep every one of their scripted cards. | A count, higher is better. |
+| moved | How many cards the model places in another topic than the script. | A count. |
+| emptied | How many scripted topics the model leaves without cards (they keep their dots). | A count. |
+
+## difficulty.csv
+
+| Column | What it measures | Range |
+|---|---|---|
+| macro_f1, macro_f1_sd | The mean of the three levels' F1 scores on the rated quizzes, out of fold, and its standard deviation over the 3 repeats of the 5-fold cross-validation. Under the deck shares every level keeps its true count, so it equals the balanced accuracy. | 0 to 1, higher is better; the always-easy row is the floor. |
+| balanced_accuracy, balanced_accuracy_sd | The mean over the three levels of the share of the level's quizzes predicted at that level, with its sd over the repeats. | 0 to 1, higher is better. |
+| kappa, kappa_sd | Cohen's kappa with quadratic weights: the agreement of the predicted with the authored levels beyond chance, an error of one level counted less than one of two; with its sd over the repeats. | −1 to 1; 0 is chance, higher is better. |
+| accuracy, accuracy_sd | The share of the rated quizzes whose predicted level is the authored one, with its sd over the repeats. Always easy scores the easy share, 8 of 12. | 0 to 1, higher is better. |
+| spearman | Spearman's rank correlation of the out-of-fold score (P(medium) + 2 · P(hard)) with the authored level. | −1 to 1, higher is better. |
+| recall_easy, recall_medium, recall_hard | The share of each authored level's quizzes predicted at that level: the diagonal of the confusion matrix. In the hand row: the share of each authored level the hand labels called the same. | 0 to 1, higher is better. |
+| rated, unrated | The rated quizzes the model is measured on, and the unrated quizzes it predicts. | Counts. |
+| predicted_easy, predicted_medium, predicted_hard | The levels the row's label rule gives the unrated quizzes. | Counts; they sum to unrated. |
+| hand_judged | How many of the row's predicted quizzes carry a hand label: the sample the hand columns are computed over. | A count. |
+| hand_macro_f1, hand_kappa, hand_accuracy | Macro-F1, weighted kappa and accuracy of the row's predictions with the hand labels as the truth, over the hand-labelled unrated quizzes. In the hand row: the hand labels against the authored levels of the rated quizzes judged blind, the criterion against the quota. | As above. |
+| hand_spearman | Spearman's rank correlation of the score with the hand level over the judged quizzes. | −1 to 1, higher is better. |
+| hand_within_deck, hand_within_pairs | Of the pairs of a deck's judged quizzes with different hand levels, the share whose scores are in the hand levels' order (a tie counts half), and how many such pairs there are. The order the recommender would use. | 0 to 1; 0.5 is chance, higher is better. |

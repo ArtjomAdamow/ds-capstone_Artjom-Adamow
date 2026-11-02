@@ -25,14 +25,15 @@ Run the commands below from the capstone's root.
 │   │   ├── difficulty_model.py     # D1: the difficulty of the unrated quizzes, measured out of fold
 │   │   └── evaluation.py           # the offline measures and the judges of the topic model, for evaluate.py
 │   ├── standalone/            # the models' own page: Dash and plotly, nothing of the viewer or the glue
-│   │   ├── __init__.py             # main(course_dir): the page on the course table
-│   │   ├── app.py                  # Page (the fitted models, what each view shows), the app and its one callback
-│   │   ├── layout.py               # the map figure and the panels
-│   │   └── assets/style.css        # the viewer's theme tokens, written anew
+│   │   ├── __init__.py             # main(course_dir, results_dir): the page on the course table and the results
+│   │   ├── app.py                  # Page (the fitted models, what each view and panel shows), the app and its one callback
+│   │   ├── layout.py               # the map figure, the dendrogram's window and the model panels
+│   │   ├── results.py              # the results files read for the panels: the newest run, the tables, the glossary
+│   │   └── assets/                 # style.css: the viewer's theme tokens, written anew; map_side.js: the map's side
 │   ├── glue/                  # the models on sputnik's map, over its public API: the Helper button and its dialog
-│   └── docs/                  # this readme and the roadmap
+│   └── docs/                  # this readme, the roadmap and columns.md, what the results' columns mean
 ├── tests/app/                 # the model tests, the page's, the launchers' and the evaluation's tests on model_support.py
-├── results/                   # written by evaluate.py: results.csv, difficulty.csv, topics.csv
+├── results/                   # hand_marks.csv and hand_labels.csv come with the trains; evaluate.py writes results.csv, difficulty.csv, topics.csv
 └── data/                      # git-ignored: topics.json, course/, images/, jupyter/ and the app's state in state/
 ```
 
@@ -54,15 +55,13 @@ The models' input without the viewer's parser, three CSV files in `data/course/`
 
 ## The standalone page
 
-The models on a page of their own, without the viewer, in its theme. It fits the course model and D1 on the course table at the start (a few seconds) and stores nothing.
+The models on a page of their own, without the viewer, in its theme. It fits the course model and D1 on the course table at the start (a few seconds), reads the results files next to `evaluate.py` and stores nothing.
 
-- **Decks view:** the decks at the model's positions on the sphere, the clustering's connections gold and dashed as far as the preset keeps them (parts of at most five decks: 9 of the 23 on the course).
-- **Topics view** (Open on a selected deck): the deck's model topics on a ring around the faint centroid in file order (the model has no topic positions yet); an emptied topic is an open circle.
-- **Cards view** (Open on a selected topic): the topic's cards on the surface of its sphere (grey, opacity 0.1), connected as far as the preset keeps them (parts of at most four cards), coloured by difficulty: easy blue, medium beige-brown, hard red-orange, predicted and unrated grey.
-- **Moving around:** a click selects a dot, Open (or a click on a selected deck's or topic's panel) enters it, Back goes up a level with the dot it came from selected.
-- **The map** is a square of 12.5 % of the window's area (`assets/map_side.js` sets its side on load and on resize, at least 240 px), with the course model C1's readout under it: C1's own measures of the view. In every view it shows its axes, x, y and z with ticks at −1, −0.5, 0, 0.5 and 1: the unit sphere's coordinates, in which the readout measures a dot's nearest. The difficulty colour legend shows in the cards view only, under the title of D1's metrics; a selected card's panel names its difficulty.
-- **The panels, ids only:** on the right the selected dot's ids and counts (a deck: `deck_id`, topics, cards; a topic: `deck_id`, `topic_id`, the rest flag, its cards by kind; a card: `comb_id`, `deck_id`, `topic_id`, the stack, the authored or predicted difficulty, whether T1 placed it between two topics) or, with nothing selected, the dendrogram of the view's connections with the preset's cut-off line, its heights the real merge distances, its leaves by id; under it D1's metrics of the view (all decks, a deck, a topic, named by ids).
-- **No learning material:** no card's question, answer or explanation and no deck's description, anywhere on the page; the map's hover and the line under the top bar are ids: a deck's `deck_id` (`deck 01` under the top bar), a card's `comb_id`; no deck's name. No topic name either: the map's hover and the line under the top bar give a topic's label, its `topic_id` and a hash of its name (`02-3fa9c1`), made at runtime and stored nowhere.
+- **Three views:** the decks, a deck's topics (Open on a selected deck), a topic's cards (Open on a selected topic). A click selects a dot, Open (or a click on a selected deck's or topic's panel) enters it, Back goes up a level with the dot it came from selected.
+- **Four model panels,** in a column right of the map: S – Similarity, C – Course model, T – Topics, D – Difficulty, each a thin row until a click expands it (one at a time; its close box collapses it). A panel holds one section per level of the model (S1, C1, T1, D1): the level's live measures of the view (C1's readout, D1's metrics with the colour legend, S1's vocabulary and minimum score, T1's agreement, moved cards and margins), then its rows of the newest run of its results file, one row per measure and one column per variant with the chosen one marked, next to its floor of that run (B0 for S1, the random layout for C1, chance for T1, always easy for D1), and a collapsed "Columns" row that says what the shown measures mean ([columns.md](columns.md)). Without a results file the section says how to make one.
+- **The map follows the expanded panel.** With every panel collapsed, or S or D expanded, it shows the scripted topics: grey dots at random positions (a fixed seed, the same for every panel), no connections, centroid, axes or colours, as the viewer without Helper; D adds the difficulty colours (easy blue, medium beige-brown, hard red-orange, predicted and unrated grey). C shows the model: T1's topics at C1's positions, the decks and the cards connected gold and dashed as far as the preset keeps them (parts of at most five decks, 9 of the 23 on the course; parts of at most four cards), the centroid of a deck and the axes, x, y and z with ticks at −1, −0.5, 0, 0.5 and 1, the unit sphere's coordinates in which the readout measures a dot's nearest. T shows the same positions with T1's markers: a card coloured by its margin on a teal scale, a cross below the threshold, a violet diamond for a card T1 moved in, an open pink diamond for a card it moved out (placed at the mean direction of its most similar cards of the topic), an emptied topic as an open circle and a topic's dot grown with its share of cards between two topics; the legend is in the panel. The topics view places the topics at random in every state (the model has no topic positions yet) and draws no connections there.
+- **The map** is a square of 12.5 % of the window's area (`assets/map_side.js` sets its side on load and on resize, at least 240 px); under it (beside it in portrait) the dendrogram's window: the selected dot's ids and counts (a deck: `deck_id`, topics, cards; a topic: `deck_id`, `topic_id`, the rest flag, its cards by kind; a card: `comb_id`, `deck_id`, `topic_id`, the stack, the authored or predicted difficulty, whether T1 placed it between two topics, and with T expanded its margin and runner-up topic) or, with nothing selected, the dendrogram of the view's membership with the preset's cut-off line, its heights the real merge distances, its leaves by id, in every panel state.
+- **No learning material, ids only:** no card's question, answer or explanation and no deck's description, anywhere on the page; the map's hover, the line under the top bar and the panels are ids: a deck's `deck_id` (`deck 01` under the top bar), a card's `comb_id`; no deck's name. No topic name either: a topic's label is its `topic_id` and a hash of its name (`02-3fa9c1`), made at runtime and stored nowhere. A results cell that names a deck or a topic of the course table shows the id or the label instead.
 
 Start it with the launcher: answer `n` at "Launch Sputnik? (y/n)"; without sputnik installed it starts without asking.
 
@@ -81,13 +80,13 @@ uv run start.py
 
 ## The offline evaluation
 
-`evaluate.py` measures the models on the course table and appends one row per model and variant to `results/` next to it (`--results` names another folder; `--table` another course table): `--part similarity` the similarity model's vectoriser variants (same-deck precision@5, coverage, each variant's own minimum score), the random floor of random positions on the sphere and the course model's map (trustworthiness and neighbour overlap of the deck layout and of the card layouts per topic, at a fixed small k with the lift over random) into `results.csv`; `--part difficulty` D1 out of fold with its baselines into `difficulty.csv`; `--part topics` T1 against the scripted topics into `topics.csv`. Without `--part` all three run; a results file whose columns grew is written again with its rows kept.
+`evaluate.py` measures the models on the course table and appends one row per model and variant to `results/` next to it (`--results` names another folder; `--table` another course table): `--part similarity` the similarity model's vectoriser variants (same-deck precision@5, coverage, each variant's own minimum score), the random floor of random positions on the sphere and the course model's map (trustworthiness and neighbour overlap of the deck layout and of the card layouts per topic, at a fixed small k with the lift over random) into `results.csv`; `--part difficulty` D1 out of fold with its baselines into `difficulty.csv`; `--part topics` T1 against the scripted topics into `topics.csv`. Without `--part` all three run; every row of a run carries its start time (`run`), and a results file whose columns grew is written again with its rows kept. What the columns mean: [columns.md](columns.md).
 
 ```bash
 uv run evaluate.py --part similarity
 ```
 
-The hand-judged measures (the relevance of the neighbours, the difficulty levels of the unrated quizzes) need the hand marks and labels, which stay in the workspace the trains come from, since their forms hold card text: here the `hand_` columns stay empty, no form is written and the run says so. It imports nothing of the viewer. What is measured and what the numbers say: [roadmap.md](roadmap.md), "The offline evaluation".
+The hand-judged measures (the relevance of the neighbours, the difficulty levels of the unrated quizzes) are computed from `results/hand_marks.csv` and `results/hand_labels.csv`, which come with the trains without their notes; their judging forms stay in the workspace the trains come from, since they hold card text, so here nothing is written back to the two files and no form is written. It imports nothing of the viewer. What is measured and what the numbers say: [roadmap.md](roadmap.md), "The offline evaluation".
 
 ## The tests
 
