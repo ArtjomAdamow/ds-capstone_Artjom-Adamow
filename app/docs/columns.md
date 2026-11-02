@@ -1,6 +1,6 @@
 # The columns of the results files
 
-What the measure columns of `results/` mean: `results.csv` (B0, S1, C1), `topics.csv` (T1) and `difficulty.csv` (D1), written by `evaluate.py`. The standalone page reads this file: a model's panel shows the rows of the measures its table shows under a collapsed "Columns" row (`app/standalone/results.py`). The bookkeeping columns (`date`, `run`, `model`, `variant`, `scope`, `params`, `features`, `label_rule`, `folds`, `repeats`, `seed`, `seconds`, `notes`) have no row here: they name the run and the row. How each measure is made: `docs/draft/helper/models/`, one file per model, "How it is judged".
+What the measure columns of `results/` mean: `results.csv` (B0, S1 and S2, which share the similarity columns, C1), `topics.csv` (T1) and `difficulty.csv` (D1), written by `evaluate.py`. The standalone page reads this file: a model's panel shows the rows of the measures its table shows under a collapsed "Columns" row (`app/standalone/results.py`). The bookkeeping columns (`date`, `run`, `model`, `variant`, `scope`, `params`, `features`, `label_rule`, `folds`, `repeats`, `seed`, `seconds`, `notes`) have no row here: they name the run and the row. How each measure is made: `docs/draft/helper/models/`, one file per model, "How it is judged".
 
 Columns of one measure share a row: a value with its sd or its interval, k = 2 with k = 3.
 

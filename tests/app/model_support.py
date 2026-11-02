@@ -198,3 +198,49 @@ def difficulty_report(predictions=None):
     if predictions is None:
         return report
     return dataclasses.replace(report, predictions=dict(predictions), unrated_ids=tuple(predictions))
+
+
+# --- a stand-in for S2's encoder ------------------------------------------------------------------------------
+
+
+class FakeEncoder:
+    """A sentence encoder without torch: a text's vector is the mean of a fixed random unit vector per word (seeded
+    by the word's hash), scaled to length 1, so two texts sharing words are close and the result is the same on
+    every run. `fit_transform` and `transform` both encode, as S2's wrapper does; `calls` counts the encodings."""
+
+    def __init__(self, dimensions: int = 16, model_name: str = "fake-encoder") -> None:
+        self.dimensions = dimensions
+        self.model_name = model_name
+        self.calls = 0
+
+    def _word(self, word: str):
+        import hashlib
+
+        import numpy as np
+
+        seed = int.from_bytes(hashlib.blake2s(word.lower().encode("utf-8"), digest_size=4).digest(), "big")
+        vector = np.random.default_rng(seed).normal(size=self.dimensions)
+        return vector / np.linalg.norm(vector)
+
+    def encode(self, texts, **_options):
+        import numpy as np
+
+        self.calls += 1
+        rows = []
+        for text in texts:
+            words = [word for word in text.replace("`", " ").split() if word]
+            vector = np.sum([self._word(word) for word in words], axis=0) if words else np.zeros(self.dimensions)
+            length = np.linalg.norm(vector)
+            rows.append(vector / length if length > 0 else vector)
+        return np.array(rows, dtype=np.float32).reshape(len(texts), self.dimensions)
+
+    def fit_transform(self, texts):
+        return self.encode(list(texts))
+
+    def transform(self, texts):
+        return self.encode(list(texts))
+
+
+def fake_loader(model_name: str) -> FakeEncoder:
+    """A loader for app.models.embeddings.SentenceEncoder: the fake model under the asked name."""
+    return FakeEncoder(model_name=model_name)

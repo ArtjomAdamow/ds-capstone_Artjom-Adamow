@@ -192,7 +192,10 @@ class Results:
             return None
         run = newest(rows)
         if letter == "S":
-            return [self._similarity(run)]
+            tables = [self._similarity(run)]
+            if any(row.get("model") == "S2" for row in run):
+                tables.append(self._embeddings(run))
+            return tables
         if letter == "C":
             return [self._course(run)]
         if letter == "T":
@@ -213,6 +216,16 @@ class Results:
         heads += [row.get("variant") or "" for row in variants]
         chosen = [False] * len(floors[:1]) + [CHOSEN in (row.get("variant") or "") for row in variants]
         return transpose("S1 next to the random floor B0", rows, heads, chosen, S1_MEASURES, self.by_ids)
+
+    def _embeddings(self, run: list[dict]) -> Table:
+        """S2's rows of the run (the encoders and the hybrids) next to S1's chosen variant, which every paired
+        difference is against."""
+        reference = [row for row in run if row.get("model") == "S1" and CHOSEN in (row.get("variant") or "")][:1]
+        variants = [row for row in run if row.get("model") == "S2"]
+        rows = reference + variants
+        heads = [f"S1 {row.get('variant') or ''}" for row in reference] + [row.get("variant") or "" for row in variants]
+        chosen = [True] * len(reference) + [False] * len(variants)
+        return transpose("S2 next to S1's chosen variant", rows, heads, chosen, S1_MEASURES, self.by_ids)
 
     def _course(self, run: list[dict]) -> Table:
         rows = [row for row in run if row.get("model") == "C1"]

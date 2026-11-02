@@ -18,6 +18,8 @@ What it measures (docs/draft/helper/models/, each model's file):
   * S1, the vectoriser variants (each a factory of anything with fit_transform): same-deck precision@5 (empty slots
     count as misses), the precision over the kept neighbours, the coverage and the number of distinct recommended
     cards, without and with the variant's own minimum score, the 10th percentile of its fifth neighbour's cosine;
+    S2, the sentence encoders and their hybrids with S1's chosen settings (app.models.embeddings), measured the same
+    way where sentence-transformers is installed, their embeddings cached in `--cache`;
   * C1, the chosen model's map: trustworthiness and top-3 overlap of the deck positions; of the card positions per
     model topic the within-topic overlap at k = min(5, n - 1), at the fixed k = 2 and k = 3 (over the topics with
     k + 2 cards or more) with the lift over random positions, and the trustworthiness at the layout's k; each
@@ -79,7 +81,7 @@ if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
 
 from app import course_table  # noqa: E402
-from app.models import evaluation, layout, similar  # noqa: E402
+from app.models import embeddings, evaluation, layout, similar  # noqa: E402
 from app.models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel  # noqa: E402
 from app.models.difficulty_model import DEFAULT_FEATURES, FEATURE_SETS, LEVEL_OF, LEVELS, fit_difficulty, measure, split  # noqa: E402
 from app.models.topic_model import FOCUS_MARGIN, TopicModel  # noqa: E402
@@ -92,7 +94,14 @@ TABLE_DIRS = (MODULE_DIR / "data" / "course",) + tuple(
 COURSE_NAME = "topics.json"  # the course file next to the table's folder, for the viewer's quiz options
 SEEDS = (42, 1, 2, 3, 4)
 FIXED_K = (2, 3)  # the fixed small k of the card layouts' overlap
-HAND_CHECK_DECKS = {"NLP Fundamentals": 4, "LLM Foundations & Embeddings": 3}  # deck -> every n-th card
+# The hand check's sample, deck -> every n-th card: every card of the two NLP decks and of the transfer deck 18
+HAND_CHECK_DECKS = {"NLP Fundamentals": 1, "LLM Foundations & Embeddings": 1, "AI Agents & RAG Systems": 1}
+TRANSFER_DECK = "AI Agents & RAG Systems"  # judged with the others, read once after the choice
+# The tags of the marks' note column (similarity.md, "S2", "How it is judged"): three on an irrelevant candidate,
+# two on a relevant one; the evaluation counts per variant how many tagged pairs it lists
+TAGS = ("lexical trap", "shared dataset", "generic term", "paraphrase", "code name")
+# The embeddings' cache: the launchers' folder, data/cache/ next to the package (the capstone) or temp/ (here)
+CACHE_DIRS = (MODULE_DIR / "data" / "cache", MODULE_DIR / "temp")
 COLUMNS = [
     "date", "run", "model", "variant", "params", "seed", "precision_at_5", "kept_precision", "coverage", "distinct", "min_score",
     "hand_precision", "hand_p1", "hand_p3", "hand_diff", "hand_diff_low", "hand_diff_high", "judged_cards",
@@ -151,6 +160,11 @@ def default_table_dir() -> Path:
     return next((folder for folder in TABLE_DIRS if folder.is_dir()), TABLE_DIRS[0])
 
 
+def default_cache_dir() -> Path:
+    """The embeddings' cache folder: the first of CACHE_DIRS whose parent (data/, the module folder) exists."""
+    return next((folder for folder in CACHE_DIRS if folder.parent.is_dir()), CACHE_DIRS[0])
+
+
 # --- the variants -----------------------------------------------------------------------
 
 
@@ -164,6 +178,7 @@ class Variant:
     make: Callable[[], object]
     with_explain: bool
     params: str
+    model: str = "S1"  # the model column: S1 for the TF-IDF variants, S2 for the encoders and the hybrids
 
 
 def tfidf_variant(name: str, with_explain: bool = False, **options) -> Variant:
@@ -189,6 +204,32 @@ def variants() -> list[Variant]:
         tfidf_variant(CHOSEN, with_explain=similar.WITH_EXPLAIN, ngram_range=similar.NGRAM_RANGE, min_df=similar.MIN_DF,
                       sublinear_tf=similar.SUBLINEAR_TF),
     ]
+
+
+S2_SKIPPED = "S2 skipped: sentence-transformers is not installed (the embeddings group), so the encoder variants are not measured"
+
+
+def s2_variants(cache_dir: Optional[Path] = None, loader: Optional[Callable] = None) -> list[Variant]:
+    """S2's variants (similarity.md, "S2"): each encoder alone and the hybrid of S1's chosen settings with it, every
+    one on S1's document (with the explanation); the embeddings cached in `cache_dir`. Empty without the library
+    (`loader` stands in for the models in the tests)."""
+    if loader is None and not embeddings.encoder_available():
+        return []
+    cache = embeddings.EmbeddingCache(Path(cache_dir) / embeddings.CACHE_FOLDER) if cache_dir is not None else None
+
+    def encoder(model_name: str):
+        return lambda: embeddings.SentenceEncoder(model_name, cache=cache, loader=loader)
+
+    def hybrid(model_name: str):
+        return lambda: embeddings.HybridVectoriser(similar.tfidf_vectoriser(), embeddings.SentenceEncoder(model_name, cache=cache, loader=loader))
+
+    chosen = f"{{'ngram_range': {similar.NGRAM_RANGE}, 'min_df': {similar.MIN_DF}, 'sublinear_tf': {similar.SUBLINEAR_TF}}}"
+    rows = []
+    for short, model_name in (("MiniLM", embeddings.MINILM), ("mpnet", embeddings.MPNET)):
+        rows.append(Variant(short, encoder(model_name), True, f"model={model_name}, explain=True", "S2"))
+        rows.append(Variant(f"hybrid: chosen + {short}", hybrid(model_name), True,
+                            f"tfidf {chosen} + model={model_name}, each half at its own minimum, explain=True", "S2"))
+    return rows
 
 
 # --- the results files ------------------------------------------------------------------
@@ -294,14 +335,14 @@ def level_counts(labels: dict[str, dict], ids) -> tuple[int, int, int]:
     return tuple(found.count(level) for level in LEVELS)
 
 
-def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | None = None) -> list[dict]:
+def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | None = None, vectoriser=None) -> list[dict]:
     """D1: every feature set, out of fold, with the deck shares and with the most likely class; the baselines once;
     the predicted levels of the unrated quizzes by the deck shares and by the cut points. With hand labels, the
     predictions of both rules and the always-easy baseline are scored on the judged quizzes (the hand columns),
     and a `hand` row gives the hand levels' agreement with the authored levels of the rated quizzes judged blind."""
     labels = labels or {}
     deck_of = {card.id: card.deck for card in cards}
-    index = similar.SimilarityIndex.fit(cards)  # as the app fits it
+    index = similar.SimilarityIndex.fit(cards, vectoriser, min_score=None)  # the app's vectoriser, as the launchers fit it
     rows = []
     for feature_set in FEATURE_SETS:
         report = fit_difficulty(cards, index, feature_set)
@@ -383,11 +424,11 @@ def topic_row(today: str, model: str, scope: str, cards: int, agreement: float, 
     return row
 
 
-def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: str) -> list[dict]:
+def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: str, vectoriser=None) -> list[dict]:
     """T1 against the scripted topics, with the neighbour rule, the per-deck logistic regression and chance: by
     course, by stack and per deck; T1's margin table, coherence, moved cards and emptied topics (models/topic.md)."""
     started = time.perf_counter()
-    index = similar.SimilarityIndex.fit(cards)
+    index = similar.SimilarityIndex.fit(cards, vectoriser, min_score=None)  # the app's vectoriser, as the launchers fit it
     model = TopicModel(index, seeds)
     t1_seconds = time.perf_counter() - started
     scripted = model.scripted_of
@@ -565,7 +606,7 @@ def write_hand_check(cards, by_id, indexes: dict[str, object], seen_today: str, 
     decks = HAND_CHECK_DECKS if decks is None else decks
     relevant = relevant_of(marks)
     lines = [
-        "# Hand check: related cards of decks 17 and 24",
+        f"# Hand check: related cards of {', '.join(decks)}",
         "",
         f"Written by evaluate.py on {seen_today} ({note}). For every card below, mark every candidate that is a "
         "genuinely related card for a learner (the same concept, a prerequisite, or the natural next card): put `x` "
@@ -765,20 +806,71 @@ def write_hand_labels_form(cards, quiz_of, labels: dict[str, dict], today: str, 
 # --- the similarity models and the map ------------------------------------------------
 
 
-def neighbour_scores(cosines: np.ndarray, rank: int) -> np.ndarray:
-    """Every card's cosine with its `rank`-th nearest other card (1 the nearest); the last other card's where the
-    course has fewer; empty below two cards."""
-    count = len(cosines)
-    if count < 2:
-        return np.zeros(0)
-    scores = np.array(cosines, dtype=float, copy=True)
-    np.fill_diagonal(scores, -np.inf)
-    return -np.sort(-scores, axis=1)[:, min(rank, count - 1) - 1]
+neighbour_scores = similar.neighbour_scores  # moved into the pipeline (S2's own minimum needs it there)
 
 
-def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note: str, marks: dict[str, set[str]]) -> tuple[list[dict], dict]:
-    """B0, the S1 variants and C1's map (the deck layout and the per-topic card layouts of the chosen model).
-    `marks`: the judged cards' relevant candidates (card id -> ids), empty without the hand side."""
+def tags_of(marks: dict[str, dict[str, dict]]) -> dict[str, set[tuple[str, str]]]:
+    """The tagged pairs of the marks file by tag: a note that holds one of TAGS (whole words, any case) tags its
+    (card, candidate) pair; a note may hold several."""
+    tagged: dict[str, set[tuple[str, str]]] = {tag: set() for tag in TAGS}
+    for card_id, rows in marks.items():
+        for candidate, row in rows.items():
+            note = (row.get("note") or "").lower()
+            for tag in TAGS:
+                if re.search(rf"\b{re.escape(tag)}\b", note):
+                    tagged[tag].add((card_id, candidate))
+    return tagged
+
+
+def tag_report(indexes: dict[str, object], tagged: dict[str, set[tuple[str, str]]], k: int = similar.TOP_K) -> dict[str, dict[str, int]]:
+    """Per variant and tag, how many of the tagged pairs the variant lists among the card's first k neighbours: a
+    trap, a shared dataset or a generic term still listed counts against it, a paraphrase or a code name listed
+    for it. Printed as a table; the counts returned by variant and tag."""
+    counts: dict[str, dict[str, int]] = {}
+    tags = [tag for tag in TAGS if tagged.get(tag)]
+    if not tags:
+        return counts
+    print("   tagged pairs listed in the top 5 (" + ", ".join(f"{tag}: {len(tagged[tag])}" for tag in tags) + ")")
+    print("   | Variant | " + " | ".join(tags) + " |")
+    print("   |---|" + "---|" * len(tags))
+    for name, index in indexes.items():
+        counts[name] = {}
+        for tag in tags:
+            listed = sum(
+                candidate in [other for other, _score in list(index.related(card_id))[:k]] for card_id, candidate in tagged[tag]
+            )
+            counts[name][tag] = listed
+        print(f"   | {name} | " + " | ".join(f"{counts[name][tag]} of {len(tagged[tag])}" for tag in tags) + " |")
+    return counts
+
+
+def deck_report(per_card: dict[str, dict[str, float]], per_card_p1: dict[str, dict[str, float]], deck_of: dict[str, str],
+                deck_ids: dict[str, str]) -> None:
+    """The hand columns per sampled deck (hand p@5, p@1, the judged cards, the paired difference to the chosen
+    variant), printed and not written: the transfer deck's numbers are read apart from the others'."""
+    judged = sorted(per_card.get(CHOSEN, {}))
+    decks = sorted({deck_of[card_id] for card_id in judged if card_id in deck_of}, key=lambda deck: deck_ids.get(deck, deck))
+    if not decks:
+        return
+    print("   hand columns per deck (p@5, p@1 over the deck's judged cards; the difference to the chosen variant with its interval)")
+    for deck in decks:
+        cards = [card_id for card_id in judged if deck_of.get(card_id) == deck]
+        print(f"   deck {deck_ids.get(deck, deck)} ({len(cards)} judged card{'s' if len(cards) != 1 else ''}"
+              + (", the transfer deck" if deck == TRANSFER_DECK else "") + ")")
+        for name in per_card:
+            p5 = float(np.mean([per_card[name][card_id] for card_id in cards]))
+            p1 = float(np.mean([per_card_p1[name][card_id] for card_id in cards]))
+            mean, low, high = evaluation.paired_bootstrap([per_card[name][card_id] - per_card[CHOSEN][card_id] for card_id in cards])
+            print(f"      {name:52s} p@5 {p5:.3f}, p@1 {p1:.2f}, difference {mean:+.3f} [{low:+.3f}, {high:+.3f}]")
+
+
+def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note: str, marks: dict[str, set[str]],
+                        cache_dir: Optional[Path] = None, vectoriser=None, tagged: Optional[dict[str, set[tuple[str, str]]]] = None,
+                        loader: Optional[Callable] = None) -> tuple[list[dict], dict]:
+    """B0, the S1 variants, the S2 variants (the encoders and the hybrids, with the library) and C1's map (the deck
+    layout and the per-topic card layouts of the app's vectoriser, `vectoriser`, TF-IDF's chosen settings by
+    default). `marks`: the judged cards' relevant candidates (card id -> ids), empty without the hand side;
+    `tagged`: the tagged pairs by tag (tags_of), for the tag report; `cache_dir`: the embeddings' cache."""
     deck_of = {card.id: card.deck for card in cards}
     ids = [card.id for card in cards]
     rows: list[dict] = []
@@ -790,12 +882,16 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
                      "seed": seed, "precision_at_5": fmt(floor), "notes": note})
     print(f"B0 random floor: same-deck precision@5 {np.mean(floors):.3f} ± {np.std(floors):.3f} over seeds {SEEDS}")
 
-    # S1: the vectoriser variants, without and with the minimum score, each at its own 10th percentile of the
-    # fifth neighbour's cosine
+    # S1 and S2: the vectoriser variants, without and with the minimum score, each at its own 10th percentile of
+    # the fifth neighbour's cosine
     indexes = {}
     per_card: dict[str, dict[str, float]] = {}
+    per_card_p1: dict[str, dict[str, float]] = {}
     variant_rows: dict[str, dict] = {}
-    for variant in variants():
+    encoder_variants = s2_variants(cache_dir, loader)
+    if not encoder_variants:
+        print(S2_SKIPPED)
+    for variant in variants() + encoder_variants:
         started = time.perf_counter()
         index = similar.SimilarityIndex.fit(cards, variant.make(), min_score=0.0, with_explain=variant.with_explain)
         seconds = time.perf_counter() - started
@@ -810,16 +906,19 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
         covered, distinct = evaluation.coverage(kept)
         vocabulary = getattr(index.vectoriser, "vocabulary_", None)
         params = variant.params + (f", vocab={len(vocabulary)}" if vocabulary is not None else "")
+        if isinstance(index.vectoriser, embeddings.HybridVectoriser):
+            params += ", minima=({:.3f}, {:.3f}), weights=({:.2f}, {:.2f})".format(*index.vectoriser.minima, *index.vectoriser.weights)
         per_card[variant.name] = evaluation.judged_precision(kept, marks, similar.TOP_K)
+        per_card_p1[variant.name] = evaluation.judged_precision(kept, marks, 1)
         p1, p3, p5 = (hand_precision(kept, marks, k) for k in (1, 3, similar.TOP_K))
-        row = {"date": today, "model": "S1", "variant": variant.name, "params": params, "seed": "",
+        row = {"date": today, "model": variant.model, "variant": variant.name, "params": params, "seed": "",
                "precision_at_5": fmt(precision), "kept_precision": fmt(kept_only), "coverage": fmt(covered),
                "distinct": distinct, "min_score": fmt(min_score), "hand_precision": fmt(p5), "hand_p1": fmt(p1), "hand_p3": fmt(p3),
                "judged_cards": len(marks) if marks else "", "seconds": f"{seconds:.2f}",
                "notes": f"precision with min_score {min_score:.3f}: {kept_precision:.3f}; {note}"}
         rows.append(row)
         variant_rows[variant.name] = row
-        print(f"S1 {variant.name:52s} precision@5 {precision:.3f} | 5th neighbour p10 {percentiles[0]:.3f}, median {percentiles[1]:.3f}, "
+        print(f"{variant.model} {variant.name:52s} precision@5 {precision:.3f} | 5th neighbour p10 {percentiles[0]:.3f}, median {percentiles[1]:.3f}, "
               f"p90 {percentiles[2]:.3f} | min_score {min_score:.3f}: precision {kept_precision:.3f}, kept-slot precision {kept_only:.3f}, "
               f"coverage {covered:.3f}, distinct {distinct}" + (f", vocab {len(vocabulary)}" if vocabulary is not None else "")
               + (f" | hand p@1 {p1:.2f}, p@3 {p3:.2f}, p@5 {p5:.3f} over {len(marks)} cards" if marks else "") + f" ({seconds:.2f}s)")
@@ -834,6 +933,9 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
             row.update(hand_diff=fmt(mean), hand_diff_low=fmt(low), hand_diff_high=fmt(high))
             print(f"   {name:52s} hand p@5 difference to the chosen variant {mean:+.3f} [{low:+.3f}, {high:+.3f}]"
                   + (" (itself)" if name == CHOSEN else ""))
+        deck_report(per_card, per_card_p1, deck_of, deck_ids)
+        if tagged:
+            tag_report(indexes, tagged)
 
     # The score distribution of the chosen settings (the basis of MIN_SCORE)
     chosen = indexes[CHOSEN]
@@ -844,10 +946,10 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
             print(f"  chosen, score of neighbour {rank}: p10 {np.percentile(column, 10):.3f}, median {np.median(column):.3f}, "
                   f"p90 {np.percentile(column, 90):.3f}")
 
-    # C1: the chosen model's positions (the deck layout and the card layouts per model topic), against the SVD
-    # start and random directions
+    # C1: the app's model's positions (the deck layout and the card layouts per model topic), against the SVD
+    # start and random directions; the app's vectoriser at its own minimum, as the launchers fit it
     started = time.perf_counter()
-    model = CourseModel(cards, deck_ids, seeds)
+    model = CourseModel(cards, deck_ids, seeds, vectoriser, min_score=None)
     seconds = time.perf_counter() - started
     start = layout.svd_start(model.deck_vectors)
     random_decks = evaluation.random_directions(len(model.deck_points), 42)
@@ -906,13 +1008,17 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
 
 
 def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", today: Optional[str] = None,
-        run_key: Optional[str] = None) -> None:
+        run_key: Optional[str] = None, cache_dir: Optional[Path] = None, vectoriser=None) -> None:
     """The evaluation on the course table in `table_dir`, its rows into `results_dir`: one part or all three, every
     row stamped with the run's key (`run_key`, by default the start time to the minute). The hand side of a part
     runs where its file or its form is in `results_dir`: with the form, the file is kept and the form written again;
     with the file alone (the capstone), the hand columns are computed and nothing is written back; with neither,
-    the hand columns stay empty and no form is written."""
+    the hand columns stay empty and no form is written. The parts measure the app's vectoriser (`vectoriser`, by
+    default embeddings.app_vectoriser with the embeddings cached in `cache_dir`), next to the similarity part's
+    variants."""
     files = result_files(results_dir)
+    if vectoriser is None:
+        vectoriser = embeddings.app_vectoriser(cache_dir)
     table = course_table.load_table(table_dir)
     cards, deck_ids, seeds = table.cards, table.deck_ids, table.seeds
     by_id = {card.id: card for card in cards}
@@ -925,16 +1031,17 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
     marks = merge_marks(read_marks(files.hand_marks), read_hand_check(files.hand_check), today, judge) if with_marks else {}
     labels = merge_labels(read_labels(files.hand_labels), read_label_form(files.hand_labels_form), today, judge) if with_labels else {}
     print(f"{len(cards)} cards in {len(deck_ids)} decks ({table_dir}, {note}); hand-check marks for {len(marks)} cards, "
-          f"hand labels for {len(labels)} quizzes; the rows go to {results_dir} (run {run_key})")
+          f"hand labels for {len(labels)} quizzes; the rows go to {results_dir} (run {run_key}); the app's vectoriser: "
+          f"{embeddings.describe(vectoriser)}" + (f", the embeddings cached in {cache_dir}" if cache_dir is not None else ""))
 
     # T1: the topic model, into its own file
     if part in ("all", "topics"):
-        topics = stamped(evaluate_topics(cards, seeds, deck_ids, today, note), run_key)
+        topics = stamped(evaluate_topics(cards, seeds, deck_ids, today, note, vectoriser), run_key)
         write_rows(topics, files.topics, TOPICS_COLUMNS)
         print(f"{len(topics)} rows appended to {files.topics}")
     # D1: the difficulty model, into its own file, with the hand labels kept and their form written again
     if part in ("all", "difficulty"):
-        difficulty = stamped(evaluate_difficulty(cards, today, note, labels), run_key)
+        difficulty = stamped(evaluate_difficulty(cards, today, note, labels, vectoriser), run_key)
         write_rows(difficulty, files.difficulty, DIFFICULTY_COLUMNS)
         print(f"{len(difficulty)} rows appended to {files.difficulty}")
         if labels_form:
@@ -951,7 +1058,7 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
     if part not in ("all", "similarity"):
         return
 
-    rows, indexes = evaluate_similarity(cards, seeds, deck_ids, today, note, relevant_of(marks))
+    rows, indexes = evaluate_similarity(cards, seeds, deck_ids, today, note, relevant_of(marks), cache_dir, vectoriser, tags_of(marks))
     write_rows(stamped(rows, run_key), files.results)
     if marks_form:
         write_marks(marks, files.hand_marks)
@@ -974,12 +1081,14 @@ def main() -> None:
                         help="the similarity models (B0, S1, C1), the difficulty model D1, the topic model T1, or all (default)")
     parser.add_argument("--judge", default="", help="who marked hand_check.md and hand_labels.md: written into hand_marks.csv "
                         "and hand_labels.csv with every new or changed mark")
+    parser.add_argument("--cache", default=None, help=f"the folder of the embeddings' cache, S2's (default: {default_cache_dir()})")
     arguments = parser.parse_args()
     table_dir = Path(arguments.table) if arguments.table else default_table_dir()
     missing = course_table.missing_files(table_dir)
     if missing:
         raise SystemExit(f"No course table in {table_dir} ({', '.join(path.name for path in missing)} missing).")
-    run(table_dir, Path(arguments.results) if arguments.results else RESULTS_DIR, arguments.part, arguments.judge)
+    run(table_dir, Path(arguments.results) if arguments.results else RESULTS_DIR, arguments.part, arguments.judge,
+        cache_dir=Path(arguments.cache) if arguments.cache else default_cache_dir())
 
 
 if __name__ == "__main__":

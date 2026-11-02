@@ -16,6 +16,10 @@ without asking and prints the command that installs the viewer.
                 viewer's state file user_state.json, the derived course file helper_topics.json and the model
                 state model_state.json
 
+Both modes run the app's vectoriser (app.models.embeddings.app_vectoriser): S2's sentence encoder with the course's
+embeddings cached in data/cache/embeddings/ where sentence-transformers is installed (the embeddings extra), TF-IDF
+otherwise, with one line that says so.
+
 data/ is git-ignored: the course data comes from the flashcards workspace with the helper's migration (its
 tools/train.py), as the package and this file do. A missing library, a missing
 data file or a sputnik older than app.launch.VIEWER_RELEASE stops the start with the command that fixes it. Until
@@ -46,6 +50,7 @@ TABLE_DIR = DATA_DIR / "course"  # the course table: the standalone page's input
 RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the standalone page's panels read them
 STATE_FILE = DATA_DIR / "state" / "user_state.json"  # the viewer's state file; the derived course file and the
 # model state go next to it (app.glue.composition)
+CACHE_DIR = DATA_DIR / "cache"  # the embeddings' cache of S2 (app.models.embeddings), a derived file, no state
 RELOADER = True  # the full app restarts on code changes; the reloader's child fits the models and serves
 
 # The commands it prints
@@ -88,8 +93,9 @@ def viewer_too_old(version: Callable = metadata.version) -> Optional[str]:
     return installed if _release(installed) < _release(VIEWER_RELEASE) else None
 
 
-def run_standalone(table_dir: Path = TABLE_DIR) -> None:
-    """The standalone page on the course table; without the table, stop with the data hint."""
+def run_standalone(table_dir: Path = TABLE_DIR, cache_dir: Path = CACHE_DIR) -> None:
+    """The standalone page on the course table, with the app's vectoriser and the embeddings' cache; without the
+    table, stop with the data hint."""
     from app.course_table import missing_files
 
     missing = missing_files(table_dir)
@@ -98,10 +104,10 @@ def run_standalone(table_dir: Path = TABLE_DIR) -> None:
         raise SystemExit(f"No course table in {table_dir} ({names} missing). {DATA_HINT}")
     from app.standalone import main as standalone_main
 
-    standalone_main(table_dir, RESULTS_DIR)
+    standalone_main(table_dir, RESULTS_DIR, cache_dir=cache_dir)
 
 
-def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE) -> None:
+def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE, cache_dir: Path = CACHE_DIR) -> None:
     """Sputnik's app with the Helper button, served with the debug reloader. The reloader's parent composes the
     viewer's app on the raw course file without the models and stores nothing (its random positions would read as
     stored ones); the child fits the models, writes the derived course file and saves the state at the start."""
@@ -113,10 +119,13 @@ def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Pat
             f"sputnik {too_old} is installed, the app needs {VIEWER_RELEASE} or newer: {INSTALL_VIEWER}, then {START}"
         )
     from app.glue.composition import compose_model, serving_process
+    from app.models.embeddings import app_vectoriser
 
     serving = serving_process(RELOADER)
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    composition = compose_model(root, uuid.uuid4().hex, course_file, state_file, fit=serving)
+    # The app's vectoriser at its own minimum, made in the serving process only (the parent fits nothing)
+    composition = compose_model(root, uuid.uuid4().hex, course_file, state_file, fit=serving,
+                                vectoriser=app_vectoriser(cache_dir) if serving else None, min_score=None)
     if serving:
         # The startup save writes everything: the checked decks and topics, the shown cards, the positions,
         # connections and groups, and the model state

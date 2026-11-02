@@ -60,7 +60,7 @@ from scipy.spatial.distance import squareform
 
 from ..course_table import CourseTable
 from ..figures import dendrogram_figure, number
-from ..models import clustering, similar
+from ..models import clustering, embeddings, similar
 from ..models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel, Point, TopicLayout
 from ..models.difficulty_model import DifficultyReport, fit_difficulty
 from ..models.evaluation import random_directions
@@ -101,6 +101,10 @@ DESCRIPTIONS = {
     "S1": "One TF-IDF over the course's card texts, unit rows, the cosine as the similarity: every card's five nearest "
           "cards above a minimum score, and the vectors every other model reads. The map shows nothing of it yet: the "
           "scripted topics at random positions.",
+    "S2": "A sentence encoder over the course's card texts, alone or hybrid with S1's TF-IDF (the two halves' unit rows "
+          "side by side, each at its own minimum), unit rows, the cosine as the similarity: every card's five nearest "
+          "cards above the index's own minimum score, and the vectors every other model reads. The map shows nothing of "
+          "it yet: the scripted topics at random positions.",
     "C1": "The course model: the layout step on S1's vectors places the decks and, per topic, the cards on the surface of "
           "the topic's sphere; the clustering gives the connections and the cut-off preset. It builds on T1's topics.",
     "T1": "The topic model: the nearest of the deck's scripted topic centroids by cosine, leave-one-out, on S1's vectors; "
@@ -132,10 +136,12 @@ class Page:
 
     def __init__(
         self, table: CourseTable, model: Optional[CourseModel] = None, difficulty: Optional[DifficultyReport] = None,
-        results_dir: Optional[Path] = None,
+        results_dir: Optional[Path] = None, vectoriser=None, min_score: Optional[float] = similar.MIN_SCORE,
     ) -> None:
+        """`vectoriser` and `min_score` are the index's when the model is fitted here: the app's vectoriser at its
+        own minimum from the launchers (standalone.main), TF-IDF at the fixed minimum by default."""
         self.table = table
-        self.model = model if model is not None else CourseModel(table.cards, table.deck_ids, table.seeds)
+        self.model = model if model is not None else CourseModel(table.cards, table.deck_ids, table.seeds, vectoriser, min_score=min_score)
         self.difficulty = difficulty if difficulty is not None else fit_difficulty(table.cards, self.model.index)
         self.topic_model = self.model.topic_model
         self.card_by_id = {card.id: card for card in table.cards}
@@ -542,18 +548,33 @@ class Page:
 
     def _section_S(self, state: dict) -> list:
         index = self.model.index
-        vocabulary = getattr(index.vectoriser, "vocabulary_", None)
+        vectoriser = index.vectoriser
+        tfidf = vectoriser.first if isinstance(vectoriser, embeddings.HybridVectoriser) else vectoriser
+        encoder = vectoriser.second if isinstance(vectoriser, embeddings.HybridVectoriser) else vectoriser
+        vocabulary = getattr(tfidf, "vocabulary_", None)
         with_neighbour = sum(bool(index.neighbours.get(card_id)) for card_id in index.ids)
         distinct = {other for items in index.neighbours.values() for other, _score in items}
-        live = model_readout(f"All {len(index.ids):,} cards", [
-            ("S1 (TF-IDF, cosine)", [
-                ("vocabulary", f"{len(vocabulary):,}" if vocabulary is not None else "–", "The terms of the fitted vectoriser: unigrams and bigrams in at least two cards."),
-                ("minimum score", number(similar.MIN_SCORE), "A neighbour below this cosine is dropped: about the 10th percentile of the fifth neighbour's score."),
-                ("cards with a neighbour", _share(with_neighbour, len(index.ids)), "The cards with at least one neighbour above the minimum score."),
-                ("distinct neighbours", f"{len(distinct):,}", "How many different cards appear as some card's neighbour."),
-            ]),
-        ])
-        return [self._section("S", "S1 · similarity", live, state)]
+        rows = [
+            ("vectoriser", embeddings.describe(vectoriser), "The vectoriser the app runs: S1's TF-IDF, or S2's sentence encoder or its hybrid with TF-IDF (app roadmap step 23)."),
+            ("vocabulary", f"{len(vocabulary):,}" if vocabulary is not None else "–", "The terms of the fitted TF-IDF: unigrams and bigrams in at least two cards."),
+        ]
+        if isinstance(encoder, embeddings.SentenceEncoder):
+            rows.append(("embedding dimensions", f"{encoder.dimensions:,}" if encoder.dimensions else "–", "The length of the encoder's vectors."))
+            rows.append(("embeddings", "from the cache" if encoder.cached else f"encoded in {encoder.seconds:.1f} s",
+                         "Whether the start read the course's embeddings from the cache (a derived file keyed by the model and the texts) or encoded them."))
+        if isinstance(vectoriser, embeddings.HybridVectoriser):
+            rows.append(("hybrid minima", " / ".join(number(value) for value in vectoriser.minima),
+                         "Each half's own minimum: the 10th percentile of its fifth neighbour's cosine (TF-IDF, then the encoder)."))
+            rows.append(("hybrid weights", " / ".join(f"{value:.2f}" for value in vectoriser.weights),
+                         "The weight of each half's score in the hybrid's cosine, 1 / (1 − minimum): the sum of the two scores each normalised at its own minimum."))
+        rows += [
+            ("minimum score", number(index.min_score), "A neighbour below this cosine is dropped: the 10th percentile of the fifth neighbour's score, the index's own."),
+            ("cards with a neighbour", _share(with_neighbour, len(index.ids)), "The cards with at least one neighbour above the minimum score."),
+            ("distinct neighbours", f"{len(distinct):,}", "How many different cards appear as some card's neighbour."),
+        ]
+        level = "S2" if isinstance(encoder, embeddings.SentenceEncoder) else "S1"
+        live = model_readout(f"All {len(index.ids):,} cards", [(f"{level} ({embeddings.describe(vectoriser)}, cosine)", rows)])
+        return [self._section("S", f"{level} · similarity", live, state)]
 
     def _section_C(self, state: dict) -> list:
         live = model_readout(*self.measures(state))

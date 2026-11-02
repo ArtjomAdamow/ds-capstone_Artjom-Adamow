@@ -39,6 +39,7 @@ from project.services.actions import ModuleAction
 from project.services.views import DECKS, TOPICS
 from project.store import state as state_store
 
+from ..models import similar
 from ..models.course_model import CourseModel
 from ..models.difficulty_model import DifficultyReport, fit_difficulty
 from .button import Helper
@@ -106,11 +107,13 @@ def is_fresh(state_path: Path) -> bool:
     return state_store.StateDocument(state_path).section(state_store.CARDS_SECTION).read() is None
 
 
-def build_model(cards_path: Path, vectoriser=None) -> CourseModel:
+def build_model(cards_path: Path, vectoriser=None, min_score: Optional[float] = similar.MIN_SCORE) -> CourseModel:
     """Fit the course model on every card of the course file, seeded by its scripted topics (course.load_course).
-    The file is version 3: the viewer's parser refuses anything else."""
+    The file is version 3: the viewer's parser refuses anything else. `vectoriser` is the index's (TF-IDF by
+    default; the app's, embeddings.app_vectoriser, from the launchers), `min_score` the neighbours' minimum (None
+    for the index's own)."""
     course = load_course(cards_path)
-    return CourseModel(course.cards, course.deck_ids, course.seeds, vectoriser)
+    return CourseModel(course.cards, course.deck_ids, course.seeds, vectoriser, min_score=min_score)
 
 
 def build_difficulty(cards_path: Path, model: CourseModel) -> DifficultyReport:
@@ -128,6 +131,8 @@ def compose_model(
     difficulty: Optional[DifficultyReport] = None,
     derived_path: Optional[Path] = None,
     links: Sequence = (),
+    vectoriser=None,
+    min_score: Optional[float] = similar.MIN_SCORE,
 ) -> ModelComposition:
     """Compose the viewer's app on the derived course file with the Helper button. A fresh card state starts as
     the viewer's (the scripted topics, random positions, nothing generated); a stored one reads the model's
@@ -137,13 +142,15 @@ def compose_model(
     nothing is written. D1 is fitted with the model unless given. `state_path` is the viewer's one state file;
     `derived_path` is where the derived course file and the model state go (the launcher's cards.py passes its
     temp/); by default next to the requested state file. `links` are the viewer's TopBarLinks for its top bar
-    (the launcher's link to the models' page), passed where the viewer's compose takes them."""
+    (the launcher's link to the models' page), passed where the viewer's compose takes them. `vectoriser` and
+    `min_score` are the index's when the model is fitted here (the app's vectoriser from the launchers, at its own
+    minimum; TF-IDF at the fixed minimum by default)."""
     derived_path = Path(derived_path) if derived_path is not None else Path(state_path).with_name(DERIVED_NAME)
     fresh_cards = is_fresh(state_path)
     hooks = viewer_hooks()
     extra = {LINKS_HOOK: list(links)} if links and LINKS_HOOK in hooks else {}
     if fit and model is None:
-        model = build_model(cards_path)
+        model = build_model(cards_path, vectoriser, min_score)
     if model is None:
         composition = compose(base_dir, boot_id, cards_path, state_path, **extra)
         return ModelComposition(composition=composition, model=None, fresh_cards=fresh_cards, links=tuple(extra.get(LINKS_HOOK, ())))

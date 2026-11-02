@@ -8,7 +8,9 @@ in a process where the viewer cannot be imported."""
 
 import model_support  # noqa: F401  (the helper's package on the path, and the folder next to it with evaluate.py)
 
+import contextlib
 import csv
+import io
 import math
 import subprocess
 import sys
@@ -395,12 +397,19 @@ class HandMarksTest(unittest.TestCase):
 # --- the similarity part and the run ---------------------------------------------------------------------------
 
 
+def without_encoder():
+    """The library as not installed, so the S1-only expectations hold wherever the tests run."""
+    return mock.patch.object(evaluate.embeddings, "encoder_available", return_value=False)
+
+
 class SimilarityPartTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.marks = {"101001": {"201002", "101004"}, "301003": set()}
-        cls.rows, cls.indexes = evaluate.evaluate_similarity(
-            model_support.CARDS, model_support.SEEDS, model_support.DECK_IDS, TODAY, "test", cls.marks)
+        with without_encoder(), contextlib.redirect_stdout(io.StringIO()) as output:
+            cls.rows, cls.indexes = evaluate.evaluate_similarity(
+                model_support.CARDS, model_support.SEEDS, model_support.DECK_IDS, TODAY, "test", cls.marks)
+        cls.output = output.getvalue()
 
     def rows_of(self, model: str) -> list[dict]:
         return [row for row in self.rows if row["model"] == model]
@@ -441,11 +450,98 @@ class SimilarityPartTest(unittest.TestCase):
         self.assertNotEqual(model["seconds"], "")
 
     def test_without_marks_the_hand_columns_stay_empty(self):
-        rows, _ = evaluate.evaluate_similarity(model_support.CARDS, model_support.SEEDS, model_support.DECK_IDS, TODAY, "test", {})
+        with without_encoder(), contextlib.redirect_stdout(io.StringIO()):
+            rows, _ = evaluate.evaluate_similarity(model_support.CARDS, model_support.SEEDS, model_support.DECK_IDS, TODAY, "test", {})
         for row in rows:
             if row["model"] == "S1":
                 self.assertEqual((row["hand_precision"], row["hand_p1"], row["hand_p3"], row["judged_cards"]), ("", "", "", ""))
                 self.assertNotIn("hand_diff", row)
+
+    def test_without_the_library_the_s2_rows_are_skipped_with_one_line_and_the_deck_report_prints(self):
+        self.assertEqual(self.output.count(evaluate.S2_SKIPPED), 1)
+        self.assertNotIn("S2 ", [row["model"] + " " for row in self.rows])
+        self.assertIn("hand columns per deck", self.output)
+        self.assertIn("deck 01 (2 judged cards)", self.output)  # the two marked cards are Alpha's
+
+
+class EncoderVariantsTest(unittest.TestCase):
+    """S2's rows with the fake encoder standing in for the models (model_support.fake_loader)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.cache = Path(cls._tmp.name) / "cache"
+        marks = {"101001": {"201002", "101004"}, "301003": set()}
+        tagged = {"lexical trap": {("101001", "103001")}, "paraphrase": {("101001", "201002")}}
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            cls.rows, cls.indexes = evaluate.evaluate_similarity(
+                model_support.CARDS, model_support.SEEDS, model_support.DECK_IDS, TODAY, "test", marks, cls.cache,
+                tagged=tagged, loader=model_support.fake_loader)
+        cls.output = output.getvalue()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_the_s2_rows_follow_s1s_and_name_the_encoders_and_the_hybrids(self):
+        self.assertEqual([row["model"] for row in self.rows], ["B0"] * 5 + ["S1"] * 7 + ["S2"] * 4 + ["C1"] * 3)
+        s2 = [row for row in self.rows if row["model"] == "S2"]
+        self.assertEqual([row["variant"] for row in s2], ["MiniLM", "hybrid: chosen + MiniLM", "mpnet", "hybrid: chosen + mpnet"])
+        self.assertIn(f"model={evaluate.embeddings.MINILM}", s2[0]["params"])
+        self.assertNotIn("vocab=", s2[0]["params"])  # an encoder has no vocabulary
+        for row in (s2[1], s2[3]):
+            self.assertIn("vocab=", row["params"])
+            self.assertIn("minima=(", row["params"])
+            self.assertIn("weights=(", row["params"])
+        for row in s2:
+            self.assertTrue(0.0 <= float(row["min_score"]) <= 1.0)
+            self.assertEqual(row["judged_cards"], 2)
+            self.assertIn(row["variant"], self.indexes)
+        self.assertNotIn(evaluate.S2_SKIPPED, self.output)
+
+    def test_the_cache_holds_one_file_per_model_and_the_hybrids_read_it(self):
+        files = sorted(path.name for path in (self.cache / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))
+        self.assertEqual(len(files), 2)
+        self.assertTrue(files[0].startswith("all-minilm-l6-v2-"))
+        self.assertTrue(files[1].startswith("all-mpnet-base-v2-"))
+        hybrid = self.indexes["hybrid: chosen + MiniLM"].vectoriser
+        self.assertTrue(hybrid.second.cached)  # the encoder's row encoded, the hybrid read the cache
+
+    def test_the_tag_report_counts_the_tagged_pairs_each_variant_lists(self):
+        self.assertIn("tagged pairs listed in the top 5 (lexical trap: 1, paraphrase: 1)", self.output)
+        self.assertIn("| Variant | lexical trap | paraphrase |", self.output)
+        counts = evaluate.tag_report(self.indexes, {"paraphrase": {("101001", "201002")}, "lexical trap": set()})
+        for name, index in self.indexes.items():
+            listed = "201002" in [other for other, _ in index.related("101001")[:5]]
+            self.assertEqual(counts[name], {"paraphrase": int(listed)}, name)
+        self.assertEqual(evaluate.tag_report(self.indexes, {}), {})
+
+
+class TagsTest(unittest.TestCase):
+    def test_the_tags_are_read_from_the_notes_as_whole_words_in_any_case(self):
+        marks = {
+            "a": {"b": row("a", "b", "", note="Lexical trap: shares 'rate'"), "c": row("a", "c", "x", note="paraphrase; code name kept")},
+            "d": {"e": row("d", "e", "", note="a generic terminology issue"), "f": row("d", "f", "x", note="")},
+        }
+        tagged = evaluate.tags_of(marks)
+        self.assertEqual(tagged["lexical trap"], {("a", "b")})
+        self.assertEqual(tagged["paraphrase"], {("a", "c")})
+        self.assertEqual(tagged["code name"], {("a", "c")})
+        self.assertEqual(tagged["generic term"], set())  # "generic terminology" is not the tag
+        self.assertEqual(tagged["shared dataset"], set())
+        self.assertEqual(set(tagged), set(evaluate.TAGS))
+
+    def test_the_sample_is_every_card_of_the_three_decks_and_the_form_names_them(self):
+        self.assertEqual(evaluate.HAND_CHECK_DECKS, {"NLP Fundamentals": 1, "LLM Foundations & Embeddings": 1, "AI Agents & RAG Systems": 1})
+        self.assertEqual(evaluate.TRANSFER_DECK, "AI Agents & RAG Systems")
+
+    def test_the_default_cache_folder_is_data_cache_next_to_the_package_or_temp(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with mock.patch.object(evaluate, "CACHE_DIRS", (root / "data" / "cache", root / "temp")):
+                self.assertEqual(evaluate.default_cache_dir(), root / "temp")  # no data/: the module's temp/
+                (root / "data").mkdir()
+                self.assertEqual(evaluate.default_cache_dir(), root / "data" / "cache")
 
 
 PROBE = """
@@ -455,6 +551,7 @@ sys.path.insert(0, {tests!r})
 import model_support
 from pathlib import Path
 import evaluate
+evaluate.embeddings.encoder_available = lambda *arguments, **options: False  # the S1 rows alone, as without torch
 folder = Path({folder!r})
 evaluate.run(model_support.write_test_table(folder / "course"), folder / "results", "similarity", "", "2026-11-01")
 loaded = sorted(name for name, module in sys.modules.items() if module is not None and name.split(".")[0] == "project")
@@ -470,8 +567,11 @@ class RunTest(unittest.TestCase):
         self.table = model_support.write_test_table(self.folder / "course")
         self.results = self.folder / "results"
         self.files = evaluate.result_files(self.results)
+        self._without = without_encoder()
+        self._without.start()
 
     def tearDown(self):
+        self._without.stop()
         self._tmp.cleanup()
 
     def test_without_the_hand_files_the_derived_rows_are_written_and_no_form(self):

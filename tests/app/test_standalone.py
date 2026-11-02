@@ -937,5 +937,57 @@ class RealTableTest(unittest.TestCase):
                 self.assertNotIn(deck_row.name, content)
 
 
+
+class EmbeddingsPanelTest(unittest.TestCase):
+    """The S panel with S2's hybrid as the app's vectoriser (the fake encoder), and the S2 table of the results."""
+
+    @classmethod
+    def setUpClass(cls):
+        from app.models import embeddings, similar
+
+        cls._tmp = tempfile.TemporaryDirectory()
+        folder = Path(cls._tmp.name)
+        cls.table = load_table(write_test_table(folder / "course"))
+        note = course_note(cls.table.deck_ids)
+        write_results(folder / "results", note)
+        import csv
+
+        path = folder / "results" / "results.csv"
+        with path.open(newline="", encoding="utf-8") as handle:
+            columns = next(csv.reader(handle))
+        with path.open("a", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=columns)
+            writer.writerow({"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "S2", "variant": "MiniLM", "params": "m",
+                             "precision_at_5": "0.7", "kept_precision": "0.75", "notes": f"x; {note}"})
+            writer.writerow({"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "S2", "variant": "hybrid: chosen + MiniLM",
+                             "params": "h", "precision_at_5": "0.8", "kept_precision": "0.85", "notes": f"x; {note}"})
+        hybrid = embeddings.HybridVectoriser(similar.tfidf_vectoriser(min_df=1), embeddings.SentenceEncoder(embeddings.MINILM, loader=model_support.fake_loader))
+        cls.page = Page(cls.table, results_dir=folder / "results", vectoriser=hybrid, min_score=None)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_the_s_panels_live_measures_name_the_hybrid_its_minima_and_weights(self):
+        contents, _classes = self.page.panels({**HOME, "panel": "S"})
+        content = str(contents[PANEL_LETTERS.index("S")])
+        self.assertIn("S2 · similarity", content)
+        self.assertIn("hybrid: TF-IDF + MiniLM (16 dimensions)", content)
+        for label in ("vectoriser", "vocabulary", "embedding dimensions", "embeddings", "hybrid minima", "hybrid weights", "minimum score"):
+            self.assertIn(label, content)
+        self.assertIn(f"{self.page.model.index.min_score:.2f}", content)  # the index's own minimum, as the readout rounds it
+        self.assertIn("encoded in", content)  # no cache: encoded at the start
+
+    def test_s2s_table_stands_next_to_s1s_chosen_variant(self):
+        s1, s2 = self.page.results.tables("S")
+        self.assertEqual(s1.heads, ["B0 random positions (mean of 2 seeds)", "unigrams", "chosen: uni+bigrams"])
+        self.assertEqual(s2.title, "S2 next to S1's chosen variant")
+        self.assertEqual(s2.heads, ["S1 chosen: uni+bigrams", "MiniLM", "hybrid: chosen + MiniLM"])
+        self.assertEqual(s2.chosen, [True, False, False])
+        self.assertEqual(dict(s2.rows)["precision_at_5"], ["0.6", "0.7", "0.8"])
+        contents, _classes = self.page.panels({**HOME, "panel": "S"})
+        self.assertIn("S2 next to S1", str(contents[PANEL_LETTERS.index("S")]))
+
+
 if __name__ == "__main__":
     unittest.main()

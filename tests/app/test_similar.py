@@ -94,5 +94,35 @@ class NeighboursTest(unittest.TestCase):
         self.assertEqual([index.ids[row] for row in index.rows_of_deck("Beta")], model_support.BETA_CARDS)
 
 
+
+class OwnMinimumTest(unittest.TestCase):
+    """S2's rule for every vectoriser: the index's own minimum, the 10th percentile of the fifth neighbour's cosine."""
+
+    def test_neighbour_scores_and_the_own_minimum(self):
+        scores = np.array([[1.0, 0.9, 0.3, 0.05], [0.9, 1.0, 0.2, 0.0], [0.3, 0.2, 1.0, 0.5], [0.05, 0.0, 0.5, 1.0]])
+        self.assertEqual(list(similar.neighbour_scores(scores, 1)), [0.9, 0.9, 0.5, 0.5])
+        self.assertEqual(list(similar.neighbour_scores(scores, 3)), [0.05, 0.0, 0.2, 0.0])
+        self.assertEqual(list(similar.neighbour_scores(scores, 7)), [0.05, 0.0, 0.2, 0.0])  # the last other card's
+        self.assertEqual(similar.neighbour_scores(np.ones((1, 1)), 1).size, 0)
+        self.assertAlmostEqual(similar.own_minimum(scores, k=1, percentile=50), 0.7)  # the median of the first neighbour
+        self.assertEqual(similar.own_minimum(np.ones((1, 1))), similar.MIN_SCORE)
+        self.assertEqual(similar.OWN_PERCENTILE, 10)
+
+    def test_the_index_takes_its_own_minimum_with_none_and_keeps_the_minimum_it_used(self):
+        fixed = similar.SimilarityIndex.fit(model_support.CARDS)
+        self.assertEqual(fixed.min_score, similar.MIN_SCORE)
+        own = similar.SimilarityIndex.fit(model_support.CARDS, min_score=None)
+        expected = similar.own_minimum(similar.cosine_similarities(own.vectors))
+        self.assertEqual(own.min_score, expected)
+        self.assertTrue(all(score >= expected for items in own.neighbours.values() for _other, score in items))
+        self.assertEqual(similar.SimilarityIndex.fit(model_support.CARDS[:1], min_score=None).min_score, similar.MIN_SCORE)
+
+    def test_tfidf_transforms_another_text_into_the_indexs_space(self):
+        index = similar.SimilarityIndex.fit(model_support.CARDS)
+        row = similar.unit_rows(index.vectoriser.transform([similar.card_text(model_support.CARDS[0])]))
+        self.assertEqual(row.shape[1], index.vectors.shape[1])
+        self.assertAlmostEqual(float((row @ index.vectors[0].T).todense()[0, 0]), 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

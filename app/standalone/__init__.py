@@ -20,20 +20,24 @@ from pathlib import Path
 from typing import Optional
 
 from ..course_table import load_table, missing_files
+from ..models.embeddings import app_vectoriser
 from .app import RESULTS_DIR, Page, create_app
 
 
-def main(course_dir: Path, results_dir: Optional[Path] = None, debug: bool = False, port: Optional[int] = None) -> None:
+def main(course_dir: Path, results_dir: Optional[Path] = None, debug: bool = False, port: Optional[int] = None,
+         cache_dir: Optional[Path] = None) -> None:
     """Serve the page on the course table in `course_dir` and the results files in `results_dir` (by default
-    `results/` next to `evaluate.py`), on `port` (Dash's default without one); without the table, stop and name the
-    missing files."""
+    `results/` next to `evaluate.py`), on `port` (Dash's default without one), with the app's vectoriser
+    (app.models.embeddings.app_vectoriser: S2's encoder with the course's embeddings cached in `cache_dir`, or
+    TF-IDF) at its own minimum; without the table, stop and name the missing files."""
     course_dir = Path(course_dir)
     missing = missing_files(course_dir)
     if missing:
         raise SystemExit(f"No course table in {course_dir}: {', '.join(path.name for path in missing)} missing")
     started = time.perf_counter()
     table = load_table(course_dir)
-    page = Page(table, results_dir=Path(results_dir) if results_dir is not None else RESULTS_DIR)
+    page = Page(table, results_dir=Path(results_dir) if results_dir is not None else RESULTS_DIR,
+                vectoriser=app_vectoriser(cache_dir), min_score=None)
     print(f"Fitted the models on {len(table.cards)} cards of {len(table.decks)} decks in {time.perf_counter() - started:.1f} s; "
           f"the results of {page.results.folder}")
     create_app(page).run(debug=debug, **({"port": port} if port is not None else {}))
