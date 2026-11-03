@@ -1,12 +1,13 @@
 """The results files for the standalone page's model panels (the csv module, nothing of Dash): the rows of the
-current course, the newest run of each file, one table per level with one row per measure and one column per
-variant next to its floor, every deck or topic name of the course table replaced by the deck's id or the topic's
-label, and the glossary of the measure columns (app/docs/columns.md).
+current course, each level's newest run, its tables with one row per measure and one column per variant next to its
+floor, every deck or topic name of the course table replaced by the deck's id or the topic's label, and the glossary
+of the measure columns (app/docs/columns.md).
 
 * `Results(folder, note, names)`: reads results.csv, topics.csv and difficulty.csv of `folder` once; a missing file
   gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
   "decks 01 to 24", as evaluate.scope_note writes it), so the rows of an older course stay out. A run is the `run`
-  column, the date for the rows written before it, and a level shows its newest run.
+  column, the date for the rows written before it, and a level (S1, S2, C1, T1, D1, D2: the model generations) shows
+  the newest run that holds its rows, so a later run of another part or without the encoder hides none.
 * `Table`: the heads (one per variant, the floor among them), the rows (a measure and its value per head; a measure
   with its sd reads "mean ± sd", a difference with its interval "diff [low, high]", a share with its count
   "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
@@ -27,6 +28,9 @@ GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "docs" / "columns.md"
 BOOKKEEPING = ("params", "features", "folds", "repeats", "seed")  # the subtitle, where every head shares the value
 CHOSEN = "chosen"
 HINT = "No {name} in {folder} yet. The offline evaluation writes it, next to app/: uv run evaluate.py"
+NO_ROWS = "No {level} rows of this course in {name} yet. The offline evaluation writes them, next to app/: uv run evaluate.py"
+# The model generations per file, and the model column that marks a run as the level's
+LEVEL_FILES = {"S1": RESULTS, "S2": RESULTS, "C1": RESULTS, "T1": TOPICS, "D1": DIFFICULTY, "D2": DIFFICULTY}
 NO_FOLDER = "No results folder. The offline evaluation writes one, next to app/: uv run evaluate.py"
 Measure = Union[str, tuple[str, ...]]  # a column, or the columns of one measure (a value with its sd or interval)
 S1_MEASURES: tuple[Measure, ...] = (
@@ -84,11 +88,13 @@ def run_key(row: Mapping[str, str]) -> str:
     return row.get("run") or row.get("date") or ""
 
 
-def newest(rows: Sequence[Mapping[str, str]]) -> list[dict]:
-    """The rows of the newest run among `rows`."""
-    if not rows:
+def newest(rows: Sequence[Mapping[str, str]], model: Optional[str] = None) -> list[dict]:
+    """The rows of the newest run among `rows`; with `model`, of the newest run that holds a row of it (none
+    without one)."""
+    keys = [run_key(row) for row in rows if model is None or row.get("model") == model]
+    if not keys:
         return []
-    key = max(run_key(row) for row in rows)
+    key = max(keys)
     return [dict(row) for row in rows if run_key(row) == key]
 
 
@@ -182,28 +188,31 @@ class Results:
             return NO_FOLDER
         return HINT.format(name=name, folder=self.folder)
 
-    def tables(self, letter: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
-        """The tables of a model's panel: S (S1 next to B0), C (C1's three layouts), T (the course or the entered
-        deck, the stacks, the margins) or D (D1's rows next to the baselines and the hand row); None without the
-        file."""
-        name = {"S": RESULTS, "C": RESULTS, "T": TOPICS, "D": DIFFICULTY}[letter]
-        rows = self.rows.get(name)
+    def tables(self, level: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
+        """The tables of a level, from its newest run: S1 (next to B0), S2 (next to S1's chosen variant), C1 (its
+        three layouts), T1 (the course or the entered deck, the stacks, the margins), D1 (next to the baselines and
+        the hand row) or D2 (next to D1's chosen row); None without the file, empty without the level's rows."""
+        rows = self.rows.get(LEVEL_FILES[level])
         if rows is None:
             return None
-        run = newest(rows)
-        if letter == "S":
-            tables = [self._similarity(run)]
-            if any(row.get("model") == "S2" for row in run):
-                tables.append(self._embeddings(run))
-            return tables
-        if letter == "C":
+        run = newest(rows, level)
+        if not run:
+            return []
+        if level == "S1":
+            return [self._similarity(run)]
+        if level == "S2":
+            return [self._embeddings(run)]
+        if level == "C1":
             return [self._course(run)]
-        if letter == "T":
+        if level == "T1":
             return self._topics(run, deck_id)
-        tables = [self._difficulty(run)]
-        if any(row.get("model") == "D2" for row in run):
-            tables.append(self._tags(run))
-        return tables
+        if level == "D1":
+            return [self._difficulty(run)]
+        return [self._tags(run)]
+
+    def no_rows(self, level: str) -> str:
+        """Why a level has no table though its file is there."""
+        return NO_ROWS.format(level=level, name=LEVEL_FILES[level])
 
     def _similarity(self, run: list[dict]) -> Table:
         variants = [row for row in run if row.get("model") == "S1"]

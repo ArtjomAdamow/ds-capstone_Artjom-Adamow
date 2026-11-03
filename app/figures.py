@@ -1,7 +1,7 @@
 """The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the glue's back of the card panel
 (glue.difficulty_metrics) and by the standalone page (standalone) alike:
 
-* the difficulty model D1 (models.difficulty_model.DifficultyReport): the line that says what was measured
+* the difficulty models D1 and D2 (models.difficulty_model.DifficultyReport): the line that says what was measured
   (metrics_subtitle), the score table's rows (score_header, score_rows), the confusion matrix (confusion_figure) and
   the shares of the levels (shares_figure);
 * the sphere: its surface (sphere_surface) and the great-circle arcs along it (surface_arc), the cards view's
@@ -59,12 +59,12 @@ def spread(value: tuple[float, float]) -> str:
 
 
 def score_header(report: DifficultyReport) -> list[str]:
-    """The score table's columns after the row labels: D1, then the baselines."""
-    return ["D1"] + list(report.baselines)
+    """The score table's columns after the row labels: the report's model (D1 or D2), then the baselines."""
+    return [report.model] + list(report.baselines)
 
 
 def score_rows(report: DifficultyReport) -> list[tuple[str, str, list[str]]]:
-    """The key scores, one row per metric: its label, D1 as mean ± sd, and the baselines' means."""
+    """The key scores, one row per metric: its label, the model as mean ± sd, and the baselines' means."""
     return [
         (label, spread(report.metrics[key]), [number(report.baselines[name][key][0]) for name in report.baselines])
         for key, label in TABLE_ROWS
@@ -81,11 +81,16 @@ def _count(number: int, noun: str) -> str:
 
 
 def metrics_subtitle(report: DifficultyReport) -> str:
-    """What was measured: the whole course, a deck's part, or a topic's part with the deck's metrics."""
-    run = f"{report.folds} folds × {report.repeats} repeats"
+    """What was measured: the whole course, a deck's part, or a topic's part with the deck's metrics; D1's out of
+    fold in its cross-validation, D2's (no folds: nothing fitted) in one pass."""
+    if report.folds:
+        run = f"{report.folds} folds × {report.repeats} repeats"
+        course, deck_run = f"out of fold ({run})", f"out of fold in the course's cross-validation ({run})"
+    else:
+        course = deck_run = "in one pass, nothing fitted"
     if report.scope is None:
         return (
-            f"All decks: {report.rated} rated quizzes ({_levels(report)}), measured out of fold ({run}); levels by each "
+            f"All decks: {report.rated} rated quizzes ({_levels(report)}), measured {course}; levels by each "
             f"deck's shares. {report.unrated} unrated quizzes predicted; plain flashcards are not rated."
         )
     if report.parent is not None:  # a topic: its counts, the deck's metrics
@@ -97,13 +102,13 @@ def metrics_subtitle(report: DifficultyReport) -> str:
         )
         return (
             f"This topic: {rated} and {unrated}. The scores, the matrix and the baselines are the deck's: its {deck.rated} "
-            f"rated quizzes ({_levels(deck)}), out of fold in the course's cross-validation ({run}), by the deck's shares; "
+            f"rated quizzes ({_levels(deck)}), {deck_run}, by the deck's shares; "
             f"a topic's few rated quizzes are too few to measure on their own."
         )
     predicted = f"{report.unrated} unrated quizzes of this deck predicted." if report.unrated else "No unrated quiz in this deck."
     return (
-        f"This deck: its {report.rated} rated quizzes ({_levels(report)}), out of fold in the course's cross-validation "
-        f"({run}), by the deck's shares. {predicted} The decks view shows all decks."
+        f"This deck: its {report.rated} rated quizzes ({_levels(report)}), {deck_run}, by the deck's shares. {predicted} "
+        f"The decks view shows all decks."
     )
 
 

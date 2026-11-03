@@ -3,27 +3,34 @@ viewer's in its theme (assets/style.css holds the tokens):
 
 * the top bar: the title, Back and Open;
 * the map (`map`), a square of 12.5 % of the window's area (assets/map_side.js): the view's dots on the sphere, and
-  what the expanded model panel adds (app.Page decides, map_figure draws): with C the connections below the preset
-  gold and dashed (straight between decks, along the surface between cards), the centroid of a deck and the axes with
-  their ticks, the map's own coordinates, the unit sphere's; with T the centroid, the axes and T1's markers (a card's
-  margin on a teal scale, a cross below the threshold, the diamonds of the moved cards, a topic's dot grown with its
-  share of cards between two topics); with D the cards coloured as the viewer colours them after Helper: a rated quiz
-  by its level, a quiz D1 predicted in the predicted colour as a cross, a flashcard grey, with the legend inside the
-  map (plotly's, at the top left); with every panel collapsed, or S expanded, grey dots at random positions, nothing
-  else;
+  what the expanded model generation adds (app.Page decides, map_figure draws): with S1 or S2 the generation's
+  neighbours (every dot coloured by the share of its cards' neighbours in its own deck or topic, a card by the share
+  in the entered topic, on the figures' blue ramp, a dot without a neighbour an open grey circle; in the cards view
+  the neighbour pairs inside the topic as lines along the surface, the selected card's bright); with C the
+  connections below the preset gold and dashed (straight between decks, along the surface between cards), the
+  centroid of a deck and the axes with their ticks, the map's own coordinates, the unit sphere's; with T the
+  centroid, the axes and T1's markers (a card's margin on a teal scale, a cross below the threshold, the diamonds of
+  the moved cards, a topic's dot grown with its share of cards between two topics); with D1 or D2 the cards coloured
+  as the viewer colours them after Helper: a rated quiz by its level, a quiz the generation predicted in the predicted
+  colour as a cross (its level on the hover), a flashcard grey, with the legend inside the map (plotly's, at the top
+  left); with every panel collapsed grey dots at random positions, nothing else;
 * window A (`dot-panel`), under the map (beside it in portrait): the selected dot's ids and counts, a click on a
   deck's or a topic's enters it; with nothing selected the dendrogram of the view's membership with the preset's
   cut-off line, its leaves by id (figures.dendrogram_figure);
-* the difficulty window (`difficulty-window`), under window A, shown with D expanded only: D1's confusion matrix and
-  the shares of the levels of the view's part of the course (metrics_window);
+* the difficulty window (`difficulty-window`), under window A at its width in both orientations, shown with D
+  expanded only: the expanded generation's confusion matrix and the shares of the levels of the view's part of the
+  course (metrics_window);
 * the model panels (`box-S` to `box-D`), a column right of all three (under them in portrait): one per model letter, a
   row with its letter and name (`panel-S`, a click expands it and collapses any other) and a close box (`close-S`);
-  expanded, the levels' sections (`content-S`): the level's live measures, the newest run's table of its results
-  file, one row per measure and one column per variant with the chosen one marked. A click on a row opens its
-  description under it (what the measure is, its range, from app/docs/columns.md), one row at a time: a click on
-  another row moves it, a click on the same row or the description's close box closes it. The click goes through the
-  hidden input `measure-click` (assets/measure_rows.js sets it), the one expanded row lives in the `view` store.
-  The panels' text is at double size (style.css, `--panel-font`).
+  expanded, a row per generation in a fixed order, the oldest on top (S1 above S2, D1 above D2; C1 and T1 alone:
+  GENERATIONS), the newest expanded by default; a click on another generation's row expands it in place and collapses
+  the expanded one, the order unchanged (generation_rows). An expanded generation holds
+  what it is, its live measures and the tables of the newest run of its rows, one row per measure and one column per
+  variant with the chosen one marked. A click on a measure's row opens its description under it (what the measure
+  is, its range, from app/docs/columns.md), one row at a time: a click on another row moves it, a click on the same
+  row or the description's close box closes it. Both clicks go through the hidden input `row-click`
+  (assets/panel_rows.js sets it); the expanded generation and the one open row live in the `view` store. The panels'
+  text is at double size (style.css, `--panel-font`).
 
 No learning material shows: no card's question, answer or explanation, no deck's description; a card is its
 comb_id. The map's hover labels and the line under the top bar are ids too: a deck's id, a topic's label (its topic
@@ -39,8 +46,8 @@ from dash import dcc, html
 
 from ..cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE
 from ..figures import (
-    CUT_COLOR, FONT, GOLD, GRID, INK, MUTED, PREDICTED_COLOR, confusion_figure, metrics_subtitle, score_header, score_rows,
-    shares_figure, sphere_surface, surface_arc,
+    CUT_COLOR, FONT, GOLD, GRID, INK, MUTED, PREDICTED_COLOR, SEQUENTIAL, confusion_figure, metrics_subtitle, score_header,
+    score_rows, shares_figure, sphere_surface, surface_arc,
 )
 from .results import Table
 
@@ -68,6 +75,13 @@ CROSS_SYMBOL = "cross"  # a card below the threshold, between two topics (T)
 MOVED_IN_SYMBOL, MOVED_IN_COLOR = "diamond", "#c084fc"  # a card T1 moved into the topic from another scripted topic
 MOVED_OUT_SYMBOL, MOVED_OUT_COLOR = "diamond-open", "#f472b6"  # a card scripted here that T1 moved elsewhere
 MARGIN_PALE, MARGIN_FULL = (204, 251, 241), (20, 184, 166)  # the teal scale of a card's margin: #ccfbf1 to #14b8a6
+# S: a dot's share of neighbours in its own part on the figures' blue ramp (the confusion matrix's), from its middle
+# step at 0 to its light step at 1, so every dot stays clear of the dark surface; the neighbour pairs' lines on the
+# same ramp, the selected card's bright, the others faint
+SHARE_LOW, SHARE_HIGH = SEQUENTIAL[1][1], SEQUENTIAL[2][1]
+NO_NEIGHBOUR_SYMBOL = "circle-open"  # a dot without a neighbour above the generation's minimum score
+NEIGHBOUR_LINE = {"color": SHARE_LOW, "width": 3, "opacity": 0.5}
+SELECTED_LINE = {"color": SHARE_HIGH, "width": 5, "opacity": 1.0}
 CENTROID_GLOW = (16, 10, 4)  # the sizes of the centroid's stacked markers, outside in
 CENTROID_ALPHA = 0.4  # the centroid's opacity at its core, where all its markers overlap
 AXIS_RANGE = [-1.15, 1.15]
@@ -88,6 +102,13 @@ QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
 STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
 PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty"}
 PANEL_LETTERS = tuple(PANEL_NAMES)
+# The model generations of each panel, in their rows' fixed order, the oldest on top; the newest is expanded when its
+# panel opens
+GENERATIONS = {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2")}
+GENERATION_NAMES = {
+    "S1": "S1 · similarity, TF-IDF", "S2": "S2 · similarity, sentence encoder", "C1": "C1 · course model",
+    "T1": "T1 · topics", "D1": "D1 · difficulty, text statistics", "D2": "D2 · difficulty, zero-shot tags",
+}
 NO_LINKS = {
     DECKS_VIEW: "No connections between the decks.",
     TOPICS_VIEW: "No connections between topics: the model has no topic vectors yet.",
@@ -101,6 +122,7 @@ OVERVIEW_HINT = {
 TOPICS_NOTE = "The model's connections are not drawn in this view: connections visualization is not yet decided in this view."
 WINDOW_NOTE = "The confusion matrix and the shares of the levels are in the window under the dendrogram's window."
 ROW_HINT = "Click a row for what the measure is."
+LEVEL_HINT = "Click to expand this generation; the map follows it."
 NO_DESCRIPTION = "No description of this column yet."
 
 
@@ -127,9 +149,11 @@ def _anchor() -> go.Scatter3d:
     )
 
 
-def links_trace(points: Mapping, pairs, along_surface: bool) -> Optional[go.Scatter3d]:
-    """The model's connections as one gold dashed trace (None between two lines): straight, or along the sphere's
-    surface. None without a connection between two drawn dots."""
+def links_trace(points: Mapping, pairs, along_surface: bool, name: str = "Connections", color: str = GOLD,
+                dash: str = "dash", width: float = LINK_WIDTH, opacity: float = 1.0) -> Optional[go.Scatter3d]:
+    """Pairs of drawn dots as one trace (None between two lines), straight or along the sphere's surface: by default
+    the model's connections, gold and dashed; S's neighbour pairs solid on the blue ramp. None without a pair of two
+    drawn dots."""
     xs: list = []
     ys: list = []
     zs: list = []
@@ -146,8 +170,8 @@ def links_trace(points: Mapping, pairs, along_surface: bool) -> Optional[go.Scat
     if not xs:
         return None
     return go.Scatter3d(
-        x=xs, y=ys, z=zs, mode="lines", line={"color": GOLD, "width": LINK_WIDTH, "dash": "dash"},
-        hoverinfo="skip", showlegend=False, name="Connections",
+        x=xs, y=ys, z=zs, mode="lines", line={"color": color, "width": width, "dash": dash}, opacity=opacity,
+        hoverinfo="skip", showlegend=False, name=name,
     )
 
 
@@ -213,9 +237,18 @@ def margin_color(margin: float, scale: float) -> str:
     return f"#{red:02x}{green:02x}{blue:02x}"
 
 
+def share_color(share: float) -> str:
+    """A dot's share of neighbours in its own part on the blue ramp: SHARE_LOW at 0, SHARE_HIGH at 1."""
+    share = max(0.0, min(1.0, share))
+    low, high = (tuple(int(color[index:index + 2], 16) for index in (1, 3, 5)) for color in (SHARE_LOW, SHARE_HIGH))
+    red, green, blue = (round(a + (b - a) * share) for a, b in zip(low, high))
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
 def map_figure(page, state: dict) -> go.Figure:
-    """The map of the view in `state` (app.HOME's keys) under the expanded panel. The hover labels: a deck's id, a
-    topic's label (its id and a hash of its name, app.Page.topic_label), a card's comb_id, with T its margin."""
+    """The map of the view in `state` (app.HOME's keys) under the expanded generation. The hover labels: a deck's id,
+    a topic's label (its id and a hash of its name, app.Page.topic_label), a card's comb_id; with S the dot's share of
+    neighbours in its part, with T its margin, with D a predicted quiz's level."""
     view, selected, panel = state["view"], state.get("selected"), state.get("panel")
     model = page.uses_model(state)
     figure = go.Figure()
@@ -245,8 +278,9 @@ def map_figure(page, state: dict) -> go.Figure:
         figure.add_trace(sphere_surface(GREY))
         points = page.card_points(topic, state) if topic is not None else {}
         labels = {card_id: card_id for card_id in points}
-        if panel == "D":
-            colors, symbols, classes = page.d1_markers(points)
+        report = page.difficulty_of(state) if panel == "D" else None
+        if report is not None:
+            colors, symbols, classes, labels = page.d_markers(points, report)
             figure.add_traces(legend_traces(points, classes))
             legend = bool(points)
         elif panel == "T" and topic is not None:
@@ -255,6 +289,16 @@ def map_figure(page, state: dict) -> go.Figure:
             colors = {card_id: GREY for card_id in points}
         if panel == "C" and topic is not None:
             links = links_trace(points, page.card_links(topic, state), along_surface=True)
+        if panel == "S":
+            pairs, own = page.neighbour_pairs(points, state)
+            figure.add_traces([trace for trace in (
+                links_trace(points, pairs, True, "Neighbours", dash="solid", **NEIGHBOUR_LINE),
+                links_trace(points, own, True, "Selected neighbours", dash="solid", **SELECTED_LINE),
+            ) if trace is not None])
+    if panel == "S":
+        marked = page.s_markers(state, points)
+        if marked is not None:
+            colors, symbols, labels = marked
     if links is not None:
         figure.add_trace(links)
     if points:
@@ -352,14 +396,14 @@ def topic_panel(topic, card_by_id, rest: bool = False) -> html.Div:
 
 
 def card_panel(card, deck_id: str, topic_id: str, predicted: Optional[str] = None, between: bool = False,
-               extra: Sequence[tuple[str, str]] = ()) -> html.Div:
-    """A selected card: its ids, its stack, its difficulty, authored or predicted by D1, whether T1 placed it
-    between two topics, and `extra` rows (with T: its margin, its runner-up topic, a moved card's other topic); not
-    its text."""
+               extra: Sequence[tuple[str, str]] = (), by: str = "D1") -> html.Div:
+    """A selected card: its ids, its stack, its difficulty, authored or predicted (`by` D1, or D2 with D2
+    expanded), whether T1 placed it between two topics, and `extra` rows (with S where its neighbours lie; with T its
+    margin, its runner-up topic, a moved card's other topic); not its text."""
     if card.difficulty:
         level = card.difficulty
     elif predicted:
-        level = f"{predicted} (predicted by D1)"
+        level = f"{predicted} (predicted by {by})"
     else:
         level = "–"
     rows = [
@@ -383,11 +427,11 @@ def overview_panel(title: str, figure: Optional[go.Figure], view: str, subtitle:
     )
 
 
-# --- D1's metrics: the scores in the D panel, the matrix and the shares in the difficulty window -------------------
+# --- D1's and D2's metrics: the scores in the D panel, the matrix and the shares in the difficulty window -----------
 
 
 def score_table(report) -> html.Table:
-    """The key scores: D1 (mean ± sd) and the baselines (their means)."""
+    """The key scores: the generation (mean ± sd) and the baselines (their means)."""
     header = html.Tr([html.Th("")] + [html.Th(name) for name in score_header(report)])
     rows = [
         html.Tr([html.Td(label, className="score-label"), html.Td(d1, className="score-model")] + [html.Td(value) for value in baselines])
@@ -401,10 +445,10 @@ def _graph(figure: go.Figure, class_name: str) -> dcc.Graph:
 
 
 def metrics_panel(report, scope: str) -> html.Div:
-    """What D1 measured for the view's part of the course (`report`, the course's, a deck's or a topic's), in the D
-    panel: the title, what was measured, the score table and where the matrix and the shares are; or why there is
-    nothing to show."""
-    head = [html.Div(f"Difficulty model D1 · {scope}", className="card-label")]
+    """What the generation (`report.model`, D1 or D2) measured for the view's part of the course (`report`, the
+    course's, a deck's or a topic's), in the D panel: the title, what was measured, the score table and where the
+    matrix and the shares are; or why there is nothing to show."""
+    head = [html.Div(f"Difficulty model {report.model} · {scope}", className="card-label")]
     if not report.measured:
         return html.Div(head + [html.P(report.note or "No difficulty model.", className="empty-state")], className="tool-panel difficulty-panel")
     return html.Div(
@@ -421,10 +465,10 @@ def metrics_panel(report, scope: str) -> html.Div:
 
 
 def metrics_window(report, scope: str) -> html.Div:
-    """The difficulty window, under the dendrogram's window with D expanded: the confusion matrix (the rated
-    quizzes' true and predicted level) and the shares of the levels of the view's part; a part without metrics its
-    predicted shares only (a deck without rated quizzes), a part without quizzes its note."""
-    children = [html.Div(f"Difficulty model D1 · {scope}", className="card-label")]
+    """The difficulty window, under the dendrogram's window with D expanded: the generation's confusion matrix (the
+    rated quizzes' true and predicted level) and the shares of the levels of the view's part; a part without metrics
+    its predicted shares only (a deck without rated quizzes), a part without quizzes its note."""
+    children = [html.Div(f"Difficulty model {report.model} · {scope}", className="card-label")]
     if report.measured:
         children += [
             html.Div("Rated quizzes: true and predicted level", className="card-label metrics-heading"),
@@ -443,7 +487,19 @@ def window_class(expanded: bool) -> str:
     return f"window-d {'expanded' if expanded else 'collapsed'}"
 
 
-# --- T1's markers: the legend and the histogram (the T panel) ------------------------------------------------------
+# --- S's and T1's markers: their legends, T1's histogram -----------------------------------------------------------
+
+
+def s_legend(level: str) -> html.Div:
+    """The markers of the map with S1 or S2 expanded: the share scale, the two kinds of lines, the open circle."""
+    items = [
+        html.Div([html.Span(className="share-scale"), html.Span("share of a dot's neighbours in its own deck or topic (a card: in the entered topic), 0 to 1")], className="legend-item"),
+        html.Div([html.Span("━", className="legend-glyph", style={"color": SHARE_HIGH}), html.Span("the selected card's neighbour pairs inside the topic")], className="legend-item"),
+        html.Div([html.Span("━", className="legend-glyph", style={"color": SHARE_LOW}), html.Span("the other neighbour pairs inside the topic")], className="legend-item"),
+        html.Div([html.Span("○", className="legend-glyph", style={"color": GREY}), html.Span("no neighbour above the minimum score")], className="legend-item"),
+    ]
+    return html.Div([html.Div(f"The map with {level}", className="card-label")] + items, className="color-legend t1-legend")
+
 
 
 def t1_legend(scale: float, threshold: float) -> html.Div:
@@ -474,18 +530,18 @@ def margin_histogram(margins: Sequence[float], threshold: float) -> go.Figure:
 
 
 def measure_key(prefix: str, columns: Sequence[str]) -> str:
-    """A row's key in the `view` store: the panel's letter and the table's place, then the row's first column."""
+    """A row's key in the `view` store: the generation and the table's place, then the row's first column."""
     return f"{prefix}:{columns[0]}"
 
 
 def description_row(entry: Optional[tuple[str, str, str]], width: int) -> html.Tr:
-    """The open description under a row: the column names, what the measure is and its range (app/docs/columns.md),
-    with the close box; one line when the glossary has no entry."""
+    """The open description under a row: what the measure is and its range (app/docs/columns.md), with the close
+    box; not the column's name again, which the row above shows; one line when the glossary has no entry."""
     if entry is None:
         text = [html.Div(NO_DESCRIPTION)]
     else:
-        names, meaning, span = entry
-        text = [html.Div(names, className="measure-names"), html.Div(meaning), html.Div(f"Range: {span}", className="measure-range")]
+        _names, meaning, span = entry
+        text = [html.Div(meaning), html.Div(f"Range: {span}", className="measure-range")]
     return html.Tr(
         html.Td([html.Button("×", className="measure-close", title="Close"), html.Div(text, className="measure-text")], colSpan=width),
         className="measure-description",
@@ -494,7 +550,7 @@ def description_row(entry: Optional[tuple[str, str, str]], width: int) -> html.T
 
 def results_table(table: Table, prefix: str, expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
     """A level's results of the newest run: the heads (the chosen variant marked), one row per measure, clickable
-    (its key in `data-measure`; assets/measure_rows.js sends it), the open row's description under it; the
+    (its key in `data-measure`; assets/panel_rows.js sends it), the open row's description under it; the
     bookkeeping as the subtitle."""
     header = html.Tr([html.Th("")] + [html.Th(head, className="chosen" if chosen else None) for head, chosen in zip(table.heads, table.chosen)])
     rows = []
@@ -516,16 +572,33 @@ def results_table(table: Table, prefix: str, expanded: Optional[str], glossary: 
     )
 
 
-def level_section(title: str, description: str, live: Sequence, tables: Optional[Sequence[Table]], hint: str,
-                  letter: str, expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
-    """A level's section of its model's panel: its name and what it is, its live measures, its results tables with
-    the one open row's description, or the hint how to make a results file."""
-    body = [html.Div(title, className="card-label section-title"), html.Div(description, className="deck-description")] + list(live)
-    if tables is None:
+def level_section(description: str, live: Sequence, tables: Optional[Sequence[Table]], hint: str, level: str,
+                  expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
+    """An expanded generation's section (its row names it): what it is, its live measures, its results tables with
+    the one open row's description, or why there is none (`hint`: how to make the file, or that it holds no rows of
+    the generation)."""
+    body = [html.Div(description, className="deck-description")] + list(live)
+    if not tables:
         body.append(html.P(hint, className="empty-state"))
     else:
-        body += [results_table(table, f"{letter}:{index}", expanded, glossary) for index, table in enumerate(tables)]
+        body += [results_table(table, f"{level}:{index}", expanded, glossary) for index, table in enumerate(tables)]
     return html.Div(body, className="level-section")
+
+
+def generation_rows(letter: str, expanded: str, section) -> list:
+    """An expanded panel's content: a row per generation in GENERATIONS' fixed order, the oldest on top, each
+    clickable (its generation in `data-level`; assets/panel_rows.js sends it), the expanded one open with its section
+    under it wherever it stands: expanding another moves no row."""
+    rows = []
+    for level in GENERATIONS[letter]:
+        is_open = level == expanded
+        rows.append(html.Div(
+            [html.Span("▾" if is_open else "▸", className="level-mark"), html.Span(GENERATION_NAMES[level])],
+            className="level-row open" if is_open else "level-row", title=None if is_open else LEVEL_HINT, **{"data-level": level},
+        ))
+        if is_open:
+            rows.append(section)
+    return rows
 
 
 def model_panel_boxes() -> list[html.Div]:
@@ -553,7 +626,7 @@ def box_class(expanded: bool) -> str:
 
 def page_layout(home: dict) -> html.Main:
     """The page; the callback fills the map, window A, the difficulty window and the panels at load. The hidden
-    input `measure-click` carries a click on a results row (assets/measure_rows.js) to the callback."""
+    input `row-click` carries a click on a generation's or a measure's row (assets/panel_rows.js) to the callback."""
     return html.Main(
         [
             html.Header(
@@ -583,7 +656,7 @@ def page_layout(home: dict) -> html.Main:
                 className="workspace",
             ),
             dcc.Store(id="view", data=dict(home)),
-            dcc.Input(id="measure-click", value="", type="text", className="measure-click"),
+            dcc.Input(id="row-click", value="", type="text", className="row-click"),
         ],
         className="app-shell",
     )

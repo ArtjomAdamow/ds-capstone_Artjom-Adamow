@@ -15,7 +15,7 @@ the flattened quizzes that have none, learned from the quizzes that have one (do
   perfectly in training and mean nothing for a new card. The rated cards are put into an order of their texts
   before the cross-validation, so not even the folds depend on the course order.
 * D2 alone is judged by `judge_tags`: nothing is fitted, so one pass with no folds and no spread, the same labels
-  rules and measures on the expected level of its tags.
+  rules and measures on the expected level of its tags, the decks' parts measured on their own quizzes as D1's are.
 * A difficulty is relative to its deck (every deck's 12 rated quizzes are 8 easy, 3 medium and 1 hard), so labels
   come from each deck's shares: the cross-validation ranks each deck's out-of-fold scores and cuts them by the deck's
   own counts; the unrated quizzes of a deck are ranked among themselves, and the card at rank i of n takes the band
@@ -303,12 +303,13 @@ class DifficultyReport:
     levels: dict[str, str] = field(default_factory=dict)  # card id -> the authored level of the rated quizzes
     unrated_ids: tuple[str, ...] = ()  # the unrated quizzes (predicted or not)
     parent: Optional["DifficultyReport"] = None  # a topic's part: the deck's part whose metrics it shows
+    model: str = "D1"  # the judge the report is of: D1, or D2 (judge_tags)
 
     def for_deck(self, name: str) -> "DifficultyReport":
         """The deck's part; a deck without quizzes gets an empty one that says so."""
         part = self.decks.get(name)
         if part is None:
-            part = DifficultyReport(self.feature_set, (0, 0, 0), 0, self.folds, self.repeats, scope=name,
+            part = DifficultyReport(self.feature_set, (0, 0, 0), 0, self.folds, self.repeats, scope=name, model=self.model,
                                     note=self.note or "This deck has no quizzes: nothing to measure or predict.")
         return part
 
@@ -390,7 +391,7 @@ def fit_difficulty(
     data = features(rated, index, feature_set, tags)
     mean_scores = np.zeros(len(rated))
     deck_rows = {deck: np.flatnonzero(rated_decks == deck) for deck in counts}
-    deck_runs = {deck: {"D1": [], "always easy": [], "similarity": [], "confusion": []} for deck in counts}
+    deck_runs = {deck: {"model": [], "always easy": [], "similarity": [], "confusion": []} for deck in counts}
     if folds >= 2:
         row_of = {card_id: row for row, card_id in enumerate(index.ids)}
         rated_rows = index.vectors[[row_of[card.id] for card in rated]]
@@ -416,7 +417,7 @@ def fit_difficulty(
                 easy_runs.append(measure(levels, easy_labels))
                 confusions.append(confusion_matrix(levels, labels, labels=list(range(len(LEVELS))), normalize="true"))
                 for deck, rows in deck_rows.items():  # the same out-of-fold labels, the deck's quizzes only
-                    deck_runs[deck]["D1"].append(measure(levels[rows], labels[rows], oof[rows]))
+                    deck_runs[deck]["model"].append(measure(levels[rows], labels[rows], oof[rows]))
                     deck_runs[deck]["similarity"].append(measure(levels[rows], nearest_labels[rows], oof_nearest[rows]))
                     deck_runs[deck]["always easy"].append(measure(levels[rows], easy_labels[rows]))
                     deck_runs[deck]["confusion"].append(
@@ -463,21 +464,31 @@ def judge_tags(cards: Sequence[Card], tags: Mapping[str, Sequence[float]], name:
     rated, unrated, levels, rated_counts, counts = _rated_setup(cards)
     report = DifficultyReport(
         name, rated_counts, len(unrated), 0, 0,
-        levels={card.id: card.difficulty for card in rated}, unrated_ids=tuple(card.id for card in unrated),
+        levels={card.id: card.difficulty for card in rated}, unrated_ids=tuple(card.id for card in unrated), model="D2",
     )
     rated_scores = np.array([float(np.asarray(tags[card.id], dtype=float)[1:] @ [1.0, 2.0]) for card in rated])
+    deck_runs = {}
     if len([count for count in rated_counts if count]) >= 2:
         labels = share_labels(rated, rated_scores, counts)
         likely = np.array([int(np.argmax(tags[card.id])) for card in rated], dtype=int)
+        easy = np.zeros(len(rated), dtype=int)
         report.metrics = _spread([measure(levels, labels, rated_scores)])
         report.most_likely = _spread([measure(levels, likely, rated_scores)])
-        report.baselines = {"always easy": _spread([measure(levels, np.zeros(len(rated), dtype=int))])}
+        report.baselines = {"always easy": _spread([measure(levels, easy)])}
         report.confusion = confusion_matrix(levels, labels, labels=list(range(len(LEVELS))), normalize="true")
+        rated_decks = np.array([card.deck for card in rated])
+        for deck in counts:  # the same labels, the deck's quizzes only
+            rows = np.flatnonzero(rated_decks == deck)
+            deck_runs[deck] = {
+                "model": [measure(levels[rows], labels[rows], rated_scores[rows])], "always easy": [measure(levels[rows], easy[rows])],
+                "confusion": [confusion_matrix(levels[rows], labels[rows], labels=list(range(len(LEVELS))), normalize="true")],
+            }
     else:
         report.note = "Too few rated quizzes: nothing to measure."
     if unrated:
         scores = np.array([float(np.asarray(tags[card.id], dtype=float)[1:] @ [1.0, 2.0]) for card in unrated])
         _predict(report, unrated, scores, rated, rated_scores, counts)
+    report.decks = _deck_parts(report, rated, unrated, counts, deck_runs)
     report.seconds = time.perf_counter() - started
     return report
 
@@ -485,12 +496,13 @@ def judge_tags(cards: Sequence[Card], tags: Mapping[str, Sequence[float]], name:
 def _deck_parts(
     report: DifficultyReport, rated: Sequence[Card], unrated: Sequence[Card], counts, deck_runs
 ) -> dict[str, DifficultyReport]:
-    """One report per deck with quizzes: its rated quizzes' share of the cross-validation, and its predictions."""
+    """One report per deck with quizzes: its rated quizzes' share of the measurement (`deck_runs`: per deck the
+    model's runs, the baselines' and the confusion matrices), and its predictions."""
     parts = {}
     for deck in sorted(set(counts) | {card.deck for card in unrated}):
         ids = [card.id for card in unrated if card.deck == deck]
         part = DifficultyReport(
-            report.feature_set, counts.get(deck, (0, 0, 0)), len(ids), report.folds, report.repeats, scope=deck,
+            report.feature_set, counts.get(deck, (0, 0, 0)), len(ids), report.folds, report.repeats, scope=deck, model=report.model,
             predictions={card_id: report.predictions[card_id] for card_id in ids if card_id in report.predictions},
             scores={card_id: report.scores[card_id] for card_id in ids if card_id in report.scores},
             cut_point_predictions={card_id: report.cut_point_predictions[card_id] for card_id in ids if card_id in report.cut_point_predictions},
@@ -498,9 +510,9 @@ def _deck_parts(
             unrated_ids=tuple(ids),
         )
         runs = deck_runs.get(deck)
-        if runs and runs["D1"]:
-            part.metrics = _spread(runs["D1"])
-            part.baselines = {name: _spread(runs[name]) for name in ("always easy", "similarity")}
+        if runs and runs["model"]:
+            part.metrics = _spread(runs["model"])
+            part.baselines = {name: _spread(values) for name, values in runs.items() if name not in ("model", "confusion")}
             part.confusion = np.mean(runs["confusion"], axis=0)
         elif deck not in counts:
             part.note = "No rated quizzes in this deck: nothing to measure; its unrated quizzes take the course's shares."

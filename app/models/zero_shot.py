@@ -12,12 +12,13 @@ learner read off the quiz with its resolution by natural language inference, not
 * `Template`: the hypothesis template and its three labels, one per level. CRITERION, the primary: the hand
   criterion's three demands (recall, apply, analyse), written before D2 existed, so nothing is tuned; LEVEL_NAMES,
   the control: the lesson's own form with the level names.
-* `ZeroShotTagger`: transformers' zero-shot-classification pipeline on S2's device (embeddings.resolve_device), the library imported when the
+* `ZeroShotTagger`: transformers' zero-shot-classification pipeline on the CPU, the library imported when the
   model is loaded, so the package imports without torch; `scores(cards)` gives one row of three probabilities per
   card (one softmax over the three hypotheses), from the cache where it holds them (the embeddings' cache class,
   the file named by the model and the template, keyed by the premises in order).
 * `tags_of`: the tags of a course's quizzes (the rated and the unrated ones; flashcards are not tagged) for the
-  evaluation and the app, as `Tags`; None with one printed line without the library or the model.
+  evaluation and the app, as `Tags`; None with one printed line without the library or the model. `cached_tags`:
+  the same from the cache alone, for the standalone page, which loads no model.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from typing import Callable, Optional, Sequence
 import numpy as np
 
 from .difficulty_model import LEVELS, split
-from .embeddings import CACHE_FOLDER, EmbeddingCache, resolve_device
+from .embeddings import CACHE_FOLDER, EmbeddingCache
 
 # The model: trained for zero-shot classification with a hypothesis template, 299 MB, an 8,192-token window, so no
 # premise is cut (difficulty.md, "D2", "Decisions"); the large bart-large-mnli stays a later check
@@ -93,19 +94,18 @@ def tagger_available(find_spec: Callable = importlib.util.find_spec) -> bool:
 
 
 class ZeroShotTagger:
-    """The zero-shot-classification pipeline of one model and one template on `device` (embeddings.resolve_device's
-    when None, as S2's encoder); `loader(model_name, device)` stands in for the pipeline in the tests. `scores(cards)` reads the course's tags from the cache where it holds them, else
+    """The zero-shot-classification pipeline of one model and one template; `loader(model_name)` stands in for the
+    pipeline in the tests. `scores(cards)` reads the course's tags from the cache where it holds them, else
     classifies the premises and caches them; `seconds` and `cached` say what the last call did."""
 
     def __init__(self, model_name: str = NLI_MODEL, template: Template = CRITERION, cache: Optional[EmbeddingCache] = None,
-                 batch_size: int = BATCH_SIZE, loader: Optional[Callable] = None, device: Optional[str] = None) -> None:
+                 batch_size: int = BATCH_SIZE, loader: Optional[Callable] = None) -> None:
         self.model_name = model_name
         self.template = template
         self.cache = cache
         self.batch_size = batch_size
         self._loader = loader
         self._classifier = None
-        self.device = device  # resolved at the load: "cpu" or "cuda"
         self.seconds = 0.0
         self.cached = False
 
@@ -117,13 +117,12 @@ class ZeroShotTagger:
     def load(self):
         """The pipeline, loaded once (the library imported here, so the package imports without torch)."""
         if self._classifier is None:
-            self.device = resolve_device(self.device)
             if self._loader is not None:
-                self._classifier = self._loader(self.model_name, self.device)
+                self._classifier = self._loader(self.model_name)
             else:
                 from transformers import pipeline
 
-                self._classifier = pipeline("zero-shot-classification", model=self.model_name, device=self.device)
+                self._classifier = pipeline("zero-shot-classification", model=self.model_name, device="cpu")
         return self._classifier
 
     def classify(self, premises: Sequence[str]) -> np.ndarray:
@@ -168,7 +167,6 @@ class Tags:
     scores: dict[str, np.ndarray]
     seconds: float  # the classification's time, 0 for a cache hit
     cached: bool
-    device: str = ""  # the device that classified them, "" for a cache hit
 
     def expected(self) -> dict[str, float]:
         """Every quiz's score, the expected level."""
@@ -193,5 +191,19 @@ def tags_of(cards: Sequence, cache_dir: Optional[Path] = None, template: Templat
         output(f"D2's model {model_name} could not be loaded ({error.__class__.__name__}); the zero-shot tags are skipped. "
                f"Fetch it once with: {FETCH_COMMAND.format(name=model_name)}")
         return None
-    return Tags(template, model_name, {card.id: scores[position] for position, card in enumerate(quizzes)}, tagger.seconds, tagger.cached,
-                tagger.device or "")
+    return Tags(template, model_name, {card.id: scores[position] for position, card in enumerate(quizzes)}, tagger.seconds, tagger.cached)
+
+
+def cached_tags(cards: Sequence, cache_dir: Optional[Path], template: Template = CRITERION,
+                model_name: str = NLI_MODEL) -> Optional[Tags]:
+    """The tags of the course's quizzes from the cache alone, as `tags_of` wrote them: no model is loaded and no
+    library is needed (the standalone page's D2). None without the folder or where the cache does not hold them."""
+    if cache_dir is None:
+        return None
+    rated, unrated = split(cards)
+    quizzes = rated + unrated
+    tagger = ZeroShotTagger(model_name, template, cache=EmbeddingCache(Path(cache_dir) / CACHE_FOLDER))
+    scores = tagger.cache.read(tagger.cache_name, [premise(card) for card in quizzes]) if quizzes else None
+    if scores is None:
+        return None
+    return Tags(template, model_name, {card.id: scores[position] for position, card in enumerate(quizzes)}, 0.0, True)

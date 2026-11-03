@@ -1,15 +1,16 @@
 """The standalone page (app.standalone) on the test course as a course table, with nothing of the viewer:
 the three views through the callback (select, Open, a click on the panel, Back), the four model panels (one
-expanded at a time, the close box), the map per panel (random positions and the scripted topics with every panel
-collapsed, C1's positions with the connections, the centroid and the axes with C, T1's markers with T, the difficulty
-colours with D, the predicted quizzes as crosses in the predicted colour and the legend inside the map), the dot's
-ids in its panel, the dendrogram of the view's membership with the preset's line and its leaves by id, D1's scores
-in the D panel and its matrix and shares in the difficulty window under window A, C1's readout in the C panel, the
-results tables of the newest run with their floor, a row's description opened by a click (one at a time, the close
-box), the decks' hover and the line under the top bar by id, no learning material and no deck's or topic's name in
-any view or panel, and that neither the page nor the table, the figures or the mode question import the viewer or
-the glue (a subprocess with the viewer blocked). The real course's table serves the three views too (skipped
-without it)."""
+expanded at a time, the close box) with a row per generation (the newest expanded, one at a time), the map per
+generation (random positions and the scripted topics with every panel collapsed, S1's and S2's neighbour shares and
+lines, C1's positions with the connections, the centroid and the axes with C, T1's markers with T, the difficulty
+colours of D1 or D2, the predicted quizzes as crosses in the predicted colour and the legend inside the map), the
+dot's ids in its panel, the dendrogram of the view's membership with the preset's line and its leaves by id, D1's
+and D2's scores in the D panel and their matrix and shares in the difficulty window under window A, C1's readout in
+the C panel, each generation's results tables of its newest run with their floor, a row's description opened by a
+click (one at a time, the close box, without the column's name again), the decks' hover and the line under the top
+bar by id, no learning material and no deck's or topic's name in any view or panel, and that neither the page nor the
+table, the figures or the mode question import the viewer or the glue (a subprocess with the viewer blocked). The
+real course's table serves the three views too (skipped without it)."""
 
 import model_support
 
@@ -31,11 +32,12 @@ from app.models.course_model import TopicLayout
 from app.models.topic_model import FOCUS_MARGIN
 from app.standalone import main as standalone_main
 from app.standalone.app import (
-    ASSETS_DIR, CARD_PART, DECK_PART, HOME, MEASURE_INPUT, PANEL_LETTERS, Page, create_app, register_callback,
+    ASSETS_DIR, CARD_PART, DECK_PART, HOME, NO_ENCODER, NO_TAGS, PANEL_LETTERS, ROW_INPUT, Page, create_app, register_callback,
 )
 from app.standalone.layout import (
-    AXIS_RANGE, AXIS_TICKS, CROSS_SYMBOL, EMPTIED_SYMBOL, GREY, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR,
-    MOVED_OUT_SYMBOL, PREDICTED_SYMBOL, TOPICS_NOTE, WINDOW_NOTE, box_class, margin_color, page_layout, window_class,
+    AXIS_RANGE, AXIS_TICKS, CROSS_SYMBOL, EMPTIED_SYMBOL, GENERATIONS, GREY, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL,
+    MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, NO_NEIGHBOUR_SYMBOL, PREDICTED_SYMBOL, SELECTED_LINE, SHARE_HIGH, SHARE_LOW, TOPICS_NOTE,
+    WINDOW_NOTE, box_class, margin_color, page_layout, share_color, window_class,
 )
 from app.standalone.results import NO_FOLDER, Results, course_note, read_glossary
 
@@ -45,14 +47,26 @@ for _index, _letter in enumerate(PANEL_LETTERS):
     OUT[f"class_{_letter}"] = 6 + len(PANEL_LETTERS) + _index
 OUT["window_d"] = 6 + 2 * len(PANEL_LETTERS)  # the difficulty window's content, then its class
 OUT["class_d"] = OUT["window_d"] + 1
-INPUTS = 5 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the four rows, the four close boxes, the measure input
+INPUTS = 5 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the four rows, the four close boxes, the row input
 
 
 def measure_value(key) -> str:
-    """What assets/measure_rows.js writes into the hidden input: the row's key (None for the close box) and a
-    sequence number."""
+    """What assets/panel_rows.js writes into the hidden input for a results row: the row's key (None for the close
+    box) and a sequence number."""
     measure_value.seq = getattr(measure_value, "seq", 0) + 1
-    return json.dumps({"measure": key, "seq": measure_value.seq})
+    return json.dumps({"seq": measure_value.seq, "measure": key})
+
+
+def level_value(level) -> str:
+    """What assets/panel_rows.js writes into the hidden input for a generation's row."""
+    measure_value.seq = getattr(measure_value, "seq", 0) + 1
+    return json.dumps({"seq": measure_value.seq, "level": level})
+
+
+def level_rows(content) -> dict:
+    """The generation rows of a panel's content: generation -> whether it is the open one."""
+    return {child.to_plotly_json()["props"]["data-level"]: "open" in child.className
+            for child in content if "level-row" in (getattr(child, "className", "") or "")}
 
 
 def measure_keys(content) -> list[str]:
@@ -129,7 +143,11 @@ class PageDriver(unittest.TestCase):
 
     def describe(self, key):
         """A click on a results row (its key), or on the open description's close box (None)."""
-        return self.call(MEASURE_INPUT, measure=measure_value(key))
+        return self.call(ROW_INPUT, measure=measure_value(key))
+
+    def generation(self, level):
+        """A click on a generation's row of the expanded panel."""
+        return self.call(ROW_INPUT, measure=level_value(level))
 
     def trace(self, result, name):
         return next((trace for trace in result[OUT["figure"]].data if trace.name == name), None)
@@ -307,7 +325,10 @@ class StandaloneTest(PageDriver):
         self.assertEqual(self.legend(result), [])
         self.assertEqual(self.points(result, "Cards"), Page.random_points(["301003", "401005"]))
         self.assertIsNone(self.trace(result, "Connections"))
-        result = self.expand("D")
+        result = self.expand("D")  # D2 is the newest: no tags on this page, so no colours
+        self.assertEqual(self.colors(result), {"301003": GREY, "401005": GREY})
+        self.assertEqual(self.legend(result), [])
+        result = self.generation("D1")
         self.assertEqual(self.colors(result), {"301003": LEVEL_COLORS["easy"], "401005": GREY})  # the rated quiz, the flashcard
         self.assertEqual(self.symbols(result), {"301003": "circle", "401005": "circle"})
         self.assertEqual(self.legend(result), ["easy", "flashcard"])  # inside the map: the classes the view holds
@@ -392,7 +413,13 @@ class StandaloneTest(PageDriver):
     def test_the_scores_live_in_the_d_panel_and_the_difficulty_window_opens_with_it_and_follows_the_view(self):
         result = self.call(None)
         self.assertEqual((result[OUT["window_d"]], result[OUT["class_d"]]), ([], window_class(False)))  # collapsed without D
-        result = self.expand("D")
+        result = self.expand("D")  # D2, the newest, without cached tags: both say how to get them
+        self.assertEqual(level_rows(result[OUT["content_D"]]), {"D1": False, "D2": True})
+        self.assertIn(NO_TAGS, str(result[OUT["content_D"]]))
+        self.assertEqual(result[OUT["class_d"]], window_class(True))
+        self.assertIn(NO_TAGS, str(result[OUT["window_d"]]))
+        result = self.generation("D1")
+        self.assertEqual(level_rows(result[OUT["content_D"]]), {"D1": True, "D2": False})
         self.assertIn("Difficulty model D1 · all decks", str(result[OUT["content_D"]]))
         self.assertIn(self.page.difficulty.note, str(result[OUT["content_D"]]))  # the test course is too small for D1
         self.assertEqual(result[OUT["class_d"]], window_class(True))
@@ -449,13 +476,92 @@ class StandaloneTest(PageDriver):
         self.assertEqual((scope, values[("Cards on the sphere", "layout")]), ("This topic: 0 cards", "none"))
 
     def test_the_s_panel_shows_s1s_live_measures_and_the_hint_without_a_results_file(self):
-        result = self.expand("S")
+        result = self.expand("S")  # S2, the newest: this page runs TF-IDF, so S2 has no index
+        self.assertEqual(level_rows(result[OUT["content_S"]]), {"S1": False, "S2": True})
         content = str(result[OUT["content_S"]])
+        self.assertIn(NO_ENCODER, content)
+        self.assertIsNone(self.page.indexes["S2"])
+        self.assertEqual(self.colors(self.enter_topic("01", "01")), {card_id: GREY for card_id in ("101001", "201002", "101004")})
+        self.assertIsNone(self.trace(self.call(None), "Neighbours"))
+        result = self.generation("S1")
+        content = str(result[OUT["content_S"]])
+        self.assertIs(self.page.indexes["S1"], self.page.model.index)  # without the encoder S1's index is the app's
         self.assertIn("S1 · similarity", content)
         self.assertIn("vocabulary", content)
+        self.assertIn("the app's index", content)
         self.assertIn("No results.csv in", content)  # the hint: how to make one
         self.assertIn("uv run evaluate.py", content)
         self.assertNotIn("Columns", content)
+
+    def test_a_panel_opens_its_newest_generation_and_a_generations_row_expands_it_alone(self):
+        self.call(None)
+        result = self.expand("S")
+        self.assertEqual((self.state["level"], Page.level_of(self.state)), (None, "S2"))
+        content = result[OUT["content_S"]]
+        self.assertEqual(list(level_rows(content).items()), [("S1", False), ("S2", True)])  # the older on top, collapsed
+        self.assertEqual(content[-1].className, "level-section")  # S2's section under S2's row
+        result = self.generation("S1")
+        self.assertEqual(self.state["level"], "S1")
+        content = result[OUT["content_S"]]
+        self.assertEqual(list(level_rows(content).items()), [("S1", True), ("S2", False)])  # the order unchanged
+        self.assertEqual([getattr(child, "className", None) for child in content], ["level-row open", "level-section", "level-row"])
+        self.generation("S1")  # the open one again: it stays open
+        self.assertEqual(self.state["level"], "S1")
+        self.generation("D1")  # no generation of this panel: nothing changes
+        self.assertEqual(self.state["level"], "S1")
+        result = self.expand("C")  # another panel: its newest, its one generation
+        self.assertEqual((self.state["level"], level_rows(result[OUT["content_C"]])), (None, {"C1": True}))
+        self.expand("S")
+        self.assertEqual(Page.level_of(self.state), "S2")  # a panel opens with its newest again
+        self.generation("S1")
+        self.close("S")
+        self.assertEqual((self.state["panel"], self.state["level"]), (None, None))
+        self.assertEqual(GENERATIONS, {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2")})
+        self.assertIsNone(Page.generation_of(measure_value("S1:0:x")))
+        self.assertIsNone(Page.measure_of(level_value("S1")))
+
+    def test_s1_colours_the_dots_by_their_neighbours_share_and_draws_the_topics_pairs(self):
+        index = self.page.indexes["S1"]
+        self.call(None)
+        self.expand("S")
+        result = self.generation("S1")
+        decks = self.trace(result, "Decks")
+        for deck_id, color, text in zip(decks.customdata, decks.marker.color, decks.text):
+            ids = [card.id for card in self.table.cards if self.table.deck_ids[card.deck] == deck_id]
+            inside, total = Page.neighbour_share(index, ids, set(ids))
+            self.assertEqual(color, share_color(inside / total) if total else GREY, deck_id)
+            self.assertTrue(text.startswith(f"{deck_id} · "))
+        self.assertEqual(self.points(result, "Decks"), Page.random_points(["01", "02", "03"]))  # S places nothing
+        self.assertFalse(self.axes_visible(result))
+        self.assertEqual((share_color(0.0), share_color(1.0)), (SHARE_LOW, SHARE_HIGH))
+        result = self.enter_topic("02", "01")
+        self.assertEqual(self.state["level"], "S1")  # kept while the view changes
+        cards = self.trace(result, "Cards")
+        topic = self.page.entered(self.state)
+        pairs = {frozenset((card_id, other)) for card_id in topic.ids for other, _score in index.neighbours[card_id] if other in topic.ids}
+        self.assertTrue(pairs)
+        lines = self.trace(result, "Neighbours")
+        self.assertEqual(list(lines.x).count(None), len(pairs))  # each pair once, along the surface
+        self.assertIsNone(self.trace(result, "Selected neighbours"))
+        symbols = self.symbols(result)
+        for card_id, color, text in zip(cards.customdata, cards.marker.color, cards.text):
+            inside, total = Page.neighbour_share(index, [card_id], set(topic.ids))
+            if total:
+                expected = (share_color(inside / total), "circle", f"{card_id} · {inside} of {total} neighbours in this topic")
+                self.assertEqual((color, symbols[card_id], text), expected)
+            else:
+                self.assertEqual((color, symbols[card_id]), (GREY, NO_NEIGHBOUR_SYMBOL))
+        selected = sorted(next(iter(pairs)))[0]
+        result = self.click(selected)
+        own = self.trace(result, "Selected neighbours")
+        self.assertEqual(own.line.color, SELECTED_LINE["color"])
+        self.assertEqual(list(own.x).count(None), sum(selected in pair for pair in pairs))
+        rows = id_rows(result[OUT["panel"]])
+        self.assertTrue(rows["neighbours (S1)"].startswith(f"{len(index.neighbours[selected])}: "))
+        content = str(result[OUT["content_S"]])
+        self.assertIn(f"card {selected}'s neighbours", content)
+        self.assertIn("this topic", content)
+        self.assertIn("The map with S1", content)  # the legend
 
     def test_a_scripted_topics_dendrogram_is_the_clustering_of_its_cards(self):
         result = self.enter_topic("01", "01")  # every panel collapsed: the scripted membership
@@ -491,9 +597,11 @@ class StandaloneTest(PageDriver):
         material += [text for deck in self.table.decks for text in (deck.description, deck.name)]
         material += [name for name, _rest in model_support.TOPIC_NAMES.values()]
         outputs = []
-        for letter in (None,) + PANEL_LETTERS:
+        for letter, level in [(None, None)] + [(letter, level) for letter in PANEL_LETTERS for level in GENERATIONS[letter]]:
             self.state = None
             outputs.append(self.expand(letter) if letter else self.call(None))
+            if level:
+                outputs.append(self.generation(level))
             for deck in self.page.deck_points():
                 outputs += [self.click(deck), self.call("open")]
                 for dot in self.page.dots(self.state):
@@ -501,7 +609,7 @@ class StandaloneTest(PageDriver):
                     outputs += [self.click(card_id) for card_id in self.page.dots(self.state)]
                     self.call("back")
                 self.call("back")
-        self.assertGreater(len(outputs), 150)
+        self.assertGreater(len(outputs), 240)
         shown = dumped(outputs)
         for text in material:
             self.assertNotIn(json.dumps(text)[1:-1], shown)
@@ -656,7 +764,7 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(self.note, "decks 01 to 03")
 
     def test_s1_stands_next_to_b0s_mean_in_the_newest_run_with_the_chosen_variant_marked(self):
-        (table,) = self.page.results.tables("S")
+        (table,) = self.page.results.tables("S1")
         self.assertEqual(table.heads, ["B0 random positions (mean of 2 seeds)", "unigrams", "chosen: uni+bigrams"])
         self.assertEqual(table.chosen, [False, False, True])
         self.assertEqual(table.subtitle, "run 2026-11-01T10:00")
@@ -668,7 +776,7 @@ class ResultsTest(unittest.TestCase):
         self.assertNotIn("old", dumped(table.heads))  # the 48-deck row and the older run stay out
 
     def test_c1s_table_replaces_a_decks_and_a_topics_name_and_marks_the_model(self):
-        (table,) = self.page.results.tables("C")
+        (table,) = self.page.results.tables("C1")
         self.assertEqual((table.heads, table.chosen), (["model", "random"], [True, False]))
         self.assertEqual(table.subtitle, "run 2026-11-01T10:00 · params k=3")  # the seed differs: not shared
         self.assertEqual(dict(table.rows)["lift_k2"], ["0.5", "0.000"])
@@ -677,17 +785,17 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(self.page.results.by_ids(""), "")
 
     def test_t1s_tables_are_the_course_or_the_entered_deck_with_the_stacks_and_the_margins(self):
-        course, stacks, margins = self.page.results.tables("T")
+        course, stacks, margins = self.page.results.tables("T1")
         self.assertEqual((course.title, course.heads, course.chosen), ("T1 next to the judges, the course", ["T1", "chance"], [True, False]))
         self.assertEqual(dict(course.rows)["agreement"], ["1.000", "0.400"])
         self.assertEqual((stacks.heads, dict(stacks.rows)["cards"]), (["stack 1"], ["6"]))
         self.assertEqual((margins.heads, dict(margins.rows)["kept_share"]), (["margin >= 0.05"], ["0.923"]))
-        deck, _stacks, _margins = self.page.results.tables("T", "01")
+        deck, _stacks, _margins = self.page.results.tables("T1", "01")
         self.assertEqual((deck.title, deck.heads), ("T1 next to the judges, deck 01", ["T1", "chance"]))
         self.assertEqual(dict(deck.rows)["agreement"], ["1.000", "0.300"])  # the row "deck 01 Alpha" is no deck scope
 
     def test_d1s_table_has_a_column_per_row_of_the_run(self):
-        table, _tags = self.page.results.tables("D")
+        (table,) = self.page.results.tables("D1")
         self.assertEqual(table.heads, [
             "text (chosen) · deck shares", "text (chosen) · most likely class", "baseline: always easy",
             "hand labels: the criterion against the authored levels",
@@ -701,7 +809,7 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(table.measures[:2], ["macro_f1", "macro_f1_sd"])
 
     def test_d2s_table_stands_next_to_d1s_chosen_row(self):
-        _table, tags = self.page.results.tables("D")
+        (tags,) = self.page.results.tables("D2")
         self.assertEqual(tags.title, "D2 next to D1's chosen row")
         self.assertEqual(tags.heads, ["D1 text (chosen) · deck shares", "D2 criterion · deck shares", "D2 criterion · most likely class"])
         self.assertEqual(tags.chosen, [True, False, False])
@@ -722,7 +830,7 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(glossary["lift_k2"], glossary["lift_k3"])  # one row for the columns of one measure
         self.assertEqual(glossary["lift_k2"][0], "lift_k2, lift_k3")
         self.assertIn("(overlap − random) / (1 − random)", glossary["lift_k2"][1])
-        table = self.page.results.tables("D")[0]
+        table = self.page.results.tables("D1")[0]
         self.assertEqual(table.row_columns[0], ["macro_f1", "macro_f1_sd"])  # the columns behind a row, its description's key
 
     def test_the_panels_show_the_tables_by_ids_and_a_click_on_a_row_opens_its_description(self):
@@ -736,49 +844,59 @@ class ResultsTest(unittest.TestCase):
             state = result[OUT["view"]]
             return result
 
-        result = call("panel-S")
+        result = call("panel-S")  # S2, the newest: no S2 rows in this run
+        self.assertIn(self.page.results.no_rows("S2"), dumped(result[OUT["content_S"]]))
+        self.assertEqual(self.page.results.tables("S2"), [])
+        result = call(ROW_INPUT, level_value("S1"))
         content = dumped(result[OUT["content_S"]])
         self.assertIn("chosen: uni+bigrams", content)
         self.assertIn("B0 random positions (mean of 2 seeds)", content)
         self.assertNotIn("Columns", content)  # no separate row of the columns: each row opens its own description
         self.assertNotIn("measure-description", content)
         keys = measure_keys(result[OUT["content_S"]])
-        self.assertEqual(keys, ["S:0:precision_at_5", "S:0:kept_precision"])  # the panel, the table, the row's first column
-        result = call(MEASURE_INPUT, measure_value("S:0:precision_at_5"))
-        self.assertEqual(state["measure"], "S:0:precision_at_5")
+        self.assertEqual(keys, ["S1:0:precision_at_5", "S1:0:kept_precision"])  # the generation, the table, the row's first column
+        result = call(ROW_INPUT, measure_value("S1:0:precision_at_5"))
+        self.assertEqual(state["measure"], "S1:0:precision_at_5")
         content = dumped(result[OUT["content_S"]])
         self.assertEqual(content.count("measure-description"), 1)
         self.assertIn(read_glossary()["precision_at_5"][1], content)  # what the measure is, from columns.md
+        self.assertNotIn("measure-names", content)  # not the column's name again: the row above shows it
         self.assertIn("Range:", content)
         self.assertIn("measure-close", content)
         self.assertIn("measure-row open", content)
-        result = call(MEASURE_INPUT, measure_value("S:0:kept_precision"))  # another row: the description moves
-        self.assertEqual(state["measure"], "S:0:kept_precision")
+        result = call(ROW_INPUT, measure_value("S1:0:kept_precision"))  # another row: the description moves
+        self.assertEqual(state["measure"], "S1:0:kept_precision")
         content = dumped(result[OUT["content_S"]])
         self.assertEqual(content.count("measure-description"), 1)
         self.assertIn(read_glossary()["kept_precision"][1], content)
         self.assertNotIn(read_glossary()["precision_at_5"][1], content)
-        call(MEASURE_INPUT, measure_value("S:0:kept_precision"))  # the open row again: closed
+        call(ROW_INPUT, measure_value("S1:0:kept_precision"))  # the open row again: closed
         self.assertIsNone(state["measure"])
-        call(MEASURE_INPUT, measure_value("S:0:kept_precision"))
-        result = call(MEASURE_INPUT, measure_value(None))  # the close box
+        call(ROW_INPUT, measure_value("S1:0:kept_precision"))
+        result = call(ROW_INPUT, measure_value(None))  # the close box
         self.assertIsNone(state["measure"])
         self.assertNotIn("measure-description", dumped(result[OUT["content_S"]]))
-        call(MEASURE_INPUT, measure_value("S:0:kept_precision"))
+        call(ROW_INPUT, measure_value("S1:0:kept_precision"))
+        call(ROW_INPUT, level_value("S2"))  # another generation: the open description goes
+        self.assertIsNone(state["measure"])
+        call(ROW_INPUT, level_value("S1"))
+        call(ROW_INPUT, measure_value("S1:0:kept_precision"))
         result = call("panel-C")  # another panel: the open description goes
         self.assertIsNone(state["measure"])
         content = dumped(result[OUT["content_C"]])
         self.assertNotIn("Alpha", content)
         self.assertNotIn("Lists", content)
-        self.assertIn("C:0:lift_k2", measure_keys(result[OUT["content_C"]]))
-        result = call(MEASURE_INPUT, measure_value("C:0:lift_k2"))
-        self.assertIn("lift_k2, lift_k3", dumped(result[OUT["content_C"]]))  # the glossary's names for the row's columns
+        self.assertIn("C1:0:lift_k2", measure_keys(result[OUT["content_C"]]))
+        result = call(ROW_INPUT, measure_value("C1:0:lift_k2"))
+        content = dumped(result[OUT["content_C"]])
+        self.assertIn("within-topic overlap at k = 2 or 3", content)  # the shared row of the two columns
+        self.assertNotIn("lift_k2, lift_k3", content)  # its names cell stays out
         self.assertIsNone(Page.measure_of("not json"))
         self.assertIsNone(Page.measure_of(0))
 
     def test_without_a_file_or_a_folder_the_section_says_how_to_make_one(self):
         results = Results(self.folder / "nowhere", self.note)
-        self.assertIsNone(results.tables("S"))
+        self.assertIsNone(results.tables("S1"))
         self.assertIn("No results.csv in", results.hint("results.csv"))
         self.assertIn("uv run evaluate.py", results.hint("results.csv"))
         self.assertEqual(Results(None, self.note).hint("topics.csv"), NO_FOLDER)
@@ -805,7 +923,7 @@ class MeasuredMetricsTest(unittest.TestCase):
         self.assertIn("All decks: 36 rated quizzes", str(panel))
         self.assertEqual(self.graphs(panel), [])  # no figure in the panel
         self.assertIn(WINDOW_NOTE, str(panel))  # it says where they are
-        (window,), class_name = self.page.difficulty_window({**HOME, "panel": "D"})
+        (window,), class_name = self.page.difficulty_window({**HOME, "panel": "D", "level": "D1"})
         self.assertEqual(class_name, window_class(True))
         self.assertEqual(self.graphs(window), ["difficulty-confusion", "difficulty-shares"])
         self.assertNotIn("color-legend", str(window))  # the legend is the map's
@@ -814,13 +932,13 @@ class MeasuredMetricsTest(unittest.TestCase):
         topic = self.page.metrics({**HOME, "view": "cards", "deck": "01", "topic": "01"})
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(topic))
         self.assertIn("This topic:", str(topic))
-        (window,), _class = self.page.difficulty_window({**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D"})
+        (window,), _class = self.page.difficulty_window({**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D", "level": "D1"})
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(window))
 
     def test_a_predicted_card_says_so_and_is_a_cross_in_the_predicted_colour_with_d(self):
         panel = self.page.dot_panel({**HOME, "view": "cards", "deck": "01", "topic": "01", "selected": "201002"})
         self.assertEqual(id_rows(panel)["difficulty"], "hard (predicted by D1)")
-        state = {**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D"}
+        state = {**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D", "level": "D1"}
         from app.standalone.layout import map_figure
 
         figure = map_figure(self.page, state)
@@ -828,6 +946,7 @@ class MeasuredMetricsTest(unittest.TestCase):
         colors = dict(zip(cards.customdata, cards.marker.color))
         symbols = dict(zip(cards.customdata, cards.marker.symbol))
         self.assertEqual((colors["201002"], symbols["201002"]), (PREDICTED_COLOR, PREDICTED_SYMBOL))  # as predicted, not as hard
+        self.assertEqual(dict(zip(cards.customdata, cards.text))["201002"], "201002 · D1: hard")  # its level on the hover
         self.assertEqual((colors["101001"], symbols["101001"]), (GREY, "circle"))  # a flashcard
         self.assertEqual(PREDICTED_SYMBOL, "cross")
         self.assertTrue(figure.layout.showlegend)
@@ -843,10 +962,12 @@ class AppTest(unittest.TestCase):
         self.assertEqual(len(app.callback_map), 1)
         self.assertTrue(Path(app.config.assets_folder, "style.css").is_file())
         self.assertIn("--map-side", Path(app.config.assets_folder, "map_side.js").read_text(encoding="utf-8"))
-        rows = Path(app.config.assets_folder, "measure_rows.js").read_text(encoding="utf-8")
-        self.assertIn(f'"{MEASURE_INPUT}"', rows)  # the hidden input the rows' clicks set
+        rows = Path(app.config.assets_folder, "panel_rows.js").read_text(encoding="utf-8")
+        self.assertIn(f'"{ROW_INPUT}"', rows)  # the hidden input the rows' clicks set
         self.assertIn("set_props", rows)
-        self.assertIn(".measure-close", rows)
+        for selector in (".level-row", ".measure-row", ".measure-close"):
+            self.assertIn(selector, rows)
+        self.assertFalse(Path(app.config.assets_folder, "measure_rows.js").exists())
 
     def test_the_map_is_a_square_with_window_a_the_difficulty_window_and_the_panels_beside_them(self):
         layout = page_layout(HOME)
@@ -858,10 +979,13 @@ class AppTest(unittest.TestCase):
         self.assertIn(".window-d.collapsed { display: none; }", style)
         self.assertIn("--panel-font: 2;", style)  # the panels' text at double size
         self.assertIn("@media (orientation: portrait)", style)  # window A beside the map, the panels under both
+        portrait = style[style.index("@media (orientation: portrait)"):]
+        self.assertIn(".window-d { grid-column: 2; grid-row: 2; }", portrait)  # under window A, at its width
+        self.assertNotIn("measure-names", style)
         workspace = layout.children[2]
         self.assertEqual([child.className for child in workspace.children], ["map-frame", "window-a", window_class(False), "model-panels"])
         self.assertEqual(workspace.children[2].id, "difficulty-window")
-        self.assertEqual((layout.children[-1].id, layout.children[-1].value), (MEASURE_INPUT, ""))
+        self.assertEqual((layout.children[-1].id, layout.children[-1].value), (ROW_INPUT, ""))
         boxes = workspace.children[3].children
         self.assertEqual([box.id for box in boxes], [f"box-{letter}" for letter in PANEL_LETTERS])
         self.assertEqual({box.className for box in boxes}, {box_class(False)})
@@ -991,14 +1115,29 @@ class EmbeddingsPanelTest(unittest.TestCase):
         content = str(contents[PANEL_LETTERS.index("S")])
         self.assertIn("S2 · similarity", content)
         self.assertIn("hybrid: TF-IDF + MiniLM (16 dimensions)", content)
-        for label in ("vectoriser", "vocabulary", "embedding dimensions", "embeddings", "device", "hybrid minima", "hybrid weights", "minimum score"):
+        self.assertIs(self.page.indexes["S2"], self.page.model.index)
+        for label in ("vectoriser", "vocabulary", "embedding dimensions", "embeddings", "hybrid minima", "hybrid weights", "minimum score"):
             self.assertIn(label, content)
         self.assertIn(f"{self.page.model.index.min_score:.2f}", content)  # the index's own minimum, as the readout rounds it
         self.assertIn("encoded in", content)  # no cache: encoded at the start
-        self.assertIn(f"s on {self.page.model.index.vectoriser.second.device}", content)  # and on which device
+
+    def test_s1_is_a_tfidf_index_of_its_own_next_to_the_apps(self):
+        s1 = self.page.indexes["S1"]
+        self.assertIsNot(s1, self.page.model.index)
+        self.assertEqual(s1.ids, self.page.model.index.ids)
+        contents, _classes = self.page.panels({**HOME, "panel": "S", "level": "S1"})
+        content = str(contents[PANEL_LETTERS.index("S")])
+        self.assertIn("TF-IDF, cosine", content)
+        self.assertNotIn("hybrid minima", content)
+        state = {**HOME, "view": "cards", "deck": "02", "topic": "01", "panel": "S"}
+        points = self.page.card_points(self.page.entered(state), state)
+        for level in ("S1", "S2"):  # each generation draws its own index's neighbours
+            index = self.page.indexes[level]
+            pairs, _own = self.page.neighbour_pairs(points, {**state, "level": level})
+            self.assertTrue(all(other in dict(index.neighbours[card_id]) or card_id in dict(index.neighbours[other]) for card_id, other in pairs), level)
 
     def test_s2s_table_stands_next_to_s1s_chosen_variant(self):
-        s1, s2 = self.page.results.tables("S")
+        (s1,), (s2,) = self.page.results.tables("S1"), self.page.results.tables("S2")
         self.assertEqual(s1.heads, ["B0 random positions (mean of 2 seeds)", "unigrams", "chosen: uni+bigrams"])
         self.assertEqual(s2.title, "S2 next to S1's chosen variant")
         self.assertEqual(s2.heads, ["S1 chosen: uni+bigrams", "MiniLM", "hybrid: chosen + MiniLM"])
@@ -1006,6 +1145,7 @@ class EmbeddingsPanelTest(unittest.TestCase):
         self.assertEqual(dict(s2.rows)["precision_at_5"], ["0.6", "0.7", "0.8"])
         contents, _classes = self.page.panels({**HOME, "panel": "S"})
         self.assertIn("S2 next to S1", str(contents[PANEL_LETTERS.index("S")]))
+        self.assertNotIn("S1 next to the random floor", str(contents[PANEL_LETTERS.index("S")]))  # S1's table is under S1's row
 
 
 if __name__ == "__main__":

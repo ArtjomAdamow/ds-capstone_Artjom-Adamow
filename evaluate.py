@@ -399,7 +399,7 @@ def difficulty_tags(cards, cache_dir: Optional[Path] = None, loader: Optional[Ca
             return {}
         found[template.name] = tags
         print(f"D2 {template.name}: {len(tags.scores)} quizzes tagged by {tags.model_name} "
-              + ("from the cache" if tags.cached else f"on {tags.device} in {tags.seconds:.1f}s"))
+              + ("from the cache" if tags.cached else f"in {tags.seconds:.1f}s"))
     return found
 
 
@@ -987,9 +987,6 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
         params = variant.params + (f", vocab={len(vocabulary)}" if vocabulary is not None else "")
         if isinstance(index.vectoriser, embeddings.HybridVectoriser):
             params += ", minima=({:.3f}, {:.3f}), weights=({:.2f}, {:.2f})".format(*index.vectoriser.minima, *index.vectoriser.weights)
-        encoder = index.vectoriser.second if isinstance(index.vectoriser, embeddings.HybridVectoriser) else index.vectoriser
-        if isinstance(encoder, embeddings.SentenceEncoder):
-            params += f", device={encoder.device or 'none (cache)'}"  # what the seconds were measured on; a cache hit loads no model
         per_card[variant.name] = evaluation.judged_precision(kept, marks, similar.TOP_K)
         per_card_p1[variant.name] = evaluation.judged_precision(kept, marks, 1)
         p1, p3, p5 = (hand_precision(kept, marks, k) for k in (1, 3, similar.TOP_K))

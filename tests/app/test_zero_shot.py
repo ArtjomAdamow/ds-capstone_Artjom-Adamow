@@ -18,7 +18,9 @@ from app.cards import CardRecord
 from app.models import zero_shot
 from app.models.difficulty_model import LEVELS
 from app.models.embeddings import CACHE_FOLDER, EmbeddingCache
-from app.models.zero_shot import CRITERION, LEVEL_NAMES, NLI_MODEL, TEMPLATES, Tags, ZeroShotTagger, premise, tagger_available, tags_of
+from app.models.zero_shot import (
+    CRITERION, LEVEL_NAMES, NLI_MODEL, TEMPLATES, Tags, ZeroShotTagger, cached_tags, premise, tagger_available, tags_of,
+)
 
 QUIZ = CardRecord(
     "201001", "Alpha", "  What does `len` return?  ", "The number of items.", stack=2, explain="It counts.\nSource: `lists.ipynb`.",
@@ -97,15 +99,6 @@ class TaggerTest(unittest.TestCase):
         self.assertGreater(tagger.seconds, 0.0)
         self.assertFalse(tagger.cached)
 
-    def test_the_tagger_runs_on_s2s_device_handed_to_the_loader(self):
-        tagger = ZeroShotTagger(loader=model_support.fake_classifier_loader, device="cpu")
-        self.assertEqual(tagger.load().device, "cpu")
-        with mock.patch("app.models.embeddings.cuda_available", return_value=True), \
-                mock.patch.dict(os.environ, {"APP_DEVICE": "auto"}):
-            tagger = ZeroShotTagger(loader=model_support.fake_classifier_loader)
-            tagger.scores(self.cards)
-        self.assertEqual((tagger.device, tagger.load().device), ("cuda", "cuda"))
-
     def test_the_cache_serves_the_second_call_and_keeps_a_file_per_model_and_template(self):
         cache = EmbeddingCache(self.folder / CACHE_FOLDER)
         tagger = ZeroShotTagger("fake-nli", CRITERION, cache=cache, loader=model_support.fake_classifier_loader)
@@ -159,6 +152,19 @@ class TagsOfTest(unittest.TestCase):
         self.assertEqual(control.template, LEVEL_NAMES)
         self.assertEqual(len(list((self.folder / CACHE_FOLDER).glob("*.npy"))), 2)
 
+    def test_the_cached_tags_need_neither_the_library_nor_the_model(self):
+        self.assertIsNone(cached_tags(self.cards, None))
+        self.assertIsNone(cached_tags(self.cards, self.folder))  # nothing tagged yet
+        tags = tags_of(self.cards, self.folder, loader=model_support.fake_classifier_loader)
+        with mock.patch.object(zero_shot, "tagger_available", return_value=False), \
+                mock.patch.object(ZeroShotTagger, "load", side_effect=AssertionError("no model is loaded")):
+            cached = cached_tags(self.cards, self.folder)
+        self.assertEqual((cached.template, cached.cached, cached.seconds), (CRITERION, True, 0.0))
+        self.assertEqual(set(cached.scores), set(tags.scores))
+        np.testing.assert_array_equal(cached.scores["201101"], tags.scores["201101"])
+        self.assertIsNone(cached_tags(self.cards, self.folder, LEVEL_NAMES))  # another template: its own file, not there
+        self.assertIsNone(cached_tags(self.cards[:-5], self.folder))  # another course: another key
+
     def test_without_the_library_none_with_one_line(self):
         lines = []
         with mock.patch.object(zero_shot, "tagger_available", return_value=False):
@@ -169,7 +175,7 @@ class TagsOfTest(unittest.TestCase):
     def test_a_model_that_does_not_load_gives_none_and_the_fetching_command(self):
         lines = []
 
-        def failing(model_name, device):
+        def failing(model_name):
             raise OSError("not cached, offline")
 
         self.assertIsNone(tags_of(self.cards, self.folder, output=lines.append, loader=failing))

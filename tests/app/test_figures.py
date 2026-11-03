@@ -37,6 +37,18 @@ class MetricsFiguresTest(unittest.TestCase):
         topic = deck.for_topic("Some topic", ("301001", "201101"))
         self.assertTrue(figures.metrics_subtitle(topic).startswith("This topic: its 1 rated quiz (1 easy, 0 medium, 0 hard)"))
 
+    def test_d2s_scores_and_subtitle_name_it_and_its_one_pass(self):
+        from app.models.difficulty_model import judge_tags
+
+        cards = model_support.difficulty_course()
+        tags = {card.id: (0.5, 0.3, min(0.2, len(card.question) / 400)) for card in cards}
+        report = judge_tags(cards, tags)
+        self.assertEqual(figures.score_header(report), ["D2", "always easy"])
+        self.assertIn("measured in one pass, nothing fitted", figures.metrics_subtitle(report))
+        deck = report.for_deck("Alpha")
+        self.assertIn("(8 easy, 3 medium, 1 hard), in one pass, nothing fitted", figures.metrics_subtitle(deck))
+        self.assertIn("out of fold (", figures.metrics_subtitle(self.report))  # D1's stays its cross-validation
+
     def test_the_confusion_matrix_and_the_shares(self):
         heatmap = figures.confusion_figure(self.report).data[0]
         self.assertEqual(list(heatmap.x), ["easy", "medium", "hard"])

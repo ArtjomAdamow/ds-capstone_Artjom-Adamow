@@ -253,7 +253,20 @@ class JudgeTagsTest(unittest.TestCase):
         self.assertAlmostEqual(report.baselines["always easy"]["accuracy"][0], 24 / 36)
         self.assertEqual(report.confusion.shape, (3, 3))
         self.assertGreater(report.metrics["spearman"][0], 0.5)  # the fake tags grow with the question's length, as the levels do
-        self.assertEqual(report.decks, {})  # no parts: the page's live parts are D1's
+        self.assertEqual(report.model, "D2")
+
+    def test_every_deck_has_its_part_of_the_one_pass_and_of_the_predictions(self):
+        report = self.report
+        self.assertEqual(set(report.decks), set(TOPICS))
+        for deck in TOPICS:
+            part = report.for_deck(deck)
+            self.assertEqual((part.model, part.scope, part.rated_counts, part.unrated, part.folds), ("D2", deck, (8, 3, 1), 2, 0))
+            self.assertTrue(part.measured)
+            self.assertEqual(set(part.baselines), {"always easy"})  # no similarity baseline: nothing of the index
+            self.assertAlmostEqual(part.baselines["always easy"]["accuracy"][0], 8 / 12)
+            self.assertEqual(part.confusion.shape, (3, 3))
+            self.assertEqual(set(part.predictions), {card.id for card in self.cards if card.deck == deck and card.stack == 2})
+        self.assertEqual(report.for_deck("nowhere").model, "D2")  # a deck without quizzes says so under D2's name
 
     def test_every_unrated_quiz_gets_a_level_by_its_decks_shares_and_its_score_is_the_expected_level(self):
         report = self.report

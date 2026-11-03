@@ -6,10 +6,9 @@ embeddings (app roadmap step 23; docs/draft/helper/models/similarity.md, "S2").
                 └→ encoder → unit rows · √(1/(1 − m₂)) ─┘
     m₁, m₂: each half's own minimum, the 10th percentile of its fifth neighbour's cosine over the cards
 
-* `SentenceEncoder` encodes texts with a sentence-transformers model (nothing is fitted: fit_transform and
-  transform both encode), unit length from the model, in batches, on the device `resolve_device` picks: APP_DEVICE,
-  the GPU where torch sees one, else the CPU; the library is imported when the model is loaded, so this module
-  imports without torch. The embeddings of a course are cached (`EmbeddingCache`): one .npy
+* `SentenceEncoder` encodes texts with a sentence-transformers model on the CPU (nothing is fitted: fit_transform
+  and transform both encode), unit length from the model, in batches; the library is imported when the model is
+  loaded, so this module imports without torch. The embeddings of a course are cached (`EmbeddingCache`): one .npy
   per model and course, keyed by the model's name and a hash of the texts in order, in a folder the launcher names.
 * `HybridVectoriser` fits two vectorisers on the same texts and returns their unit rows side by side, each block
   scaled by √(1/(1 − m)) with the block's own minimum m, so the index's cosine of two cards is the weighted sum
@@ -49,11 +48,6 @@ BATCH_SIZE = 64
 CACHE_FOLDER = "embeddings"  # the cache's folder name under the launcher's derived folder (temp/, data/cache/)
 LIBRARY = "sentence_transformers"
 FETCH_COMMAND = 'python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer({name!r})"'
-# The device of S2's encoder and D2's model (gen3.md): "auto", the GPU where torch sees one (the embeddings-gpu
-# extra), else the CPU; "cpu" or "cuda" to choose. fp32 on the GPU gives the CPU's vectors (cosine 1.000000, the
-# same five neighbours), so the cache's key has no device.
-DEVICE_VARIABLE = "APP_DEVICE"
-DEVICES = ("auto", "cpu", "cuda")
 
 
 def encoder_available(find_spec: Callable = importlib.util.find_spec) -> bool:
@@ -62,26 +56,6 @@ def encoder_available(find_spec: Callable = importlib.util.find_spec) -> bool:
         return find_spec(LIBRARY) is not None
     except (ImportError, ValueError):
         return False
-
-
-def cuda_available() -> bool:
-    """Whether torch sees a CUDA GPU (torch imported here; False without it or with its CPU build)."""
-    try:
-        import torch
-    except ImportError:
-        return False
-    return bool(torch.cuda.is_available())
-
-
-def resolve_device(setting: Optional[str] = None, cuda: Callable[[], bool] = cuda_available) -> str:
-    """The device the models run on: `setting`, else APP_DEVICE, else "auto"; auto, and "cuda" without a GPU, is the
-    CPU unless `cuda()` says a GPU is there."""
-    setting = (setting or os.environ.get(DEVICE_VARIABLE) or "auto").strip().lower()
-    if setting not in DEVICES:
-        raise ValueError(f"unknown device {setting!r} in {DEVICE_VARIABLE}; one of {', '.join(DEVICES)}")
-    if setting == "cpu":
-        return "cpu"
-    return "cuda" if cuda() else "cpu"
 
 
 def slug(model_name: str) -> str:
@@ -132,18 +106,16 @@ class EmbeddingCache:
 
 class SentenceEncoder:
     """A sentence-transformers model as a vectoriser: fit_transform and transform both encode the texts (unit length
-    from the model, in batches on `device`, resolve_device's when None) and return a dense array, one row per text.
-    `cache` keeps a course's embeddings between starts; `loader(model_name, device)` makes the model
-    (sentence_transformers.SentenceTransformer by default)."""
+    from the model, batches on the CPU) and return a dense array, one row per text. `cache` keeps a course's
+    embeddings between starts; `loader` makes the model (sentence_transformers.SentenceTransformer by default)."""
 
     def __init__(self, model_name: str = MINILM, batch_size: int = BATCH_SIZE, cache: Optional[EmbeddingCache] = None,
-                 loader: Optional[Callable] = None, device: Optional[str] = None) -> None:
+                 loader: Optional[Callable] = None) -> None:
         self.model_name = model_name
         self.batch_size = batch_size
         self.cache = cache
         self._loader = loader
         self._model = None
-        self.device = device  # resolved at the load: "cpu" or "cuda"
         self.seconds = 0.0  # the last encoding's time (0 for a cache hit)
         self.cached = False  # whether the last fit_transform came from the cache
         self.dimensions: Optional[int] = None
@@ -155,13 +127,12 @@ class SentenceEncoder:
     def load(self):
         """The model, loaded once (the library imported here, so the package imports without torch)."""
         if self._model is None:
-            self.device = resolve_device(self.device)
             if self._loader is not None:
-                self._model = self._loader(self.model_name, self.device)
+                self._model = self._loader(self.model_name)
             else:
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(self.model_name, device=self.device)
+                self._model = SentenceTransformer(self.model_name, device="cpu")
         return self._model
 
     def encode(self, texts: Sequence[str]) -> np.ndarray:

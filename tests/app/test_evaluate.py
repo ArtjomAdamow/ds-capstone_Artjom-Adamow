@@ -584,7 +584,6 @@ class EncoderVariantsTest(unittest.TestCase):
             self.assertTrue(0.0 <= float(row["min_score"]) <= 1.0)
             self.assertEqual(row["judged_cards"], 2)
             self.assertIn(row["variant"], self.indexes)
-            self.assertIn("device=", row["params"])  # the device the seconds were measured on, or the cache
         self.assertNotIn(evaluate.S2_SKIPPED, self.output)
 
     def test_the_cache_holds_one_file_per_model_and_the_hybrids_read_it(self):
