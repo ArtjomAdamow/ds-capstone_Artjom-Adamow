@@ -99,6 +99,15 @@ class TaggerTest(unittest.TestCase):
         self.assertGreater(tagger.seconds, 0.0)
         self.assertFalse(tagger.cached)
 
+    def test_the_tagger_runs_on_s2s_device_handed_to_the_loader(self):
+        tagger = ZeroShotTagger(loader=model_support.fake_classifier_loader, device="cpu")
+        self.assertEqual(tagger.load().device, "cpu")
+        with mock.patch("app.models.embeddings.cuda_available", return_value=True), \
+                mock.patch.dict(os.environ, {"APP_DEVICE": "auto"}):
+            tagger = ZeroShotTagger(loader=model_support.fake_classifier_loader)
+            tagger.scores(self.cards)
+        self.assertEqual((tagger.device, tagger.load().device), ("cuda", "cuda"))
+
     def test_the_cache_serves_the_second_call_and_keeps_a_file_per_model_and_template(self):
         cache = EmbeddingCache(self.folder / CACHE_FOLDER)
         tagger = ZeroShotTagger("fake-nli", CRITERION, cache=cache, loader=model_support.fake_classifier_loader)
@@ -175,7 +184,7 @@ class TagsOfTest(unittest.TestCase):
     def test_a_model_that_does_not_load_gives_none_and_the_fetching_command(self):
         lines = []
 
-        def failing(model_name):
+        def failing(model_name, device):
             raise OSError("not cached, offline")
 
         self.assertIsNone(tags_of(self.cards, self.folder, output=lines.append, loader=failing))
