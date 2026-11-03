@@ -11,7 +11,8 @@ learner read off the quiz with its resolution by natural language inference, not
   "try again" in the unrated ones). A card without options gives its question, its answer and its explanation.
 * `Template`: the hypothesis template and its three labels, one per level. CRITERION, the primary: the hand
   criterion's three demands (recall, apply, analyse), written before D2 existed, so nothing is tuned; LEVEL_NAMES,
-  the control: the lesson's own form with the level names.
+  the control: the lesson's own form with the level names. NLI_MODELS: the base model and the large one of the same
+  family (app roadmap step 15), each read by the evaluation with both templates; NLI_MODEL the one the app reads.
 * `ZeroShotTagger`: transformers' zero-shot-classification pipeline on S2's device (embeddings.resolve_device), the library imported when the
   model is loaded, so the package imports without torch; `scores(cards)` gives one row of three probabilities per
   card (one softmax over the three hypotheses), from the cache where it holds them (the embeddings' cache class,
@@ -35,9 +36,16 @@ import numpy as np
 from .difficulty_model import LEVELS, split
 from .embeddings import CACHE_FOLDER, EmbeddingCache, resolve_device
 
-# The model: trained for zero-shot classification with a hypothesis template, 299 MB, an 8,192-token window, so no
-# premise is cut (difficulty.md, "D2", "Decisions"); the large bart-large-mnli stays a later check
-NLI_MODEL = "MoritzLaurer/ModernBERT-base-zeroshot-v2.0"
+# The models: trained for zero-shot classification with a hypothesis template, an 8,192-token window, so no premise
+# is cut (difficulty.md, "D2", "Decisions"): the base model (299 MB, step 12) and the large one of the same family
+# (792 MB, app roadmap step 15), both measured by the evaluation. NLI_MODEL is the app's D2: the large one, with
+# which alone the criterion template reads above chance on the hand labels (53 against 41 of 77 pairs; a choice
+# between two on the labels, declared in difficulty.md, "D2", "Decisions"); the page reads its tags from the cache
+BASE_MODEL = "MoritzLaurer/ModernBERT-base-zeroshot-v2.0"
+LARGE_MODEL = "MoritzLaurer/ModernBERT-large-zeroshot-v2.0"
+NLI_MODELS = (BASE_MODEL, LARGE_MODEL)
+MODEL_SIZES = {BASE_MODEL: "base", LARGE_MODEL: "large"}  # how the evaluation's rows name them
+NLI_MODEL = LARGE_MODEL
 LIBRARY = "transformers"
 BATCH_SIZE = 16
 FETCH_COMMAND = "python -c \"from transformers import pipeline; pipeline('zero-shot-classification', model={name!r})\""
@@ -78,6 +86,11 @@ def premise(card) -> str:
     if explain:
         parts.append(explain)
     return "\n".join(part for part in parts if part)
+
+
+def size_of(model_name: str) -> str:
+    """The model's short name in the evaluation's rows: base, large, or the name's last part."""
+    return MODEL_SIZES.get(model_name, model_name.rsplit("/", 1)[-1])
 
 
 def expected_level(probabilities: Sequence[float]) -> float:

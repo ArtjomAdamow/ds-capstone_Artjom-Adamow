@@ -758,17 +758,26 @@ def write_results(folder: Path, note: str) -> None:
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "stack 1", "cards": "6", "agreement": "1.000", "notes": note},
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "margin >= 0.05", "cards": "12", "kept_share": "0.923", "agreement": "1.000", "notes": note},
     ])
-    columns = ["date", "run", "model", "variant", "features", "label_rule", "folds", "repeats", "seed", "macro_f1", "macro_f1_sd",
-               "accuracy", "hand_judged", "hand_within_deck", "hand_within_pairs", "hand_diff", "hand_diff_low", "hand_diff_high", "notes"]
+    columns = ["date", "run", "model", "variant", "scope", "params", "features", "label_rule", "folds", "repeats", "seed", "macro_f1", "macro_f1_sd",
+               "accuracy", "rated", "unrated", "hand_judged", "hand_within_deck", "hand_within_pairs", "hand_diff", "hand_diff_low", "hand_diff_high", "notes"]
     write("difficulty.csv", columns, [
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "features": "text", "label_rule": "deck shares",
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "scope": "all", "features": "text", "label_rule": "deck shares",
          "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.593", "macro_f1_sd": "0.018", "accuracy": "0.7", "hand_within_deck": "0.75", "hand_within_pairs": "77",
          "hand_diff": "0.000", "hand_diff_low": "0.000", "hand_diff_high": "0.000", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion", "features": "premise", "label_rule": "deck shares",
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "scope": "deck 01", "features": "text", "label_rule": "deck shares",
+         "folds": "5", "repeats": "3", "seed": "42", "rated": "12", "unrated": "7", "hand_judged": "7", "hand_within_deck": "0.80", "hand_within_pairs": "16",
+         "hand_diff": "0.000", "hand_diff_low": "0.000", "hand_diff_high": "0.000", "notes": note},
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text+options", "scope": "deck 01", "features": "text+options", "label_rule": "deck shares",
+         "folds": "5", "repeats": "3", "seed": "42", "rated": "12", "unrated": "7", "hand_judged": "7", "hand_within_deck": "0.85", "hand_within_pairs": "16",
+         "hand_diff": "0.050", "hand_diff_low": "-0.100", "hand_diff_high": "0.200", "notes": note},
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, base", "scope": "all", "params": "model=x", "features": "premise", "label_rule": "deck shares",
          "folds": "0", "repeats": "0", "macro_f1": "0.410", "macro_f1_sd": "0.000", "accuracy": "0.5", "hand_within_deck": "0.80", "hand_within_pairs": "77",
          "hand_diff": "0.052", "hand_diff_low": "-0.020", "hand_diff_high": "0.120", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion", "features": "premise", "label_rule": "most likely class",
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, base", "scope": "all", "params": "model=x", "features": "premise", "label_rule": "most likely class",
          "folds": "0", "repeats": "0", "macro_f1": "0.380", "macro_f1_sd": "0.000", "accuracy": "0.45", "notes": note},
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, base", "scope": "deck 01", "params": "model=x", "features": "premise", "label_rule": "deck shares",
+         "folds": "0", "repeats": "0", "rated": "12", "unrated": "7", "hand_judged": "7", "hand_within_deck": "0.90", "hand_within_pairs": "16",
+         "hand_diff": "0.100", "hand_diff_low": "-0.100", "hand_diff_high": "0.300", "notes": note},
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "features": "text", "label_rule": "most likely class",
          "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.530", "macro_f1_sd": "0.017", "accuracy": "0.62", "notes": note},
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "baseline", "variant": "always easy", "label_rule": "constant",
@@ -842,17 +851,39 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "", "", ""])
         self.assertIn("folds 5", table.subtitle)
         self.assertEqual(table.measures[:2], ["macro_f1", "macro_f1_sd"])
+        self.assertNotIn("rated", rows)  # the deck rows stay out of the course's table
+
+    def test_the_entered_decks_rows_are_a_second_table_of_d1_and_of_d2(self):
+        course, deck = self.page.results.tables("D1", "01")
+        self.assertEqual(course.title, "D1 next to the baselines and the hand labels")
+        self.assertEqual((deck.title, deck.heads, deck.chosen), ("D1 within deck 01: the hand order", ["text (chosen) · deck shares", "text+options · deck shares"], [True, False]))
+        rows = dict(deck.rows)
+        self.assertEqual(rows["hand_within_deck (pairs)"], ["0.80 (16)", "0.85 (16)"])
+        self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "0.050 [-0.100, 0.200]"])
+        self.assertEqual((rows["rated"], rows["unrated"], rows["hand_judged"]), (["12", "12"], ["7", "7"], ["7", "7"]))
+        self.assertNotIn("macro_f1 ± sd", rows)  # a readout of the order, nothing else
+        self.assertEqual(len(self.page.results.tables("D1", "02")), 1)  # no rows of deck 02: the course's table alone
+        _course, deck = self.page.results.tables("D2", "01")
+        self.assertEqual((deck.title, deck.heads, deck.chosen),
+                         ("D2 within deck 01 next to D1's chosen row", ["D1 text (chosen) · deck shares", "D2 criterion, base · deck shares"], [True, False]))
+        self.assertEqual(dict(deck.rows)["hand_within_deck (pairs)"], ["0.80 (16)", "0.90 (16)"])
+        self.assertEqual(len(self.page.results.tables("D2")), 1)
+        # the panel shows the deck's table with a deck entered, and the course's alone in the decks view
+        section = str(self.page._section("D1", {**HOME, "view": "topics", "deck": "01", "panel": "D", "level": "D1"}))
+        self.assertIn("D1 within deck 01: the hand order", section)
+        self.assertNotIn("within deck", str(self.page._section("D1", {**HOME, "panel": "D", "level": "D1"})))
+        self.assertIn("D2 within deck 01 next to D1's chosen row", str(self.page._section("D2", {**HOME, "view": "topics", "deck": "01", "panel": "D"})))
 
     def test_d2s_table_stands_next_to_d1s_chosen_row(self):
         (tags,) = self.page.results.tables("D2")
         self.assertEqual(tags.title, "D2 next to D1's chosen row")
-        self.assertEqual(tags.heads, ["D1 text (chosen) · deck shares", "D2 criterion · deck shares", "D2 criterion · most likely class"])
+        self.assertEqual(tags.heads, ["D1 text (chosen) · deck shares", "D2 criterion, base · deck shares", "D2 criterion, base · most likely class"])
         self.assertEqual(tags.chosen, [True, False, False])
         rows = dict(tags.rows)
         self.assertEqual(rows["macro_f1 ± sd"], ["0.593 ± 0.018", "0.410 ± 0.000", "0.380 ± 0.000"])
         self.assertEqual(rows["hand_within_deck (pairs)"], ["0.75 (77)", "0.80 (77)", ""])
         self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "0.052 [-0.020, 0.120]", ""])
-        self.assertEqual(tags.subtitle, "run 2026-11-01T10:00 · features premise · folds 0 · repeats 0")
+        self.assertEqual(tags.subtitle, "run 2026-11-01T10:00 · params model=x · features premise · folds 0 · repeats 0")
 
     def test_the_glossary_has_a_row_for_every_measure_column_and_none_for_the_bookkeeping(self):
         glossary = read_glossary()
@@ -990,8 +1021,46 @@ class MeasuredMetricsTest(unittest.TestCase):
         self.assertEqual((colors["101001"], symbols["101001"]), (GREY, "circle"))  # a flashcard
         self.assertEqual(PREDICTED_SYMBOL, "cross")
         self.assertTrue(figure.layout.showlegend)
-        self.assertEqual([trace.name for trace in figure.data if trace.showlegend], ["predicted", "flashcard"])
+        self.assertEqual([trace.name for trace in figure.data if trace.showlegend], ["predicted", "flashcard"])  # no ring without D2
         self.assertEqual(PREDICTED_COLOR, "#c98500")  # the viewer's predicted group's colour too (test_difficulty_groups.py)
+
+    def test_a_quiz_the_two_generations_put_at_different_levels_gets_a_ring_and_window_a_names_both(self):
+        from app.standalone.layout import DISAGREE, DISAGREE_SYMBOL, map_figure
+
+        table = load_table(write_test_table(Path(self._tmp.name) / "again"))
+        tags = {card.id: (0.6, 0.3, 0.1) for card in table.cards if card.stack in (2, 3)}  # D2 reads every quiz easy
+        page = Page(table, difficulty=self.report, results_dir=None, tags=tags)
+        self.assertEqual(page.reports["D2"].predictions, {"201002": "easy"})  # one extra quiz of a deck: easy; D1 says hard
+        self.assertEqual(page.disagreements(["201002", "101001"], page.reports["D1"]), {"201002": "easy"})
+        self.assertEqual(page.disagreements(["201002"], page.reports["D2"]), {"201002": "hard"})
+        self.assertEqual(self.page.disagreements(["201002"], self.page.reports["D1"]), {})  # the page without tags: no other generation
+        state = {**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D", "level": "D1"}
+        figure = map_figure(page, state)
+        cards = next(trace for trace in figure.data if trace.name == "Cards")
+        self.assertEqual(dict(zip(cards.customdata, cards.text))["201002"], "201002 · D1: hard (D2: easy)")  # both levels on the hover
+        self.assertEqual(dict(zip(cards.customdata, cards.marker.symbol))["201002"], PREDICTED_SYMBOL)  # the dot stays the predicted cross
+        ring = next(trace for trace in figure.data if trace.name == DISAGREE)
+        self.assertEqual((ring.marker.symbol, ring.showlegend, ring.hoverinfo), (DISAGREE_SYMBOL, True, "skip"))
+        self.assertEqual((list(ring.x), list(ring.y), list(ring.z)), ([cards.x[list(cards.customdata).index("201002")]],
+                                                                       [cards.y[list(cards.customdata).index("201002")]],
+                                                                       [cards.z[list(cards.customdata).index("201002")]]))
+        self.assertEqual([trace.name for trace in figure.data if trace.showlegend], ["predicted", "flashcard", DISAGREE])
+        self.assertEqual(list(figure.data).index(ring) + 1, list(figure.data).index(cards))  # the ring behind the dots
+        figure = map_figure(page, {**state, "level": "D2"})
+        cards = next(trace for trace in figure.data if trace.name == "Cards")
+        self.assertEqual(dict(zip(cards.customdata, cards.text))["201002"], "201002 · D2: easy (D1: hard)")
+        self.assertTrue(any(trace.name == DISAGREE for trace in figure.data))
+        panel = page.dot_panel({**HOME, "view": "cards", "deck": "01", "topic": "01", "selected": "201002"})
+        self.assertEqual(id_rows(panel)["difficulty"], "hard (predicted by D1; D2: easy)")
+        panel = page.dot_panel({**state, "level": "D2", "selected": "201002"})
+        self.assertEqual(id_rows(panel)["difficulty"], "easy (predicted by D2; D1: hard)")
+        agreed = Page(table, difficulty=self.report, results_dir=None, tags={card_id: (0.1, 0.1, 0.8) for card_id in tags})  # D2 reads every quiz hard
+        self.assertEqual(agreed.reports["D2"].predictions, {"201002": "easy"})  # one quiz of a deck is easy by the shares whatever its score
+        figure = map_figure(agreed, state)
+        self.assertTrue(any(trace.name == DISAGREE for trace in figure.data))
+        agreed.reports["D2"].predictions["201002"] = "hard"
+        self.assertFalse(any(trace.name == DISAGREE for trace in map_figure(agreed, state).data))  # the same level: no ring
+        self.assertEqual(id_rows(agreed.dot_panel({**state, "selected": "201002"}))["difficulty"], "hard (predicted by D1)")
 
 
 class AppTest(unittest.TestCase):

@@ -19,7 +19,8 @@ from app.models import zero_shot
 from app.models.difficulty_model import LEVELS
 from app.models.embeddings import CACHE_FOLDER, EmbeddingCache
 from app.models.zero_shot import (
-    CRITERION, LEVEL_NAMES, NLI_MODEL, TEMPLATES, Tags, ZeroShotTagger, cached_tags, premise, tagger_available, tags_of,
+    BASE_MODEL, CRITERION, LARGE_MODEL, LEVEL_NAMES, NLI_MODEL, NLI_MODELS, TEMPLATES, Tags, ZeroShotTagger, cached_tags, premise,
+    size_of, tagger_available, tags_of,
 )
 
 QUIZ = CardRecord(
@@ -65,6 +66,12 @@ class TemplatesTest(unittest.TestCase):
         self.assertEqual(LEVEL_NAMES.labels, LEVELS)
         self.assertEqual(LEVEL_NAMES.hypothesis, "This question is {}.")
         self.assertEqual({template.name for template in TEMPLATES}, {"criterion", "level names"})
+
+    def test_the_two_models_are_one_family_and_the_app_reads_one_of_them(self):
+        self.assertEqual(NLI_MODELS, (BASE_MODEL, LARGE_MODEL))
+        self.assertIn(NLI_MODEL, NLI_MODELS)
+        self.assertTrue(all(name.startswith("MoritzLaurer/ModernBERT-") and name.endswith("-zeroshot-v2.0") for name in NLI_MODELS))
+        self.assertEqual((size_of(BASE_MODEL), size_of(LARGE_MODEL), size_of("some/other-model")), ("base", "large", "other-model"))
 
     def test_the_expected_level_is_on_d1s_scale(self):
         self.assertAlmostEqual(zero_shot.expected_level((0.2, 0.3, 0.5)), 1.3)
@@ -160,6 +167,12 @@ class TagsOfTest(unittest.TestCase):
         control = tags_of(self.cards, self.folder, LEVEL_NAMES, loader=model_support.fake_classifier_loader)
         self.assertEqual(control.template, LEVEL_NAMES)
         self.assertEqual(len(list((self.folder / CACHE_FOLDER).glob("*.npy"))), 2)
+        self.assertEqual(NLI_MODEL, LARGE_MODEL)  # the app's D2 since app roadmap step 15
+        base = tags_of(self.cards, self.folder, model_name=BASE_MODEL, loader=model_support.fake_classifier_loader)
+        self.assertEqual((base.model_name, base.template, base.cached), (BASE_MODEL, CRITERION, False))  # another model: its own file
+        self.assertEqual(len(list((self.folder / CACHE_FOLDER).glob("*.npy"))), 3)
+        self.assertEqual(cached_tags(self.cards, self.folder, CRITERION, BASE_MODEL).model_name, BASE_MODEL)
+        self.assertIsNone(cached_tags(self.cards, self.folder, LEVEL_NAMES, BASE_MODEL))  # the base model's control: not tagged
 
     def test_the_cached_tags_need_neither_the_library_nor_the_model(self):
         self.assertIsNone(cached_tags(self.cards, None))

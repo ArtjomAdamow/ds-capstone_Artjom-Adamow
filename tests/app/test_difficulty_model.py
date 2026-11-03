@@ -1,6 +1,6 @@
 """The difficulty model D1: the split, features that ignore the course order, the deck shares, the out-of-fold metrics
-with their spread, the predictions of the unrated quizzes, the feature set with D2's tags, and D2 alone judged the
-same way without folds (nothing of the viewer)."""
+with their spread, the predictions of the unrated quizzes, the feature set with the answer options' statistics, and
+D2 alone judged the same way without folds, on D1's frame and supplying no feature (nothing of the viewer)."""
 
 import model_support  # noqa: F401  (the helper's package on the path)
 
@@ -12,8 +12,8 @@ import numpy as np
 from app.cards import CardRecord
 from app.models import similar
 from app.models.difficulty_model import (
-    COURSE_SHARES, FEATURE_SETS, LEVELS, TAG_FEATURES, TEXT_FEATURES, band, band_labels, features, fit_difficulty, judge_tags,
-    share_labels, split,
+    COURSE_SHARES, FEATURE_SETS, LEVELS, OPTION_FEATURES, TEXT_FEATURES, band, band_labels, features, fit_difficulty, judge_tags,
+    option_statistics, share_labels, split,
 )
 
 TOPICS = model_support.TOPICS
@@ -66,8 +66,8 @@ class SplitAndFeaturesTest(unittest.TestCase):
         other = shuffled_and_renamed(self.cards)
         other_index = similar.SimilarityIndex.fit(other)
         for feature_set in FEATURE_SETS:
-            mine = features(self.cards, self.index, feature_set, fake_tags(self.cards))
-            theirs = features(other, other_index, feature_set, fake_tags(other))
+            mine = features(self.cards, self.index, feature_set)
+            theirs = features(other, other_index, feature_set)
             row_of = {card.question: row for row, card in enumerate(other)}
             order = [row_of[card.question] for card in self.cards]
             np.testing.assert_allclose(mine.dense, theirs.dense[order], atol=1e-12, err_msg=feature_set)
@@ -78,20 +78,41 @@ class SplitAndFeaturesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             features(self.cards, self.index, "card order")
 
-    def test_the_feature_set_with_the_tags_needs_them_and_puts_the_three_probabilities_after_the_statistics(self):
-        self.assertIn("text+tags", FEATURE_SETS)
-        with self.assertRaises(ValueError) as error:
-            features(self.cards, self.index, "text+tags")
-        self.assertIn("tags", str(error.exception))
-        tags = fake_tags(self.cards)
-        data = features(self.cards, self.index, "text+tags", tags)
-        self.assertEqual(data.dense.shape, (len(self.cards), len(TEXT_FEATURES) + len(TAG_FEATURES)))
+    def test_the_feature_set_with_the_options_puts_their_statistics_after_the_text_ones_and_d2_supplies_none(self):
+        self.assertEqual(FEATURE_SETS, ("text", "text+course", "text+course+tfidf", "text+options"))  # no set reads D2's tags
+        data = features(self.cards, self.index, "text+options")
+        self.assertEqual(data.dense.shape, (len(self.cards), len(TEXT_FEATURES) + len(OPTION_FEATURES)))
         self.assertIsNone(data.rows)
-        np.testing.assert_allclose(data.dense[:, -3:], [tags[card.id] for card in self.cards])
-        np.testing.assert_allclose(data.dense[:, :-3], features(self.cards, self.index, "text").dense)
-        # no tag is read from a label: the tags are the caller's, so a card's level never enters them
-        with self.assertRaises(KeyError):
-            features(self.cards[:1], self.index, "text+tags", {})
+        np.testing.assert_allclose(data.dense[:, :len(TEXT_FEATURES)], features(self.cards, self.index, "text").dense)
+        statistics = option_statistics(self.cards, self.index)
+        np.testing.assert_allclose(data.dense[:, len(TEXT_FEATURES):], statistics)
+        without = [position for position, card in enumerate(self.cards) if not card.options]
+        self.assertEqual(len(without), len(self.cards) - 6)  # the rated quizzes and the flashcards of the test course carry no options
+        np.testing.assert_array_equal(statistics[without], 0.0)
+        # the names: nothing counts the options or the correct ones, and no feedback is read
+        self.assertEqual(OPTION_FEATURES, ("code in the options", "digits in the options", "option length spread (log)", "closest distractor"))
+
+    def test_the_option_statistics_read_code_digits_the_spread_and_the_closest_distractor_never_the_counts(self):
+        def quiz(options, correct):
+            return CardRecord("q", "Alpha", "What is a slice?", "a", stack=2, options=options, correct=correct, answers=tuple("" for _ in options))
+
+        plain = option_statistics([quiz(("a slice of a list", "a loop in python", "a git branch", "a sample"), (0,))], self.index)[0]
+        self.assertEqual(list(plain[:2]), [0.0, 0.0])
+        self.assertAlmostEqual(plain[2], np.log1p(np.std([5, 4, 3, 2])))
+        coded = option_statistics([quiz(("`list[1:3]`", "a loop", "4 items"), (0,))], self.index)[0]
+        self.assertEqual(list(coded[:2]), [1.0, 1.0])
+        # the closest distractor: a wrong option that shares the correct one's words lies nearer than one that does not
+        near = option_statistics([quiz(("a slice of a list", "a slice of a list in python", "a git branch"), (0,))], self.index)[0][3]
+        far = option_statistics([quiz(("a slice of a list", "a git branch", "a sample"), (0,))], self.index)[0][3]
+        self.assertGreater(near, 0.5)
+        self.assertGreater(near, far)
+        # a many-choice quiz with every option correct has no distractor; one without options has nothing
+        self.assertEqual(option_statistics([quiz(("a slice", "a list"), (0, 1))], self.index)[0][3], 0.0)
+        np.testing.assert_array_equal(option_statistics([CardRecord("p", "Alpha", "Q?", "A.")], self.index)[0], 0.0)
+        # two quizzes of the same option texts, one single-choice and one many-choice, differ in no count: the counts are no feature
+        single = option_statistics([quiz(("a slice", "a list", "a loop"), (0,))], self.index)[0]
+        many = option_statistics([quiz(("a slice", "a list", "a loop"), (0, 1))], self.index)[0]
+        np.testing.assert_array_equal(single[:3], many[:3])
 
 
 class DeckSharesTest(unittest.TestCase):
@@ -220,15 +241,14 @@ class FitTest(unittest.TestCase):
         self.assertEqual(report.predictions, {})
         self.assertTrue(report.note)
 
-    def test_the_feature_set_with_the_tags_is_measured_out_of_fold_like_the_others(self):
-        tags = fake_tags(self.cards)
-        report = fit_difficulty(self.cards, self.index, "text+tags", tags=tags)
-        self.assertEqual((report.feature_set, report.folds, report.repeats), ("text+tags", 3, 3))
+    def test_the_feature_set_with_the_options_is_measured_out_of_fold_like_the_others(self):
+        report = fit_difficulty(self.cards, self.index, "text+options")
+        self.assertEqual((report.feature_set, report.folds, report.repeats), ("text+options", 3, 3))
         self.assertTrue(report.measured)
         self.assertEqual(set(report.predictions), set(self.report.predictions))
         self.assertEqual(report.predicted_counts, (3, 3, 0))  # two per deck: an easy and a medium
         other = shuffled_and_renamed(self.cards)
-        theirs = fit_difficulty(other, similar.SimilarityIndex.fit(other), "text+tags", tags=fake_tags(other))
+        theirs = fit_difficulty(other, similar.SimilarityIndex.fit(other), "text+options")
         self.assertEqual(by_question(other, theirs.predictions), by_question(self.cards, report.predictions))
 
 

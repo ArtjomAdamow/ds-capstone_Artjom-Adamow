@@ -63,7 +63,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Mapping, Optional, Sequence
+from typing import Iterable, Mapping, Optional, Sequence
 
 import numpy as np
 from dash import Dash, Input, Output, State, html
@@ -98,6 +98,7 @@ MODEL_PANELS = ("C", "T")  # the panels whose map shows T1's membership at C1's 
 HOME = {"view": DECKS_VIEW, "deck": None, "topic": None, "selected": None, "panel": None, "level": None, "measure": None}
 ENTER_TRIGGERS = ("open", "dot-panel")
 ROW_INPUT = "row-click"  # the hidden input a generation's or a results row's click sets (assets/panel_rows.js)
+DECK_TABLE_LEVELS = ("T1", "D1", "D2")  # the generations with a table of the entered deck's rows
 Key = tuple[str, str]  # (deck id, topic id)
 NO_ENCODER = (
     "The app runs on TF-IDF here: S2's encoder needs sentence-transformers (the embeddings group) and its model, so S2 "
@@ -106,7 +107,7 @@ NO_ENCODER = (
 NO_TAGS = (
     "No D2 tags of this course in the cache: evaluate.py --part difficulty tags the quizzes once with the embeddings "
     "group (transformers and the model) into the launcher's cache, where the page reads them at its start (the "
-    "criterion template, the primary)."
+    "criterion template on the large model, the app's D2)."
 )
 # The readout's hints, a row's tooltip
 TRUSTWORTHINESS = "scikit-learn's trustworthiness of the map for the text vectors: 1 when none of a dot's k nearest on the map is a stranger by text."
@@ -135,10 +136,11 @@ DESCRIPTIONS = {
     "D1": "The difficulty model the app runs: logistic regression on the question's statistics, labelled by the deck "
           "shares, predicts the level of the unrated quizzes; it reads neither C1 nor T1, so the map shows the scripted "
           "topics.",
-    "D2": "Zero-shot tags: an NLI model reads each quiz with its resolution against the hand criterion's three demands "
-          "(the criterion template), nothing fitted; the expected level is cut by the deck shares. Within noise of D1's "
-          "order on the hand labels, so a judge of the evaluation and D1 stays the app's. The page reads the tags from "
-          "the launcher's cache; the map and window B show its levels.",
+    "D2": "Zero-shot tags: an NLI model (the large ModernBERT since step 15) reads each quiz with its resolution against "
+          "the hand criterion's three demands (the criterion template), nothing fitted, on D1's frame: the expected level "
+          "is cut by the deck shares. Within noise of D1's order on the hand labels and below it, so a judge of the "
+          "evaluation and D1 stays the app's. The page reads the tags from the launcher's cache; the map and window B "
+          "show its levels, a ring where it disagrees with D1.",
 }
 
 
@@ -238,6 +240,21 @@ class Page:
     def difficulty_of(self, state: dict) -> Optional[DifficultyReport]:
         """The expanded D generation's report; None without D expanded or for D2 without cached tags."""
         return self.reports.get(self.level_of(state)) if state.get("panel") == "D" else None
+
+    def other_report(self, report: DifficultyReport) -> Optional[DifficultyReport]:
+        """The other D generation's report (D2's next to D1's and the reverse); None without it."""
+        return self.reports.get("D2" if report.model == "D1" else "D1")
+
+    def disagreements(self, ids: Iterable[str], report: DifficultyReport) -> dict[str, str]:
+        """The quizzes among `ids` the generation predicted at another level than the other generation did (app
+        roadmap step 15): card id -> the other generation's level; empty without the other generation's report."""
+        other = self.other_report(report)
+        if other is None:
+            return {}
+        return {
+            card_id: other.predictions[card_id] for card_id in ids
+            if card_id in report.predictions and card_id in other.predictions and other.predictions[card_id] != report.predictions[card_id]
+        }
 
     def topics(self, deck_id: Optional[str], state: Optional[dict] = None) -> list[TopicLayout]:
         """The deck's topics in file order: the model's, or the scripted ones without the model."""
@@ -477,16 +494,21 @@ class Page:
     def d_markers(self, points: dict[str, Point], report: DifficultyReport) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
         """With D1 or D2: every drawn card's colour, symbol, class (layout.card_class: its authored level,
         "predicted" for a quiz the generation predicted, a cross in the predicted colour, "flashcard" or "unrated
-        quiz" grey) and hover (a predicted quiz's level next to its id)."""
+        quiz" grey) and hover (a predicted quiz's level next to its id, and the other generation's where it
+        differs; the map draws a ring behind those, layout.disagreement_trace)."""
         colors: dict[str, str] = {}
         symbols: dict[str, str] = {}
         classes: dict[str, str] = {}
         labels: dict[str, str] = {}
+        other = self.other_report(report)
+        differing = self.disagreements(points, report)
         for card_id in points:
             predicted = report.predictions.get(card_id)
             classes[card_id] = card_class(self.card_by_id[card_id], predicted is not None)
             colors[card_id], symbols[card_id] = class_style(classes[card_id])
             labels[card_id] = f"{card_id} · {report.model}: {predicted}" if classes[card_id] == PREDICTED else card_id
+            if card_id in differing:
+                labels[card_id] += f" ({other.model}: {differing[card_id]})"
         return colors, symbols, classes, labels
 
     # --- the connections and the trees -------------------------------------------------------------------------
@@ -572,9 +594,12 @@ class Page:
             elif self.similarity_of(state) is not None:
                 extra = [(f"neighbours ({self.level_of(state)})", self.neighbour_counts(selected, state))]
             report = self.difficulty_of(state) if state.get("panel") == "D" else self.difficulty
+            other = None
+            if report is not None and selected in self.disagreements([selected], report):
+                other = (self.other_report(report).model, self.disagreements([selected], report)[selected])
             return card_panel(
                 self.card_by_id[selected], state["deck"], state["topic"], report.predictions.get(selected) if report else None,
-                between=selected in self.between, extra=extra, by=report.model if report else self.level_of(state),
+                between=selected in self.between, extra=extra, by=report.model if report else self.level_of(state), other=other,
             )
         if view == DECKS_VIEW:
             tree = self.deck_tree()
@@ -712,7 +737,7 @@ class Page:
         """A generation's section: its description, the live measures, its tables of its newest run with the one
         open row's description (the glossary), or why there is none (no file: how to make it; no rows of it)."""
         live = {"S": self._live_similarity, "C": self._live_course, "T": self._live_topics, "D": self._live_difficulty}[level[0]](level, state)
-        deck_id = state.get("deck") if level == "T1" and state["view"] != DECKS_VIEW else None
+        deck_id = state.get("deck") if level in DECK_TABLE_LEVELS and state["view"] != DECKS_VIEW else None
         tables = self.results.tables(level, deck_id)
         hint = self.results.hint(LEVEL_FILES[level]) if tables is None else self.results.no_rows(level)
         return level_section(DESCRIPTIONS[level], live, tables, hint, level, state.get("measure"), self.glossary)

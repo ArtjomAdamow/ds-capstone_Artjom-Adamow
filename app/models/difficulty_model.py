@@ -7,15 +7,19 @@ the flattened quizzes that have none, learned from the quizzes that have one (do
     plain flashcards (stack 1, and the quiz file's flashcards, stack 4): not in the first run (another kind of card,
     rated differently later)
 
-* Features come from a card's own text and the fitted similarity index only: text statistics (the chosen set), and
-  as variants its centrality and neighbour scores and its TF-IDF row (the hand-labelled sample of
-  docs/draft/helper/models/difficulty.md found no gain in them), and D2's zero-shot tags (`text+tags`: the three
-  probabilities of zero_shot.tags_of next to the statistics, app roadmap step 12). Never the card order, the ids,
-  the deck or the stack: the course lists every deck's rated quizzes easy → medium → hard, so the order would score
+* Features come from a card's own text, its answer options and the fitted similarity index only: text statistics
+  (the chosen set), and as variants its centrality and neighbour scores, its TF-IDF row (the hand-labelled sample of
+  docs/draft/helper/models/difficulty.md found no gain in them) and the option statistics (`text+options`, app
+  roadmap step 15: code and digits in the options, the spread of their lengths and the closest distractor's cosine
+  on the index's vectoriser; never the number of options or of correct ones, which every rated quiz shares, nor a
+  feedback length, which tells the rated quizzes from the unrated ones). Never the card order, the ids, the deck
+  or the stack: the course lists every deck's rated quizzes easy → medium → hard, so the order would score
   perfectly in training and mean nothing for a new card. The rated cards are put into an order of their texts
   before the cross-validation, so not even the folds depend on the course order.
-* D2 alone is judged by `judge_tags`: nothing is fitted, so one pass with no folds and no spread, the same labels
-  rules and measures on the expected level of its tags, the decks' parts measured on their own quizzes as D1's are.
+* D2 alone is judged by `judge_tags`, built on D1's frame (the split, the deck shares, the report with its deck
+  parts) and supplying no feature to it (app roadmap step 15): nothing is fitted, so one pass with no folds and no
+  spread, the same label rules and measures on the expected level of its tags (zero_shot.tags_of), the decks' parts
+  measured on their own quizzes as D1's are.
 * A difficulty is relative to its deck (every deck's 12 rated quizzes are 8 easy, 3 medium and 1 hard), so labels
   come from each deck's shares: the cross-validation ranks each deck's out-of-fold scores and cuts them by the deck's
   own counts; the unrated quizzes of a deck are ranked among themselves, and the card at rank i of n takes the band
@@ -53,14 +57,15 @@ N_SPLITS = 5
 N_REPEATS = 3
 SEED = 42
 NEAREST = 10  # the similarity baseline: the rated cards it votes with
-FEATURE_SETS = ("text", "text+course", "text+course+tfidf", "text+tags")
-DEFAULT_FEATURES = "text"  # the course features add nothing on the hand labels and lose on the rank measures
+FEATURE_SETS = ("text", "text+course", "text+course+tfidf", "text+options")
+DEFAULT_FEATURES = "text"  # the course and the option features add nothing on the hand labels (difficulty.md)
 TEXT_FEATURES = (
     "question words (log)", "answer words (log)", "explanation words (log)", "code in the question",
     "digits in the question", "scenario words", "commas in the question",
 )
 COURSE_FEATURES = ("centrality", "first neighbour", "fifth neighbour")
-TAG_FEATURES = ("tag easy", "tag medium", "tag hard")  # D2's three probabilities (zero_shot), in the order of LEVELS
+# The answer options' statistics (app roadmap step 15): what a classifier fitted on the rated quizzes can learn of them
+OPTION_FEATURES = ("code in the options", "digits in the options", "option length spread (log)", "closest distractor")
 SCENARIO = re.compile(r"\b(why|which|best|most likely|scenario|would)\b", re.IGNORECASE)
 METRICS = ("macro_f1", "balanced_accuracy", "kappa", "accuracy", "spearman", "recall_easy", "recall_medium", "recall_hard")
 
@@ -114,32 +119,57 @@ def course_features(index: similar.SimilarityIndex, ids: Sequence[str]) -> np.nd
     return np.column_stack([centrality, first, fifth]) if ids else np.zeros((0, len(COURSE_FEATURES)))
 
 
+def option_statistics(cards: Sequence[Card], index: similar.SimilarityIndex) -> np.ndarray:
+    """OPTION_FEATURES of the cards: code and digits in any option, the spread of the options' word counts (log1p of
+    the sd) and the closest distractor, the highest cosine of a wrong option to a correct one on the index's
+    vectoriser (every option text transformed once, unit rows, nothing cached); zeros for a card without options,
+    without a wrong one or without a correct one. Never the number of options, the number of correct ones (4 and 1
+    on every rated quiz: nothing fitted there can learn them) or a feedback length (an explanation in the rated
+    quizzes, "try again" in the unrated ones: it would tell the sets apart)."""
+    rows = np.zeros((len(cards), len(OPTION_FEATURES)))
+    texts = [option for card in cards for option in card.options]
+    vectors = similar.unit_rows(index.vectoriser.transform(texts)) if texts else None
+    start = 0
+    for position, card in enumerate(cards):
+        options = tuple(card.options)
+        if not options:
+            continue
+        block = vectors[start:start + len(options)]
+        start += len(options)
+        correct = [i for i in card.correct if 0 <= i < len(options)]
+        wrong = [i for i in range(len(options)) if i not in correct]
+        closest = 0.0
+        if correct and wrong:
+            cosines = block[wrong] @ block[correct].T
+            closest = float(np.asarray(cosines.toarray() if sparse.issparse(cosines) else cosines).max())
+        counts = [len(option.split()) for option in options]
+        rows[position] = [
+            float(any("`" in option for option in options)), float(any(re.search(r"\d", option) for option in options)),
+            float(np.log1p(np.std(counts))), closest,
+        ]
+    return rows
+
+
 @dataclass
 class Features:
-    dense: np.ndarray  # text statistics (and course features), not yet scaled
+    dense: np.ndarray  # text statistics (and course or option features), not yet scaled
     rows: Optional[sparse.csr_matrix]  # the TF-IDF rows, or None
 
     def take(self, positions) -> "Features":
         return Features(self.dense[positions], self.rows[positions] if self.rows is not None else None)
 
 
-def features(
-    cards: Sequence[Card], index: similar.SimilarityIndex, feature_set: str = DEFAULT_FEATURES,
-    tags: Optional[Mapping[str, Sequence[float]]] = None,
-) -> Features:
+def features(cards: Sequence[Card], index: similar.SimilarityIndex, feature_set: str = DEFAULT_FEATURES) -> Features:
     """The feature matrix of the cards for one of FEATURE_SETS; nothing in it depends on where a card is in the
-    course. `tags` (card id -> D2's three probabilities) is needed by `text+tags` alone."""
+    course."""
     if feature_set not in FEATURE_SETS:
         raise ValueError(f"unknown feature set {feature_set!r}, expected one of {FEATURE_SETS}")
     ids = [card.id for card in cards]
     dense = np.asarray([text_statistics(card) for card in cards], dtype=float).reshape(len(cards), len(TEXT_FEATURES))
     if "course" in feature_set:
         dense = np.column_stack([dense, course_features(index, ids)])
-    if feature_set.endswith("tags"):
-        if tags is None:
-            raise ValueError(f"the feature set {feature_set!r} needs D2's tags (zero_shot.tags_of)")
-        tag_rows = np.asarray([tags[card_id] for card_id in ids], dtype=float).reshape(len(ids), len(TAG_FEATURES))
-        dense = np.column_stack([dense, tag_rows])
+    if feature_set.endswith("options"):
+        dense = np.column_stack([dense, option_statistics(cards, index)])
     rows = None
     if feature_set.endswith("tfidf"):
         row_of = {card_id: row for row, card_id in enumerate(index.ids)}
@@ -368,12 +398,11 @@ def fit_difficulty(
     n_splits: int = N_SPLITS,
     n_repeats: int = N_REPEATS,
     seed: int = SEED,
-    tags: Optional[Mapping[str, Sequence[float]]] = None,
 ) -> DifficultyReport:
     """Measure D1 out of fold on the rated cards, then fit it on all of them and label the unrated quizzes by their
-    deck's shares. `index` is the similarity index fitted on the course (CourseModel.index); `tags` are D2's, for
-    the feature set `text+tags`. With too few rated cards for a cross-validation the report has no metrics; with
-    fewer than two levels it predicts nothing either."""
+    deck's shares. `index` is the similarity index fitted on the course (CourseModel.index). With too few rated
+    cards for a cross-validation the report has no metrics; with fewer than two levels it predicts nothing
+    either."""
     started = time.perf_counter()
     rated, unrated, levels, rated_counts, counts = _rated_setup(cards)
     rated_decks = np.array([card.deck for card in rated])
@@ -388,7 +417,7 @@ def fit_difficulty(
         report.seconds = time.perf_counter() - started
         return report
 
-    data = features(rated, index, feature_set, tags)
+    data = features(rated, index, feature_set)
     mean_scores = np.zeros(len(rated))
     deck_rows = {deck: np.flatnonzero(rated_decks == deck) for deck in counts}
     deck_runs = {deck: {"model": [], "always easy": [], "similarity": [], "confusion": []} for deck in counts}
@@ -435,7 +464,7 @@ def fit_difficulty(
     if folds < 2:
         mean_scores = model.score(data)
     if unrated:
-        scores = model.score(features(unrated, index, feature_set, tags))
+        scores = model.score(features(unrated, index, feature_set))
         _predict(report, unrated, scores, rated, mean_scores, counts)
     report.decks = _deck_parts(report, rated, unrated, counts, deck_runs)
     report.seconds = time.perf_counter() - started

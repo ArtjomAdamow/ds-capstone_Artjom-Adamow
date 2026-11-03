@@ -65,6 +65,9 @@ LEVEL_COLORS = {"easy": "#4f7fcf", "medium": "#b8956a", "hard": "#ff5349"}  # bl
 # The quizzes D1 predicted: the viewer's "Quiz difficulty: predicted" group (glue.difficulty_groups, the oldest group,
 # so its colour decides there too) and the predicted series of the shares figure share this amber
 PREDICTED_SYMBOL = "cross"
+DISAGREE = "D1 and D2 disagree"  # the ring behind a predicted quiz the two generations put at different levels
+DISAGREE_SYMBOL = "circle-open"
+DISAGREE_SIZE = 15
 PREDICTED = "predicted"
 FLASHCARD = "flashcard"
 UNRATED = "unrated quiz"  # an unrated quiz without a prediction (D1 without metrics)
@@ -259,6 +262,20 @@ def scale_trace(colorscale, top: float, title: str, tickformat: str) -> go.Scatt
     )
 
 
+def disagreement_trace(points: Mapping, ids: Sequence[str]) -> Optional[go.Scatter3d]:
+    """With D: an open ring behind every predicted quiz the two generations put at different levels (app roadmap
+    step 15), the legend's entry DISAGREE, neither hoverable nor clickable; None without one. It says "look here"
+    and names no winner: the hand labels say who is right."""
+    ids = [card_id for card_id in ids if card_id in points]
+    if not ids:
+        return None
+    return go.Scatter3d(
+        x=[points[card_id][0] for card_id in ids], y=[points[card_id][1] for card_id in ids], z=[points[card_id][2] for card_id in ids],
+        mode="markers", marker={"size": DISAGREE_SIZE, "color": INK, "symbol": DISAGREE_SYMBOL, "line": {"width": 2, "color": INK}},
+        hoverinfo="skip", showlegend=True, name=DISAGREE,
+    )
+
+
 def selected_trace(point, color: str) -> list[go.Scatter3d]:
     """The selected dot: a white ring behind it, the dot larger."""
     x, y, z = ([value] for value in point)
@@ -321,6 +338,7 @@ def map_figure(page, state: dict) -> go.Figure:
     symbols = None
     sizes = None
     links = None
+    rings = None  # with D: the quizzes the two generations disagree on
     classes: dict = {}  # the legend's: a dot's class by an entry's name
     entries: Sequence = ()
     title = ""
@@ -356,6 +374,7 @@ def map_figure(page, state: dict) -> go.Figure:
         if report is not None:
             colors, symbols, classes, labels = page.d_markers(points, report)
             entries, title = LEGEND, "Cards by difficulty"
+            rings = disagreement_trace(points, page.disagreements(points, report))
         elif panel == "T" and topic is not None:
             colors, symbols, labels = page.t1_markers(topic, points)
             entries, title = t1_entries(page.margin_scale), "Cards by T1"
@@ -382,6 +401,8 @@ def map_figure(page, state: dict) -> go.Figure:
         figure.add_trace(scale)
     if links is not None:
         figure.add_trace(links)
+    if rings is not None:
+        figure.add_trace(rings)
     if points:
         figure.add_trace(dots_trace(points, labels, colors, view, symbols, sizes))
     if selected in points:
@@ -477,12 +498,15 @@ def topic_panel(topic, card_by_id, rest: bool = False) -> html.Div:
 
 
 def card_panel(card, deck_id: str, topic_id: str, predicted: Optional[str] = None, between: bool = False,
-               extra: Sequence[tuple[str, str]] = (), by: str = "D1") -> html.Div:
+               extra: Sequence[tuple[str, str]] = (), by: str = "D1", other: Optional[tuple[str, str]] = None) -> html.Div:
     """A selected card: its ids, its stack, its difficulty, authored or predicted (`by` D1, or D2 with D2
-    expanded), whether T1 placed it between two topics, and `extra` rows (with S where its neighbours lie; with T its
-    margin, its runner-up topic, a moved card's other topic); not its text."""
+    expanded; `other`, the other generation's name and level where it differs), whether T1 placed it between two
+    topics, and `extra` rows (with S where its neighbours lie; with T its margin, its runner-up topic, a moved
+    card's other topic); not its text."""
     if card.difficulty:
         level = card.difficulty
+    elif predicted and other:
+        level = f"{predicted} (predicted by {by}; {other[0]}: {other[1]})"
     elif predicted:
         level = f"{predicted} (predicted by {by})"
     else:

@@ -8,6 +8,9 @@ of the measure columns (app/docs/columns.md).
   "decks 01 to 24", as evaluate.scope_note writes it), so the rows of an older course stay out. A run is the `run`
   column, the date for the rows written before it, and a level (S1, S2, C1, T1, D1, D2: the model generations) shows
   the newest run that holds its rows, so a later run of another part or without the encoder hides none.
+* A row's `scope` is the course ("all", or empty on older rows) or a deck ("deck 01"): the difficulty tables take
+  the course's rows, and with a deck entered a second table shows the deck's rows of the same run (D1's variants'
+  within-deck order on the hand labels; D2's next to D1's chosen row), as T1's deck rows do.
 * `Table`: the heads (one per variant, the floor among them), the rows (a measure and its value per head; a measure
   with its sd reads "mean ± sd", a difference with its interval "diff [low, high]", a share with its count
   "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
@@ -48,6 +51,10 @@ T1_MEASURES: tuple[Measure, ...] = (
 T1_DECK_MEASURES: tuple[Measure, ...] = ("cards", "topics", "agreement")
 T1_STACK_MEASURES: tuple[Measure, ...] = ("cards", "agreement")
 T1_MARGIN_MEASURES: tuple[Measure, ...] = ("cards", "kept_share", "agreement")
+COURSE_SCOPE = "all"  # evaluate.COURSE_SCOPE: a row over the course; a deck's rows read "deck <id>"
+D1_DECK_MEASURES: tuple[Measure, ...] = (
+    "rated", "unrated", "hand_judged", ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
+)
 D1_MEASURES: tuple[Measure, ...] = (
     ("macro_f1", "macro_f1_sd"), ("balanced_accuracy", "balanced_accuracy_sd"), ("kappa", "kappa_sd"), ("accuracy", "accuracy_sd"),
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated", "predicted_easy", "predicted_medium",
@@ -96,6 +103,11 @@ def newest(rows: Sequence[Mapping[str, str]], model: Optional[str] = None) -> li
         return []
     key = max(keys)
     return [dict(row) for row in rows if run_key(row) == key]
+
+
+def course_row(row: Mapping[str, str]) -> bool:
+    """Whether the row is over the course (its scope "all", or none on a row written before the column)."""
+    return (row.get("scope") or COURSE_SCOPE) == COURSE_SCOPE
 
 
 def cell(row: Mapping[str, str], measure: Measure) -> str:
@@ -191,7 +203,8 @@ class Results:
     def tables(self, level: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
         """The tables of a level, from its newest run: S1 (next to B0), S2 (next to S1's chosen variant), C1 (its
         three layouts), T1 (the course or the entered deck, the stacks, the margins), D1 (next to the baselines and
-        the hand row) or D2 (next to D1's chosen row); None without the file, empty without the level's rows."""
+        the hand row) or D2 (next to D1's chosen row), the two with the entered deck's rows as a second table; None
+        without the file, empty without the level's rows."""
         rows = self.rows.get(LEVEL_FILES[level])
         if rows is None:
             return None
@@ -207,8 +220,8 @@ class Results:
         if level == "T1":
             return self._topics(run, deck_id)
         if level == "D1":
-            return [self._difficulty(run)]
-        return [self._tags(run)]
+            return [self._difficulty(run)] + self._deck_difficulty(run, level, deck_id)
+        return [self._tags(run)] + self._deck_difficulty(run, level, deck_id)
 
     def no_rows(self, level: str) -> str:
         """Why a level has no table though its file is there."""
@@ -263,7 +276,7 @@ class Results:
 
     def _difficulty(self, run: list[dict]) -> Table:
         order = {"D1": 0, "baseline": 1, "hand": 2}
-        rows = sorted((row for row in run if row.get("model") in order), key=lambda row: order[row["model"]])
+        rows = sorted((row for row in run if row.get("model") in order and course_row(row)), key=lambda row: order[row["model"]])
         heads = [difficulty_head(row) for row in rows]
         chosen = [CHOSEN in (row.get("variant") or "") and row.get("label_rule") == "deck shares" for row in rows]
         return transpose("D1 next to the baselines and the hand labels", rows, heads, chosen, D1_MEASURES, self.by_ids)
@@ -272,12 +285,34 @@ class Results:
         """D2's rows of the run (the templates, each by the deck shares and by the most likely class) next to D1's
         chosen row, which every paired difference is against."""
         reference = [row for row in run if row.get("model") == "D1" and CHOSEN in (row.get("variant") or "")
-                     and row.get("label_rule") == "deck shares"][:1]
-        variants = [row for row in run if row.get("model") == "D2"]
+                     and row.get("label_rule") == "deck shares" and course_row(row)][:1]
+        variants = [row for row in run if row.get("model") == "D2" and course_row(row)]
         rows = reference + variants
         heads = [f"D1 {difficulty_head(row)}" for row in reference] + [difficulty_head(row) for row in variants]
         chosen = [True] * len(reference) + [False] * len(variants)
         return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES, self.by_ids)
+
+    def _deck_difficulty(self, run: list[dict], level: str, deck_id: Optional[str]) -> list[Table]:
+        """The entered deck's rows of the run (scope "deck <id>"; app roadmap step 15): D1's variants' within-deck
+        order on the hand labels, or D2's variants next to D1's chosen row; none without a deck or its rows."""
+        if not deck_id:
+            return []
+        deck_rows = [row for row in run if row.get("scope") == f"deck {deck_id}"]
+        if level == "D1":
+            rows = [row for row in deck_rows if row.get("model") == "D1"]
+            heads = [difficulty_head(row) for row in rows]
+            chosen = [CHOSEN in (row.get("variant") or "") for row in rows]
+            title = f"D1 within deck {deck_id}: the hand order"
+        else:
+            reference = [row for row in deck_rows if row.get("model") == "D1" and CHOSEN in (row.get("variant") or "")][:1]
+            variants = [row for row in deck_rows if row.get("model") == "D2"]
+            rows = reference + variants
+            heads = [f"D1 {difficulty_head(row)}" for row in reference] + [difficulty_head(row) for row in variants]
+            chosen = [True] * len(reference) + [False] * len(variants)
+            title = f"D2 within deck {deck_id} next to D1's chosen row"
+        if not rows:
+            return []
+        return [transpose(title, rows, heads, chosen, D1_DECK_MEASURES, self.by_ids)]
 
 
 def difficulty_head(row: Mapping[str, str]) -> str:

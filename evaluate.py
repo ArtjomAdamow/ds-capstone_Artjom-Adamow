@@ -30,9 +30,12 @@ What it measures (docs/draft/helper/models/, each model's file):
     predictions' accuracy, macro-F1 and weighted kappa, the score's Spearman against the hand levels and the share
     of a deck's pairs the score orders as the hand levels do, with every row's paired difference of that share to
     D1's chosen row and its bootstrap interval over the judged quizzes, next to the hand levels' agreement with the
-    authored levels of the rated quizzes judged blind; D2, the zero-shot tags (app.models.zero_shot, where
-    transformers and the NLI model are there, the tags cached in `--cache`): D2 alone per template, judged the same
-    way without folds (model D2), and the feature set `text+tags` among D1's;
+    authored levels of the rated quizzes judged blind; the within-deck order of every row per deck as rows of
+    their own (`scope` "deck <id>"; the course's rows "all"), paired against D1's chosen row over the deck's
+    quizzes; D2, the zero-shot tags (app.models.zero_shot, where transformers and the NLI models are there, the
+    tags cached in `--cache`): D2 alone per model and template, judged the same way without folds (model D2, the
+    variant naming the template and the model's size, the model in `params`), built on D1's frame and supplying
+    no feature to it (app roadmap step 15);
   * T1, the topic model (models/topic.md): the agreement with the scripted topics of the nearest centroid rule, of
     the neighbour rule (the nearest other card of the deck) and of a logistic regression per deck, leave-one-out,
     next to chance by the topic sizes; by stack and per deck; T1's margin table (the cards kept at a threshold and
@@ -114,7 +117,7 @@ COLUMNS = [
 MARK_COLUMNS = ["card", "candidate", "relevant", "judged", "judge", "note"]
 RELEVANT = "x"
 DIFFICULTY_COLUMNS = [
-    "date", "run", "model", "variant", "features", "label_rule", "folds", "repeats", "seed",
+    "date", "run", "model", "variant", "scope", "params", "features", "label_rule", "folds", "repeats", "seed",
     "macro_f1", "macro_f1_sd", "balanced_accuracy", "balanced_accuracy_sd", "kappa", "kappa_sd", "accuracy", "accuracy_sd",
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated",
     "predicted_easy", "predicted_medium", "predicted_hard",
@@ -123,7 +126,8 @@ DIFFICULTY_COLUMNS = [
     "seconds", "notes",
 ]
 LABEL_COLUMNS = ["card", "level", "judged", "judge", "note"]
-D2_SKIPPED = "D2 skipped: the zero-shot rows and the feature set text+tags are not measured"
+D2_SKIPPED = "D2 skipped: the zero-shot rows are not measured"
+COURSE_SCOPE = "all"  # the scope of a row over the course; a deck's rows read "deck <id>"
 # The rated quizzes judged blind next to the unrated ones: the two rated decks with the most unrated quizzes
 HAND_LABEL_REFERENCE_DECKS = ("Logistic Regression & Evaluation Metrics", "Decision Trees & Ensemble Methods")
 LABEL_HEADING = re.compile(r"^### (\S+) \(")
@@ -279,11 +283,13 @@ def stamped(rows: list[dict], run_key: str) -> list[dict]:
 # --- D1 -------------------------------------------------------------------------------
 
 
-def difficulty_rows(report, today: str, model: str, variant: str, measures: dict, label_rule: str, note: str, predicted=None) -> dict:
-    """One row of difficulty.csv: the measures (name -> (mean, sd)) and, if given, the predicted levels."""
-    row = {"date": today, "model": model, "variant": variant, "features": report.feature_set, "label_rule": label_rule,
-           "folds": report.folds, "repeats": report.repeats, "seed": 42 if report.repeats else "", "rated": report.rated,
-           "unrated": report.unrated, "seconds": f"{report.seconds:.2f}", "notes": note}
+def difficulty_rows(report, today: str, model: str, variant: str, measures: dict, label_rule: str, note: str, predicted=None,
+                    params: str = "", scope: str = COURSE_SCOPE) -> dict:
+    """One row of difficulty.csv: the measures (name -> (mean, sd)) and, if given, the predicted levels; `params`
+    names D2's model, `scope` the course or a deck."""
+    row = {"date": today, "model": model, "variant": variant, "scope": scope, "params": params, "features": report.feature_set,
+           "label_rule": label_rule, "folds": report.folds, "repeats": report.repeats, "seed": 42 if report.repeats else "",
+           "rated": report.rated, "unrated": report.unrated, "seconds": f"{report.seconds:.2f}", "notes": note}
     for name, (mean, sd) in measures.items():
         row[name] = fmt(mean)
         if f"{name}_sd" in DIFFICULTY_COLUMNS:
@@ -387,19 +393,31 @@ def with_hand_columns(row: dict, measures: dict, judged: int, within: tuple[floa
     return row
 
 
+def tags_variant(template: zero_shot.Template, model_name: str) -> str:
+    """The name of D2's rows of a template and a model: "criterion, base", "level names, large"."""
+    return f"{template.name}, {zero_shot.size_of(model_name)}"
+
+
 def difficulty_tags(cards, cache_dir: Optional[Path] = None, loader: Optional[Callable] = None) -> dict[str, zero_shot.Tags]:
-    """D2's tags by template name (zero_shot.TEMPLATES), from the cache in `cache_dir` or the model; empty, with one
-    line, without the library or the model (`loader` stands in for the pipeline in the tests)."""
+    """D2's tags by variant (tags_variant: every template of zero_shot.TEMPLATES on every model of NLI_MODELS, the
+    base model's first), from the cache in `cache_dir` or the models; empty, with one line, without the library,
+    and a model that does not load loses its rows with one line (`loader` stands in for the pipeline in the
+    tests)."""
     found: dict[str, zero_shot.Tags] = {}
-    for template in zero_shot.TEMPLATES:
-        reasons: list[str] = []
-        tags = zero_shot.tags_of(cards, cache_dir, template, loader=loader, output=reasons.append)
-        if tags is None:
-            print(f"{D2_SKIPPED}: {reasons[0] if reasons else ''}".rstrip(": "))
-            return {}
-        found[template.name] = tags
-        print(f"D2 {template.name}: {len(tags.scores)} quizzes tagged by {tags.model_name} "
-              + ("from the cache" if tags.cached else f"on {tags.device} in {tags.seconds:.1f}s"))
+    if loader is None and not zero_shot.tagger_available():
+        print(f"{D2_SKIPPED}: D2's models need {zero_shot.LIBRARY} (the embeddings group)")
+        return found
+    for model_name in zero_shot.NLI_MODELS:
+        for template in zero_shot.TEMPLATES:
+            reasons: list[str] = []
+            tags = zero_shot.tags_of(cards, cache_dir, template, model_name, loader=loader, output=reasons.append)
+            if tags is None:
+                print(f"{D2_SKIPPED} for the {zero_shot.size_of(model_name)} model: {reasons[0] if reasons else ''}".rstrip(": "))
+                break
+            variant = tags_variant(template, model_name)
+            found[variant] = tags
+            print(f"D2 {variant}: {len(tags.scores)} quizzes tagged by {tags.model_name} "
+                  + ("from the cache" if tags.cached else f"on {tags.device} in {tags.seconds:.1f}s"))
     return found
 
 
@@ -410,52 +428,60 @@ def level_counts(labels: dict[str, dict], ids) -> tuple[int, int, int]:
 
 
 def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | None = None, vectoriser=None,
-                        tags: Optional[Mapping[str, zero_shot.Tags]] = None) -> list[dict]:
+                        tags: Optional[Mapping[str, zero_shot.Tags]] = None, deck_ids: Optional[Mapping[str, str]] = None) -> list[dict]:
     """D1: every feature set, out of fold, with the deck shares and with the most likely class; the baselines once;
     the predicted levels of the unrated quizzes by the deck shares and by the cut points. With hand labels, the
     predictions of both rules and the always-easy baseline are scored on the judged quizzes (the hand columns),
     every row's within-deck order is paired against D1's chosen row (the hand_diff columns, bootstrapped over the
     judged quizzes) and printed per deck, and a `hand` row gives the hand levels' agreement with the authored levels
-    of the rated quizzes judged blind. With D2's tags (`tags`, by template name; difficulty_tags), the feature set
-    `text+tags` joins D1's (on the primary template's tags) and D2 alone gets its rows per template (model D2),
-    judged the same way without folds; without them both are skipped with one line."""
+    of the rated quizzes judged blind; every deck-shares row with judged quizzes gets a row per deck with a pair
+    (`scope` "deck <id>", by `deck_ids`; the course's rows "all"): the deck's within-deck order and its paired
+    difference to D1's chosen row over the deck's quizzes, a readout and no verdict. With D2's tags (`tags`, by
+    variant; difficulty_tags), D2 alone gets its rows per variant (model D2, the model in `params`), judged the
+    same way without folds; without them they are skipped with one line. D2 supplies no feature to D1."""
     labels = labels or {}
     tags = tags or {}
+    deck_ids = deck_ids or {}
     deck_of = {card.id: card.deck for card in cards}
     index = similar.SimilarityIndex.fit(cards, vectoriser, min_score=None)  # the app's vectoriser, as the launchers fit it
-    primary = tags.get(zero_shot.CRITERION.name)
-    reports: list[tuple[str, str, DifficultyReport]] = []  # (model, variant, report)
+    reports: list[tuple[str, str, str, DifficultyReport]] = []  # (model, variant, params, report)
     for feature_set in FEATURE_SETS:
-        if feature_set.endswith("tags") and primary is None:
-            print(f"D1 {feature_set}: skipped without D2's tags")
-            continue
-        report = fit_difficulty(cards, index, feature_set, tags=primary.scores if feature_set.endswith("tags") else None)
+        report = fit_difficulty(cards, index, feature_set)
         if not report.measured:
             print(f"D1 {feature_set}: {report.note}")
             continue
-        reports.append(("D1", f"{feature_set}{' (chosen)' if feature_set == DEFAULT_FEATURES else ''}", report))
+        reports.append(("D1", f"{feature_set}{' (chosen)' if feature_set == DEFAULT_FEATURES else ''}", "", report))
     for name, found in tags.items():
         report = judge_tags(cards, found.scores)
         if not report.measured:
             print(f"D2 {name}: {report.note}")
             continue
-        reports.append(("D2", name, report))
-    chosen = next((report for model, _variant, report in reports if model == "D1" and report.feature_set == DEFAULT_FEATURES), None)
+        reports.append(("D2", name, f"model={found.model_name}" + (f", device={found.device}" if found.device else ""), report))
+    chosen = next((report for model, _variant, _params, report in reports if model == "D1" and report.feature_set == DEFAULT_FEATURES), None)
     reference = chosen.scores if chosen is not None else {}
     rows = []
-    for model, variant, report in reports:
+    for model, variant, params, report in reports:
         shares_hand, judged = hand_measures(labels, report.predictions, report.scores)
         cut_hand, _ = hand_measures(labels, report.cut_point_predictions, report.scores)
         within = within_deck_concordance(labels, report.scores, deck_of)
         diff = paired_order_bootstrap(labels, reference, report.scores, deck_of) if judged else None
         rows.append(with_hand_columns(
-            difficulty_rows(report, today, model, variant, report.metrics, "deck shares", note, report.predictions),
+            difficulty_rows(report, today, model, variant, report.metrics, "deck shares", note, report.predictions, params),
             shares_hand, judged, within, diff))
-        rows.append(difficulty_rows(report, today, model, variant, report.most_likely, "most likely class", note))
+        rows.append(difficulty_rows(report, today, model, variant, report.most_likely, "most likely class", note, params=params))
         if model == "D1":
             rows.append(with_hand_columns(
                 difficulty_rows(report, today, model, variant, {}, "cut points of the rated cards", note, report.cut_point_predictions),
                 cut_hand, judged, within, diff))
+        if judged:  # the deck rows: the order within each deck with a pair, paired over the deck's quizzes alone
+            for deck, pair_share in sorted(within_deck_by_deck(labels, report.scores, deck_of).items()):
+                deck_labels = {card_id: labels[card_id] for card_id in report.scores if deck_of[card_id] == deck and card_id in labels}
+                part = report.decks.get(deck)
+                row = difficulty_rows(report, today, model, variant, {}, "deck shares", note, params=params,
+                                      scope=f"deck {deck_ids.get(deck, deck)}")
+                row.update(rated=part.rated if part else 0, unrated=part.unrated if part else 0,
+                           hand_judged=sum(entry.get("level") in LEVEL_OF for entry in deck_labels.values()))
+                rows.append(with_hand_columns(row, {}, 0, pair_share, paired_order_bootstrap(deck_labels, reference, report.scores, deck_of)))
         f1, kappa = report.metrics["macro_f1"], report.metrics["kappa"]
         print(f"{model} {variant:20s} deck shares: macro-F1 {f1[0]:.3f} ± {f1[1]:.3f}, weighted kappa {kappa[0]:.3f} ± {kappa[1]:.3f}, "
               f"accuracy {report.metrics['accuracy'][0]:.3f}, recall {report.metrics['recall_easy'][0]:.2f} / "
@@ -496,7 +522,7 @@ def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | 
             values, judged_rated = hand_measures({card_id: {"level": level} for card_id, level in authored.items()}, hand)
             unrated_counts = level_counts(labels, report.predictions)
             rated_counts = level_counts(labels, authored)
-            rows.append({"date": today, "model": "hand", "variant": "the criterion against the authored levels", "label_rule": "authored",
+            rows.append({"date": today, "model": "hand", "variant": "the criterion against the authored levels", "scope": COURSE_SCOPE, "label_rule": "authored",
                          "rated": judged_rated, "unrated": sum(unrated_counts), "hand_judged": judged_rated,
                          "hand_macro_f1": fmt(values["macro_f1"]), "hand_kappa": fmt(values["kappa"]), "hand_accuracy": fmt(values["accuracy"]),
                          "recall_easy": fmt(values["recall_easy"]), "recall_medium": fmt(values["recall_medium"]), "recall_hard": fmt(values["recall_hard"]),
@@ -1097,7 +1123,7 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
     with the file alone (the capstone), the hand columns are computed and nothing is written back; with neither,
     the hand columns stay empty and no form is written. The parts measure the app's vectoriser (`vectoriser`, by
     default embeddings.app_vectoriser with the embeddings cached in `cache_dir`), next to the similarity part's
-    variants; the difficulty part takes D2's tags from the same cache or the NLI model (`tagger_loader` stands in
+    variants; the difficulty part takes D2's tags from the same cache or the NLI models (`tagger_loader` stands in
     for the pipeline in the tests)."""
     files = result_files(results_dir)
     if vectoriser is None:
@@ -1125,7 +1151,7 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
     # D1: the difficulty model, into its own file, with the hand labels kept and their form written again
     if part in ("all", "difficulty"):
         tags = difficulty_tags(cards, cache_dir, tagger_loader)
-        difficulty = stamped(evaluate_difficulty(cards, today, note, labels, vectoriser, tags), run_key)
+        difficulty = stamped(evaluate_difficulty(cards, today, note, labels, vectoriser, tags, deck_ids), run_key)
         write_rows(difficulty, files.difficulty, DIFFICULTY_COLUMNS)
         print(f"{len(difficulty)} rows appended to {files.difficulty}")
         if labels_form:

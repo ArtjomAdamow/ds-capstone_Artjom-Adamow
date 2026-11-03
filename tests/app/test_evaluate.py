@@ -3,8 +3,8 @@ fixtures and nothing of the viewer: a results file whose columns grew; the hand 
 judging form, the merge of its marks) and the hand columns of D1's rows and the `hand` row; the hand marks of the
 similarity part (the marks file, the judging form, the merge, a rewrite with a variant removed); the measures (the
 random draw, the hand precision per card, the paired bootstrap, the fixed-k overlap and the lift on a hand-made
-layout); the rows of the similarity part; and a run on the test course's table, with and without the hand files,
-in a process where the viewer cannot be imported."""
+layout); the rows of the similarity part; D2's rows per model and template with the deck rows; and a run on the
+test course's table, with and without the hand files, in a process where the viewer cannot be imported."""
 
 import model_support  # noqa: F401  (the helper's package on the path, and the folder next to it with evaluate.py)
 
@@ -140,6 +140,26 @@ class HandLabelsTest(unittest.TestCase):
         value, pairs = evaluate.within_deck_concordance(labels, {"a1": 0.1, "b1": 0.2}, deck_of)  # one judged quiz per deck: no pair
         self.assertTrue(math.isnan(value) and pairs == 0)
 
+    def test_every_deck_shares_row_with_judged_quizzes_gets_its_deck_rows(self):
+        labels = {card.id: {"card": card.id, "level": "hard" if card.id.endswith("102") else "easy", "judged": TODAY, "judge": "Y", "note": ""}
+                  for card in self.unrated}
+        rows = evaluate.evaluate_difficulty(self.cards, TODAY, "test", labels, deck_ids={"Alpha": "01", "Beta": "02"})
+        self.assertTrue(all(row["scope"] for row in rows))
+        decks = [row for row in rows if row["scope"] != evaluate.COURSE_SCOPE]
+        self.assertEqual({row["scope"] for row in decks}, {"deck 01", "deck 02", "deck Gamma"})  # by id where one is given
+        self.assertEqual({row["model"] for row in decks}, {"D1"})
+        self.assertEqual(len(decks), 12)  # four feature sets, three decks, the deck-shares rule alone
+        for row in decks:
+            self.assertEqual((row["label_rule"], row["hand_judged"], row["rated"], row["unrated"]), ("deck shares", 2, 12, 2))
+            self.assertEqual((row["hand_within_deck"], row["hand_within_pairs"]), ("1.000", 1))  # the deck's long quiz above its short one
+            self.assertTrue(float(row["hand_diff_low"]) <= float(row["hand_diff"]) <= float(row["hand_diff_high"]))
+            for column in ("hand_accuracy", "hand_kappa", "predicted_easy", "macro_f1"):
+                self.assertNotIn(column, row)  # a readout of the order, nothing else
+        chosen = [row for row in decks if row["variant"] == "text (chosen)"]
+        self.assertEqual({(row["hand_diff"], row["hand_diff_low"], row["hand_diff_high"]) for row in chosen}, {("0.000", "0.000", "0.000")})
+        course = [row for row in rows if row["scope"] == evaluate.COURSE_SCOPE and row["model"] == "D1"]
+        self.assertEqual(len(course), 12)  # four feature sets, three label rules
+
     def test_the_hand_columns_of_d1s_rows_and_the_hand_row(self):
         # Every deck's short unrated quiz easy, its long one hard; Alpha's rated quizzes at their authored levels
         labels = {card.id: {"card": card.id, "level": "hard" if card.id.endswith("102") else "easy", "judged": TODAY, "judge": "Y", "note": ""}
@@ -149,8 +169,9 @@ class HandLabelsTest(unittest.TestCase):
                 labels[card.id] = {"card": card.id, "level": card.difficulty, "judged": TODAY, "judge": "Y", "note": ""}
         labels["302001"] = {"card": "302001", "level": "unsure", "judged": "", "judge": "", "note": "by hand"}  # never scored
         rows = evaluate.evaluate_difficulty(self.cards, TODAY, "test", labels)
-        d1 = [row for row in rows if row["model"] == "D1"]
-        self.assertEqual(len(d1), 9)  # three feature sets, three label rules
+        d1 = [row for row in rows if row["model"] == "D1" and row["scope"] == evaluate.COURSE_SCOPE]
+        self.assertEqual(len(d1), 12)  # four feature sets, three label rules
+        self.assertFalse(any("tags" in row["variant"] for row in d1))  # D2 supplies no feature to D1
         for row in d1:
             if row["label_rule"] == "most likely class":
                 self.assertNotIn("hand_judged", row)  # no predictions of the unrated quizzes by that rule
@@ -183,6 +204,7 @@ class HandLabelsTest(unittest.TestCase):
         self.assertFalse(any("hand_judged" in row for row in rows))
         self.assertFalse(any("hand_diff" in row for row in rows))
         self.assertFalse(any(row["model"] == "hand" for row in rows))
+        self.assertTrue(all(row["scope"] == evaluate.COURSE_SCOPE for row in rows))  # no deck rows without labels
 
     def test_the_paired_bootstrap_of_the_within_deck_order(self):
         labels = {card: {"level": level} for card, level in
@@ -204,7 +226,7 @@ class HandLabelsTest(unittest.TestCase):
 
 
 class TagsPartTest(unittest.TestCase):
-    """D2's rows and the feature set text+tags with the fake pipeline standing in for the model."""
+    """D2's rows per model and template, with their deck rows, the fake pipeline standing in for the models."""
 
     @classmethod
     def setUpClass(cls):
@@ -226,27 +248,28 @@ class TagsPartTest(unittest.TestCase):
     def rows_of(self, model: str, variant: str) -> list[dict]:
         return [row for row in self.rows if row["model"] == model and row["variant"] == variant]
 
-    def test_the_tags_come_per_template_and_are_cached(self):
-        self.assertEqual(list(self.tags), ["criterion", "level names"])
-        self.assertEqual(len(self.tags["criterion"].scores), 42)
-        self.assertEqual(len(list((self.cache / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))), 2)
-        self.assertIn("D2 criterion: 42 quizzes tagged by", self.output)
+    def test_the_tags_come_per_model_and_template_and_are_cached(self):
+        self.assertEqual(list(self.tags), ["criterion, base", "level names, base", "criterion, large", "level names, large"])
+        self.assertEqual(len(self.tags["criterion, base"].scores), 42)
+        self.assertEqual((self.tags["criterion, base"].model_name, self.tags["criterion, large"].model_name),
+                         (evaluate.zero_shot.BASE_MODEL, evaluate.zero_shot.LARGE_MODEL))
+        self.assertEqual(len(list((self.cache / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))), 4)
+        self.assertIn("D2 criterion, base: 42 quizzes tagged by MoritzLaurer/ModernBERT-base", self.output)
+        self.assertIn("D2 level names, large: 42 quizzes tagged by MoritzLaurer/ModernBERT-large", self.output)
 
-    def test_the_feature_set_with_the_tags_joins_d1s_rows(self):
-        rows = self.rows_of("D1", "text+tags")
-        self.assertEqual([row["label_rule"] for row in rows], ["deck shares", "most likely class", "cut points of the rated cards"])
-        self.assertEqual((rows[0]["features"], rows[0]["folds"], rows[0]["seed"]), ("text+tags", 3, 42))
-        self.assertEqual(rows[0]["hand_judged"], 6)
-        self.assertTrue(rows[0]["hand_diff_low"] <= rows[0]["hand_diff"] <= rows[0]["hand_diff_high"])
-        self.assertEqual(len([row for row in self.rows if row["model"] == "D1"]), 12)  # four feature sets, three label rules
+    def test_d1_takes_no_feature_of_d2(self):
+        d1 = [row for row in self.rows if row["model"] == "D1" and row["scope"] == evaluate.COURSE_SCOPE]
+        self.assertEqual(len(d1), 12)  # four feature sets, three label rules
+        self.assertFalse(any("tags" in row["variant"] or "tags" in row["features"] for row in d1))
 
-    def test_d2_alone_gets_two_rows_per_template_without_folds(self):
-        for name in ("criterion", "level names"):
+    def test_d2_alone_gets_two_rows_per_variant_without_folds_and_its_deck_rows(self):
+        for name in self.tags:
             rows = self.rows_of("D2", name)
-            self.assertEqual([row["label_rule"] for row in rows], ["deck shares", "most likely class"])
+            self.assertEqual([row["label_rule"] for row in rows], ["deck shares", "most likely class"] + ["deck shares"] * 3)
             shares = rows[0]
             self.assertEqual((shares["features"], shares["folds"], shares["repeats"], shares["seed"]), ("premise", 0, 0, ""))
-            self.assertEqual((shares["rated"], shares["unrated"]), (36, 6))
+            self.assertEqual((shares["rated"], shares["unrated"], shares["scope"]), (36, 6, evaluate.COURSE_SCOPE))
+            self.assertTrue(shares["params"].startswith(f"model={self.tags[name].model_name}, device="))  # the model and what tagged
             self.assertEqual(shares["macro_f1_sd"], "0.000")  # one pass: no spread
             self.assertEqual(shares["predicted_easy"] + shares["predicted_medium"] + shares["predicted_hard"], 6)
             self.assertEqual(shares["hand_judged"], 6)
@@ -254,20 +277,34 @@ class TagsPartTest(unittest.TestCase):
                 self.assertIn(column, shares, column)
             self.assertEqual(shares["hand_within_pairs"], 3)
             self.assertNotIn("hand_judged", rows[1])
-        self.assertIn("D2 criterion", self.output)
+            self.assertEqual([row["scope"] for row in rows[2:]], ["deck Alpha", "deck Beta", "deck Gamma"])
+            self.assertEqual({(row["params"], row["hand_within_pairs"], row["hand_judged"]) for row in rows[2:]}, {(shares["params"], 1, 2)})
+        self.assertIn("D2 criterion, base", self.output)
         self.assertIn("paired difference to text", self.output)
         self.assertIn("within a deck, per deck: Alpha", self.output)
 
-    def test_without_the_tags_both_are_skipped_with_a_line(self):
+    def test_without_the_tags_d2_is_skipped_with_a_line(self):
         with contextlib.redirect_stdout(io.StringIO()) as output:
             rows = evaluate.evaluate_difficulty(self.cards, TODAY, "test", self.labels)
         self.assertFalse(any(row["model"] == "D2" for row in rows))
-        self.assertFalse(any(row["variant"] == "text+tags" for row in rows))
-        self.assertIn("D1 text+tags: skipped without D2's tags", output.getvalue())
+        self.assertFalse(any("tags" in row["variant"] for row in rows))
         with without_tagger(), contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(evaluate.difficulty_tags(self.cards, self.cache), {})
+        self.assertEqual(output.getvalue().count("\n"), 1)  # one line
         self.assertIn(evaluate.D2_SKIPPED, output.getvalue())
         self.assertIn("transformers", output.getvalue())
+
+    def test_a_model_that_does_not_load_loses_its_rows_alone(self):
+        def loader(model_name, device):
+            if model_name == evaluate.zero_shot.LARGE_MODEL:
+                raise OSError("not fetched")
+            return model_support.fake_classifier_loader(model_name, device)
+
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            tags = evaluate.difficulty_tags(self.cards, Path(self._tmp.name) / "other", loader=loader)
+        self.assertEqual(list(tags), ["criterion, base", "level names, base"])
+        self.assertIn(f"{evaluate.D2_SKIPPED} for the large model: ", output.getvalue())
+        self.assertIn("OSError", output.getvalue())
 
 
 # --- the measures ----------------------------------------------------------------------------------------------
@@ -687,10 +724,10 @@ class RunTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as output:
             evaluate.run(self.table, self.results, "difficulty", today=TODAY, cache_dir=self.folder / "cache",
                          tagger_loader=model_support.fake_classifier_loader)
-        self.assertIn("D2 criterion: 2 quizzes tagged by", output.getvalue())  # the tagger ran on the two quizzes
-        self.assertIn("D2 level names: 2 quizzes tagged by", output.getvalue())
-        self.assertIn("D2 criterion: Too few rated quizzes", output.getvalue())  # and D2's judge has nothing to measure
-        self.assertEqual(len(list((self.folder / "cache" / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))), 2)
+        self.assertIn("D2 criterion, base: 2 quizzes tagged by", output.getvalue())  # the tagger ran on the two quizzes
+        self.assertIn("D2 level names, large: 2 quizzes tagged by", output.getvalue())
+        self.assertIn("D2 criterion, base: Too few rated quizzes", output.getvalue())  # and D2's judge has nothing to measure
+        self.assertEqual(len(list((self.folder / "cache" / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))), 4)
         evaluate.run(self.table, self.results, "topics", today=TODAY)
         topics = read_csv(self.files.topics)
         self.assertEqual(topics[0]["model"], "T1")
