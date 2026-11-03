@@ -17,7 +17,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
@@ -29,13 +28,6 @@ from app.models.difficulty_model import LEVELS
 TODAY = "2026-11-01"
 TESTS_DIR = Path(__file__).resolve().parent
 TAG = f"  —  {evaluate.NOT_JUDGED}  —  "  # how the hand-check form tags a candidate that is new under a judged card
-
-
-def fake_quiz(card_id):
-    """The options of the unrated quizzes (stack 2) of the test course; nothing for the other cards."""
-    if card_id.startswith("2"):
-        return SimpleNamespace(options=("a", "b", "c"), answers=("why a", "why b", ""), correct=(1,))
-    return None
 
 
 def mark(text: str, card_id: str, level: str) -> str:
@@ -80,7 +72,7 @@ class HandLabelsTest(unittest.TestCase):
         self._tmp.cleanup()
 
     def write_form(self, labels=None):
-        return evaluate.write_hand_labels_form(self.cards, fake_quiz, labels or {}, TODAY, "test", self.form, reference_decks=("Alpha",))
+        return evaluate.write_hand_labels_form(self.cards, labels or {}, TODAY, "test", self.form, reference_decks=("Alpha",))
 
     def test_the_form_lists_the_unrated_quizzes_and_the_reference_decks_rated_ones_blind(self):
         self.assertEqual(self.write_form(), (6, 12))
@@ -90,7 +82,7 @@ class HandLabelsTest(unittest.TestCase):
         for entry in text.split("\n### ")[1:]:  # no entry names a level outside its boxes: the authored ones stay blind
             body = [line for line in entry.splitlines() if not line.startswith("- [")]
             self.assertFalse(any(level in line for level in LEVELS for line in body), entry[:30])
-        self.assertIn("- (wrong) a  —  why a\n- (correct) b  —  why b\n- (wrong) c\n", text)  # the options with their feedback
+        self.assertIn("- (wrong) a  —  why a\n- (correct) b  —  why b\n- (wrong) c\n", text)  # the record's options with their feedback
         self.assertIn("- answer: ", text)  # a rated quiz of the fixture has no options: its answer
         self.assertIn("## The rated quizzes of Alpha, judged blind (12)", text)
         for card in self.unrated:
@@ -168,6 +160,10 @@ class HandLabelsTest(unittest.TestCase):
                 self.assertTrue(-1.0 <= float(row[name]) <= 1.0, name)
             # each deck's long quiz (hand hard) scores above its short one (hand easy): every deck's one pair right
             self.assertEqual((row["hand_within_deck"], row["hand_within_pairs"]), ("1.000", 3), row["label_rule"])
+            # the paired difference of the order to the chosen row, with its interval: 0 on the chosen row itself
+            self.assertEqual((row["hand_diff"], row["hand_diff_low"], row["hand_diff_high"]),
+                             ("0.000", "0.000", "0.000") if row["variant"] == "text (chosen)" else (row["hand_diff"], row["hand_diff_low"], row["hand_diff_high"]))
+            self.assertTrue(-1.0 <= float(row["hand_diff_low"]) <= float(row["hand_diff"]) <= float(row["hand_diff_high"]) <= 1.0)
         # D1 calls the short quiz easy and the long one medium (test_difficulty_model): half of the hand levels met
         shares = [row for row in d1 if row["label_rule"] == "deck shares"]
         self.assertEqual({row["hand_accuracy"] for row in shares}, {"0.500"})
@@ -185,7 +181,93 @@ class HandLabelsTest(unittest.TestCase):
     def test_without_labels_the_rows_have_no_hand_columns(self):
         rows = evaluate.evaluate_difficulty(self.cards, TODAY, "test")
         self.assertFalse(any("hand_judged" in row for row in rows))
+        self.assertFalse(any("hand_diff" in row for row in rows))
         self.assertFalse(any(row["model"] == "hand" for row in rows))
+
+    def test_the_paired_bootstrap_of_the_within_deck_order(self):
+        labels = {card: {"level": level} for card, level in
+                  (("a1", "easy"), ("a2", "medium"), ("a3", "hard"), ("b1", "easy"), ("b2", "medium"), ("b3", "hard"))}
+        deck_of = {card: card[0] for card in labels}
+        right = {"a1": 0.1, "a2": 0.3, "a3": 0.5, "b1": 0.1, "b2": 0.3, "b3": 0.5}  # every pair in the hand order
+        half = {"a1": 0.5, "a2": 0.3, "a3": 0.1, "b1": 0.1, "b2": 0.3, "b3": 0.5}  # deck a reversed, deck b right
+        diff, low, high = evaluate.paired_order_bootstrap(labels, half, right, deck_of, draws=200)
+        self.assertAlmostEqual(diff, 0.5)  # 6 of 6 against 3 of 6
+        self.assertTrue(low <= diff <= high)
+        self.assertEqual(evaluate.paired_order_bootstrap(labels, right, right, deck_of, draws=50), (0.0, 0.0, 0.0))
+        self.assertTrue(all(math.isnan(value) for value in evaluate.paired_order_bootstrap(labels, right, {"a1": 0.1}, deck_of)))
+        self.assertTrue(all(math.isnan(value) for value in evaluate.paired_order_bootstrap({}, right, half, deck_of)))
+
+    def test_the_order_per_deck(self):
+        labels = {card: {"level": level} for card, level in (("a1", "easy"), ("a2", "hard"), ("b1", "easy"), ("b2", "medium"), ("c1", "easy"))}
+        scores = {"a1": 0.1, "a2": 0.5, "b1": 0.9, "b2": 0.2, "c1": 0.3}
+        self.assertEqual(evaluate.within_deck_by_deck(labels, scores, {card: card[0] for card in scores}), {"a": (1.0, 1), "b": (0.0, 1)})
+
+
+class TagsPartTest(unittest.TestCase):
+    """D2's rows and the feature set text+tags with the fake pipeline standing in for the model."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.cache = Path(cls._tmp.name) / "cache"
+        cls.cards = model_support.difficulty_course()
+        unrated = [card for card in cls.cards if card.stack == 2]
+        cls.labels = {card.id: {"card": card.id, "level": "hard" if card.id.endswith("102") else "easy", "judged": TODAY, "judge": "Y", "note": ""}
+                      for card in unrated}
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            cls.tags = evaluate.difficulty_tags(cls.cards, cls.cache, loader=model_support.fake_classifier_loader)
+            cls.rows = evaluate.evaluate_difficulty(cls.cards, TODAY, "test", cls.labels, tags=cls.tags)
+        cls.output = output.getvalue()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def rows_of(self, model: str, variant: str) -> list[dict]:
+        return [row for row in self.rows if row["model"] == model and row["variant"] == variant]
+
+    def test_the_tags_come_per_template_and_are_cached(self):
+        self.assertEqual(list(self.tags), ["criterion", "level names"])
+        self.assertEqual(len(self.tags["criterion"].scores), 42)
+        self.assertEqual(len(list((self.cache / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))), 2)
+        self.assertIn("D2 criterion: 42 quizzes tagged by", self.output)
+
+    def test_the_feature_set_with_the_tags_joins_d1s_rows(self):
+        rows = self.rows_of("D1", "text+tags")
+        self.assertEqual([row["label_rule"] for row in rows], ["deck shares", "most likely class", "cut points of the rated cards"])
+        self.assertEqual((rows[0]["features"], rows[0]["folds"], rows[0]["seed"]), ("text+tags", 3, 42))
+        self.assertEqual(rows[0]["hand_judged"], 6)
+        self.assertTrue(rows[0]["hand_diff_low"] <= rows[0]["hand_diff"] <= rows[0]["hand_diff_high"])
+        self.assertEqual(len([row for row in self.rows if row["model"] == "D1"]), 12)  # four feature sets, three label rules
+
+    def test_d2_alone_gets_two_rows_per_template_without_folds(self):
+        for name in ("criterion", "level names"):
+            rows = self.rows_of("D2", name)
+            self.assertEqual([row["label_rule"] for row in rows], ["deck shares", "most likely class"])
+            shares = rows[0]
+            self.assertEqual((shares["features"], shares["folds"], shares["repeats"], shares["seed"]), ("premise", 0, 0, ""))
+            self.assertEqual((shares["rated"], shares["unrated"]), (36, 6))
+            self.assertEqual(shares["macro_f1_sd"], "0.000")  # one pass: no spread
+            self.assertEqual(shares["predicted_easy"] + shares["predicted_medium"] + shares["predicted_hard"], 6)
+            self.assertEqual(shares["hand_judged"], 6)
+            for column in ("hand_macro_f1", "hand_within_deck", "hand_diff", "hand_diff_low", "hand_diff_high"):
+                self.assertIn(column, shares, column)
+            self.assertEqual(shares["hand_within_pairs"], 3)
+            self.assertNotIn("hand_judged", rows[1])
+        self.assertIn("D2 criterion", self.output)
+        self.assertIn("paired difference to text", self.output)
+        self.assertIn("within a deck, per deck: Alpha", self.output)
+
+    def test_without_the_tags_both_are_skipped_with_a_line(self):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            rows = evaluate.evaluate_difficulty(self.cards, TODAY, "test", self.labels)
+        self.assertFalse(any(row["model"] == "D2" for row in rows))
+        self.assertFalse(any(row["variant"] == "text+tags" for row in rows))
+        self.assertIn("D1 text+tags: skipped without D2's tags", output.getvalue())
+        with without_tagger(), contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(evaluate.difficulty_tags(self.cards, self.cache), {})
+        self.assertIn(evaluate.D2_SKIPPED, output.getvalue())
+        self.assertIn("transformers", output.getvalue())
 
 
 # --- the measures ----------------------------------------------------------------------------------------------
@@ -402,6 +484,11 @@ def without_encoder():
     return mock.patch.object(evaluate.embeddings, "encoder_available", return_value=False)
 
 
+def without_tagger():
+    """transformers as not installed, so the difficulty part runs without D2 wherever the tests run."""
+    return mock.patch.object(evaluate.zero_shot, "tagger_available", return_value=False)
+
+
 class SimilarityPartTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -552,6 +639,7 @@ import model_support
 from pathlib import Path
 import evaluate
 evaluate.embeddings.encoder_available = lambda *arguments, **options: False  # the S1 rows alone, as without torch
+evaluate.zero_shot.tagger_available = lambda *arguments, **options: False
 folder = Path({folder!r})
 evaluate.run(model_support.write_test_table(folder / "course"), folder / "results", "similarity", "", "2026-11-01")
 loaded = sorted(name for name, module in sys.modules.items() if module is not None and name.split(".")[0] == "project")
@@ -569,8 +657,11 @@ class RunTest(unittest.TestCase):
         self.files = evaluate.result_files(self.results)
         self._without = without_encoder()
         self._without.start()
+        self._without_tagger = without_tagger()
+        self._without_tagger.start()
 
     def tearDown(self):
+        self._without_tagger.stop()
         self._without.stop()
         self._tmp.cleanup()
 
@@ -589,6 +680,16 @@ class RunTest(unittest.TestCase):
         self.assertTrue(all(row["hand_judged"] == "" and row["run"] == "2026-11-02T09:00" for row in read_csv(self.files.difficulty)))
         self.assertFalse(self.files.hand_labels_form.exists())
         self.assertFalse(self.files.hand_labels.exists())
+        with self.files.difficulty.open(newline="", encoding="utf-8") as handle:
+            self.assertEqual(next(csv.reader(handle)), evaluate.DIFFICULTY_COLUMNS)  # the header, with the hand_diff columns
+        self.assertEqual(read_csv(self.files.difficulty), [])  # one rated card on this course: nothing measured, no row
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            evaluate.run(self.table, self.results, "difficulty", today=TODAY, cache_dir=self.folder / "cache",
+                         tagger_loader=model_support.fake_classifier_loader)
+        self.assertIn("D2 criterion: 2 quizzes tagged by", output.getvalue())  # the tagger ran on the two quizzes
+        self.assertIn("D2 level names: 2 quizzes tagged by", output.getvalue())
+        self.assertIn("D2 criterion: Too few rated quizzes", output.getvalue())  # and D2's judge has nothing to measure
+        self.assertEqual(len(list((self.folder / "cache" / evaluate.embeddings.CACHE_FOLDER).glob("*.npy"))), 2)
         evaluate.run(self.table, self.results, "topics", today=TODAY)
         topics = read_csv(self.files.topics)
         self.assertEqual(topics[0]["model"], "T1")
@@ -625,7 +726,7 @@ class RunTest(unittest.TestCase):
             candidate = next(match.group(2) for match in map(evaluate.CANDIDATE.match, text.split("\n## 101001 (")[1].splitlines()) if match)
             self.files.hand_check.write_text(mark_candidate(text, "101001", candidate), encoding="utf-8")
             form = self.files.hand_labels_form.read_text(encoding="utf-8")
-            self.assertIn("- answer: ", form)  # no course file next to the table: the answer, not the options
+            self.assertIn("- (correct) list[start:stop]  —  ", form)  # the table's options, no viewer needed
             self.files.hand_labels_form.write_text(mark(form, "201002", "medium"), encoding="utf-8")
             evaluate.run(self.table, self.results, "all", "Y", TODAY)
         marks = read_csv(self.files.hand_marks)

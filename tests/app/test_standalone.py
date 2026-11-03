@@ -616,10 +616,16 @@ def write_results(folder: Path, note: str) -> None:
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "margin >= 0.05", "cards": "12", "kept_share": "0.923", "agreement": "1.000", "notes": note},
     ])
     columns = ["date", "run", "model", "variant", "features", "label_rule", "folds", "repeats", "seed", "macro_f1", "macro_f1_sd",
-               "accuracy", "hand_judged", "hand_within_deck", "hand_within_pairs", "notes"]
+               "accuracy", "hand_judged", "hand_within_deck", "hand_within_pairs", "hand_diff", "hand_diff_low", "hand_diff_high", "notes"]
     write("difficulty.csv", columns, [
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "features": "text", "label_rule": "deck shares",
-         "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.593", "macro_f1_sd": "0.018", "accuracy": "0.7", "hand_within_deck": "0.75", "hand_within_pairs": "77", "notes": note},
+         "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.593", "macro_f1_sd": "0.018", "accuracy": "0.7", "hand_within_deck": "0.75", "hand_within_pairs": "77",
+         "hand_diff": "0.000", "hand_diff_low": "0.000", "hand_diff_high": "0.000", "notes": note},
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion", "features": "premise", "label_rule": "deck shares",
+         "folds": "0", "repeats": "0", "macro_f1": "0.410", "macro_f1_sd": "0.000", "accuracy": "0.5", "hand_within_deck": "0.80", "hand_within_pairs": "77",
+         "hand_diff": "0.052", "hand_diff_low": "-0.020", "hand_diff_high": "0.120", "notes": note},
+        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion", "features": "premise", "label_rule": "most likely class",
+         "folds": "0", "repeats": "0", "macro_f1": "0.380", "macro_f1_sd": "0.000", "accuracy": "0.45", "notes": note},
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "features": "text", "label_rule": "most likely class",
          "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.530", "macro_f1_sd": "0.017", "accuracy": "0.62", "notes": note},
         {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "baseline", "variant": "always easy", "label_rule": "constant",
@@ -681,17 +687,29 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(dict(deck.rows)["agreement"], ["1.000", "0.300"])  # the row "deck 01 Alpha" is no deck scope
 
     def test_d1s_table_has_a_column_per_row_of_the_run(self):
-        (table,) = self.page.results.tables("D")
+        table, _tags = self.page.results.tables("D")
         self.assertEqual(table.heads, [
             "text (chosen) · deck shares", "text (chosen) · most likely class", "baseline: always easy",
             "hand labels: the criterion against the authored levels",
-        ])
+        ])  # D2's rows are the second table's
         self.assertEqual(table.chosen, [True, False, False, False])
         rows = dict(table.rows)
         self.assertEqual(rows["macro_f1 ± sd"], ["0.593 ± 0.018", "0.530 ± 0.017", "0.27 ± 0.00", ""])
         self.assertEqual(rows["hand_within_deck (pairs)"], ["0.75 (77)", "", "", ""])
+        self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "", "", ""])
         self.assertIn("folds 5", table.subtitle)
         self.assertEqual(table.measures[:2], ["macro_f1", "macro_f1_sd"])
+
+    def test_d2s_table_stands_next_to_d1s_chosen_row(self):
+        _table, tags = self.page.results.tables("D")
+        self.assertEqual(tags.title, "D2 next to D1's chosen row")
+        self.assertEqual(tags.heads, ["D1 text (chosen) · deck shares", "D2 criterion · deck shares", "D2 criterion · most likely class"])
+        self.assertEqual(tags.chosen, [True, False, False])
+        rows = dict(tags.rows)
+        self.assertEqual(rows["macro_f1 ± sd"], ["0.593 ± 0.018", "0.410 ± 0.000", "0.380 ± 0.000"])
+        self.assertEqual(rows["hand_within_deck (pairs)"], ["0.75 (77)", "0.80 (77)", ""])
+        self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "0.052 [-0.020, 0.120]", ""])
+        self.assertEqual(tags.subtitle, "run 2026-11-01T10:00 · features premise · folds 0 · repeats 0")
 
     def test_the_glossary_has_a_row_for_every_measure_column_and_none_for_the_bookkeeping(self):
         glossary = read_glossary()
@@ -704,7 +722,7 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(glossary["lift_k2"], glossary["lift_k3"])  # one row for the columns of one measure
         self.assertEqual(glossary["lift_k2"][0], "lift_k2, lift_k3")
         self.assertIn("(overlap − random) / (1 − random)", glossary["lift_k2"][1])
-        (table,) = self.page.results.tables("D")
+        table = self.page.results.tables("D")[0]
         self.assertEqual(table.row_columns[0], ["macro_f1", "macro_f1_sd"])  # the columns behind a row, its description's key
 
     def test_the_panels_show_the_tables_by_ids_and_a_click_on_a_row_opens_its_description(self):

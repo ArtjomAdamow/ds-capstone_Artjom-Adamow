@@ -23,8 +23,9 @@ import sys
 sys.modules["project"] = None  # `import project` raises ImportError from here on
 sys.path.insert(0, {tests!r})
 import model_support
-from app.models import clustering, course_model, difficulty_model, evaluation, layout, similar, topic_model
+from app.models import clustering, course_model, difficulty_model, evaluation, layout, similar, topic_model, zero_shot
 from app.cards import CardRecord
+assert zero_shot.premise(CardRecord("1", "d", "q?", "a", explain="e. Source: `n.ipynb`.")) == "q?\\na\\ne."
 model = model_support.course_model()
 assert set(model.deck_points) == {{"01", "02", "03"}} and model.card_points and model.deck_links
 assert model_support.difficulty_report().measured

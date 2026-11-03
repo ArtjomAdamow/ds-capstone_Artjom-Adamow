@@ -28,15 +28,18 @@ What it measures (docs/draft/helper/models/, each model's file):
     deck shares and with the most likely class, the two baselines, and the predicted levels of the unrated quizzes
     by the deck shares and by the cut points of the rated cards; and, on the quizzes labelled by hand, the
     predictions' accuracy, macro-F1 and weighted kappa, the score's Spearman against the hand levels and the share
-    of a deck's pairs the score orders as the hand levels do, next to the hand levels' agreement with the authored
-    levels of the rated quizzes judged blind;
+    of a deck's pairs the score orders as the hand levels do, with every row's paired difference of that share to
+    D1's chosen row and its bootstrap interval over the judged quizzes, next to the hand levels' agreement with the
+    authored levels of the rated quizzes judged blind; D2, the zero-shot tags (app.models.zero_shot, where
+    transformers and the NLI model are there, the tags cached in `--cache`): D2 alone per template, judged the same
+    way without folds (model D2), and the feature set `text+tags` among D1's;
   * T1, the topic model (models/topic.md): the agreement with the scripted topics of the nearest centroid rule, of
     the neighbour rule (the nearest other card of the deck) and of a logistic regression per deck, leave-one-out,
     next to chance by the topic sizes; by stack and per deck; T1's margin table (the cards kept at a threshold and
     their agreement), the coherence per topic, the moved cards and the emptied topics.
 
 Every run appends one row per model and variant to the results folder (`--results`, by default results/ next to
-this file): results.csv (B0, S1, C1), difficulty.csv (D1) and topics.csv (T1). A results file whose columns grew is
+this file): results.csv (B0, S1, C1), difficulty.csv (D1, D2) and topics.csv (T1). A results file whose columns grew is
 written again with its rows kept. `--part similarity`, `--part difficulty` or `--part topics` runs one part only.
 
 The hand side is judged in the flashcards workspace, since its forms hold card text: the hand marks of the
@@ -50,9 +53,8 @@ written again and written after it, so a changed form, a removed variant or a ch
 the judged cards and the paired difference of its precision@5 to the chosen variant, bootstrapped over the cards.
 The marks and the labels travel to the capstone without their notes, the forms do not: where a results folder holds
 a file without its form, the hand columns are computed from the file alone and nothing is written back; where it
-holds neither, that side's columns stay empty, the form is not written and one line says so. The form's quiz options
-come from the viewer's parser (app.glue.course) where the course file data/topics.json and the viewer are there, else
-the form lists the answer.
+holds neither, that side's columns stay empty, the form is not written and one line says so. The form lists a quiz's
+options with their feedback from the course table (the record's options), the answer for a quiz without them.
 
 Every row of a run carries the run's start time to the minute (`run`), next to its date, so the standalone page
 reads the newest run of each file (app/standalone/results.py; what the columns mean: app/docs/columns.md).
@@ -70,7 +72,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from itertools import combinations
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 import numpy as np
 
@@ -81,9 +83,11 @@ if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
 
 from app import course_table  # noqa: E402
-from app.models import embeddings, evaluation, layout, similar  # noqa: E402
+from app.models import embeddings, evaluation, layout, similar, zero_shot  # noqa: E402
 from app.models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel  # noqa: E402
-from app.models.difficulty_model import DEFAULT_FEATURES, FEATURE_SETS, LEVEL_OF, LEVELS, fit_difficulty, measure, split  # noqa: E402
+from app.models.difficulty_model import (  # noqa: E402
+    DEFAULT_FEATURES, FEATURE_SETS, LEVEL_OF, LEVELS, DifficultyReport, fit_difficulty, judge_tags, measure, split,
+)
 from app.models.topic_model import FOCUS_MARGIN, TopicModel  # noqa: E402
 
 RESULTS_DIR = MODULE_DIR / "results"
@@ -91,7 +95,6 @@ RESULTS_DIR = MODULE_DIR / "results"
 TABLE_DIRS = (MODULE_DIR / "data" / "course",) + tuple(
     parent / "data" / "course" for parent in MODULE_DIR.parents[1:2]
 )
-COURSE_NAME = "topics.json"  # the course file next to the table's folder, for the viewer's quiz options
 SEEDS = (42, 1, 2, 3, 4)
 FIXED_K = (2, 3)  # the fixed small k of the card layouts' overlap
 # The hand check's sample, deck -> every n-th card: every card of the two NLP decks and of the transfer deck 18
@@ -116,9 +119,11 @@ DIFFICULTY_COLUMNS = [
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated",
     "predicted_easy", "predicted_medium", "predicted_hard",
     "hand_judged", "hand_macro_f1", "hand_kappa", "hand_accuracy", "hand_spearman", "hand_within_deck", "hand_within_pairs",
+    "hand_diff", "hand_diff_low", "hand_diff_high",
     "seconds", "notes",
 ]
 LABEL_COLUMNS = ["card", "level", "judged", "judge", "note"]
+D2_SKIPPED = "D2 skipped: the zero-shot rows and the feature set text+tags are not measured"
 # The rated quizzes judged blind next to the unrated ones: the two rated decks with the most unrated quizzes
 HAND_LABEL_REFERENCE_DECKS = ("Logistic Regression & Evaluation Metrics", "Decision Trees & Ensemble Methods")
 LABEL_HEADING = re.compile(r"^### (\S+) \(")
@@ -277,8 +282,8 @@ def stamped(rows: list[dict], run_key: str) -> list[dict]:
 def difficulty_rows(report, today: str, model: str, variant: str, measures: dict, label_rule: str, note: str, predicted=None) -> dict:
     """One row of difficulty.csv: the measures (name -> (mean, sd)) and, if given, the predicted levels."""
     row = {"date": today, "model": model, "variant": variant, "features": report.feature_set, "label_rule": label_rule,
-           "folds": report.folds, "repeats": report.repeats, "seed": 42, "rated": report.rated, "unrated": report.unrated,
-           "seconds": f"{report.seconds:.2f}", "notes": note}
+           "folds": report.folds, "repeats": report.repeats, "seed": 42 if report.repeats else "", "rated": report.rated,
+           "unrated": report.unrated, "seconds": f"{report.seconds:.2f}", "notes": note}
     for name, (mean, sd) in measures.items():
         row[name] = fmt(mean)
         if f"{name}_sd" in DIFFICULTY_COLUMNS:
@@ -300,33 +305,102 @@ def hand_measures(labels: dict[str, dict], predictions: dict[str, str], scores: 
     return measure(truth, predicted, values), len(ids)
 
 
-def within_deck_concordance(labels: dict[str, dict], scores: dict[str, float], deck_of: dict[str, str]) -> tuple[float, int]:
-    """The order a deck's extra quizzes get: of the pairs of judged quizzes of one deck with different hand levels,
-    the share whose scores are in the hand levels' order (a tie counts half; chance 0.5), and the number of pairs;
-    (NaN, 0) without a pair."""
+def within_deck_by_deck(labels: dict[str, dict], scores: dict[str, float], deck_of: dict[str, str]) -> dict[str, tuple[float, int]]:
+    """Per deck with a pair: of the pairs of its judged quizzes with different hand levels, the share whose scores
+    are in the hand levels' order (a tie counts half; chance 0.5), and the number of pairs."""
     by_deck: dict[str, list] = {}
     for card_id, score in scores.items():
         level = labels.get(card_id, {}).get("level")
         if level in LEVEL_OF:
             by_deck.setdefault(deck_of[card_id], []).append((LEVEL_OF[level], score))
-    right = pairs = 0.0
-    for members in by_deck.values():
+    result = {}
+    for deck, members in by_deck.items():
+        right = pairs = 0.0
         for (level_a, score_a), (level_b, score_b) in combinations(members, 2):
             if level_a == level_b:
                 continue
             pairs += 1
             right += 0.5 if score_a == score_b else float((score_a > score_b) == (level_a > level_b))
+        if pairs:
+            result[deck] = (right / pairs, int(pairs))
+    return result
+
+
+def within_deck_concordance(labels: dict[str, dict], scores: dict[str, float], deck_of: dict[str, str]) -> tuple[float, int]:
+    """The order a deck's extra quizzes get, over every deck: the share of the pairs in the hand order and their
+    number (within_deck_by_deck); (NaN, 0) without a pair."""
+    per_deck = within_deck_by_deck(labels, scores, deck_of)
+    pairs = sum(count for _, count in per_deck.values())
+    right = sum(share * count for share, count in per_deck.values())
     return (right / pairs if pairs else float("nan")), int(pairs)
 
 
-def with_hand_columns(row: dict, measures: dict, judged: int, within: tuple[float, int] = (float("nan"), 0)) -> dict:
-    """The row with the hand columns, when any of its cards is judged; the within-deck order when there is a pair."""
+def paired_order_bootstrap(labels: dict[str, dict], reference: Mapping[str, float], scores: Mapping[str, float], deck_of: Mapping[str, str],
+                           draws: int = evaluation.BOOTSTRAP_DRAWS, seed: int = 42, level: float = evaluation.INTERVAL) -> tuple[float, float, float]:
+    """The within-deck order of `scores` minus the reference's, over the judged quizzes both score, and its
+    percentile interval over `draws` resamples of the quizzes with replacement, the pairs counted anew in each
+    draw (the paired bootstrap of the order measure): (difference, low, high); NaN without a pair."""
+    ids = [card_id for card_id in scores if card_id in reference and labels.get(card_id, {}).get("level") in LEVEL_OF]
+    if not ids:
+        return math.nan, math.nan, math.nan
+    levels = np.array([LEVEL_OF[labels[card_id]["level"]] for card_id in ids])
+    decks = np.array([deck_of[card_id] for card_id in ids])
+    mine = np.array([scores[card_id] for card_id in ids], dtype=float)
+    theirs = np.array([reference[card_id] for card_id in ids], dtype=float)
+    first, second = np.triu_indices(len(ids), 1)
+
+    def difference(chosen: np.ndarray) -> float:
+        level_a, level_b = levels[chosen][first], levels[chosen][second]
+        counted = (decks[chosen][first] == decks[chosen][second]) & (level_a != level_b)
+        if not counted.any():
+            return math.nan
+        harder = (level_a > level_b)[counted]
+
+        def share(values: np.ndarray) -> float:
+            value_a, value_b = values[chosen][first][counted], values[chosen][second][counted]
+            right = np.where(value_a == value_b, 0.5, ((value_a > value_b) == harder).astype(float))
+            return float(right.mean())
+
+        return share(mine) - share(theirs)
+
+    whole = difference(np.arange(len(ids)))
+    if math.isnan(whole):
+        return math.nan, math.nan, math.nan
+    generator = np.random.default_rng(seed)
+    resampled = np.array([difference(generator.integers(0, len(ids), size=len(ids))) for _ in range(draws)])
+    resampled = resampled[~np.isnan(resampled)]
+    tail = 100 * (1.0 - level) / 2
+    return whole, float(np.percentile(resampled, tail)), float(np.percentile(resampled, 100 - tail))
+
+
+def with_hand_columns(row: dict, measures: dict, judged: int, within: tuple[float, int] = (float("nan"), 0),
+                      diff: Optional[tuple[float, float, float]] = None) -> dict:
+    """The row with the hand columns, when any of its cards is judged; the within-deck order when there is a pair,
+    and its paired difference to D1's chosen row with the interval (`diff`) where given."""
     if judged:
         row.update(hand_judged=judged, hand_macro_f1=fmt(measures["macro_f1"]), hand_kappa=fmt(measures["kappa"]),
                    hand_accuracy=fmt(measures["accuracy"]), hand_spearman=fmt(measures["spearman"]))
     if within[1]:
         row.update(hand_within_deck=fmt(within[0]), hand_within_pairs=within[1])
+        if diff is not None and not math.isnan(diff[0]):
+            row.update(hand_diff=fmt(diff[0]), hand_diff_low=fmt(diff[1]), hand_diff_high=fmt(diff[2]))
     return row
+
+
+def difficulty_tags(cards, cache_dir: Optional[Path] = None, loader: Optional[Callable] = None) -> dict[str, zero_shot.Tags]:
+    """D2's tags by template name (zero_shot.TEMPLATES), from the cache in `cache_dir` or the model; empty, with one
+    line, without the library or the model (`loader` stands in for the pipeline in the tests)."""
+    found: dict[str, zero_shot.Tags] = {}
+    for template in zero_shot.TEMPLATES:
+        reasons: list[str] = []
+        tags = zero_shot.tags_of(cards, cache_dir, template, loader=loader, output=reasons.append)
+        if tags is None:
+            print(f"{D2_SKIPPED}: {reasons[0] if reasons else ''}".rstrip(": "))
+            return {}
+        found[template.name] = tags
+        print(f"D2 {template.name}: {len(tags.scores)} quizzes tagged by {tags.model_name} "
+              + ("from the cache" if tags.cached else f"in {tags.seconds:.1f}s"))
+    return found
 
 
 def level_counts(labels: dict[str, dict], ids) -> tuple[int, int, int]:
@@ -335,39 +409,60 @@ def level_counts(labels: dict[str, dict], ids) -> tuple[int, int, int]:
     return tuple(found.count(level) for level in LEVELS)
 
 
-def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | None = None, vectoriser=None) -> list[dict]:
+def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | None = None, vectoriser=None,
+                        tags: Optional[Mapping[str, zero_shot.Tags]] = None) -> list[dict]:
     """D1: every feature set, out of fold, with the deck shares and with the most likely class; the baselines once;
     the predicted levels of the unrated quizzes by the deck shares and by the cut points. With hand labels, the
     predictions of both rules and the always-easy baseline are scored on the judged quizzes (the hand columns),
-    and a `hand` row gives the hand levels' agreement with the authored levels of the rated quizzes judged blind."""
+    every row's within-deck order is paired against D1's chosen row (the hand_diff columns, bootstrapped over the
+    judged quizzes) and printed per deck, and a `hand` row gives the hand levels' agreement with the authored levels
+    of the rated quizzes judged blind. With D2's tags (`tags`, by template name; difficulty_tags), the feature set
+    `text+tags` joins D1's (on the primary template's tags) and D2 alone gets its rows per template (model D2),
+    judged the same way without folds; without them both are skipped with one line."""
     labels = labels or {}
+    tags = tags or {}
     deck_of = {card.id: card.deck for card in cards}
     index = similar.SimilarityIndex.fit(cards, vectoriser, min_score=None)  # the app's vectoriser, as the launchers fit it
-    rows = []
+    primary = tags.get(zero_shot.CRITERION.name)
+    reports: list[tuple[str, str, DifficultyReport]] = []  # (model, variant, report)
     for feature_set in FEATURE_SETS:
-        report = fit_difficulty(cards, index, feature_set)
+        if feature_set.endswith("tags") and primary is None:
+            print(f"D1 {feature_set}: skipped without D2's tags")
+            continue
+        report = fit_difficulty(cards, index, feature_set, tags=primary.scores if feature_set.endswith("tags") else None)
         if not report.measured:
             print(f"D1 {feature_set}: {report.note}")
             continue
-        chosen = " (chosen)" if feature_set == DEFAULT_FEATURES else ""
+        reports.append(("D1", f"{feature_set}{' (chosen)' if feature_set == DEFAULT_FEATURES else ''}", report))
+    for name, found in tags.items():
+        report = judge_tags(cards, found.scores)
+        if not report.measured:
+            print(f"D2 {name}: {report.note}")
+            continue
+        reports.append(("D2", name, report))
+    chosen = next((report for model, _variant, report in reports if model == "D1" and report.feature_set == DEFAULT_FEATURES), None)
+    reference = chosen.scores if chosen is not None else {}
+    rows = []
+    for model, variant, report in reports:
         shares_hand, judged = hand_measures(labels, report.predictions, report.scores)
         cut_hand, _ = hand_measures(labels, report.cut_point_predictions, report.scores)
         within = within_deck_concordance(labels, report.scores, deck_of)
+        diff = paired_order_bootstrap(labels, reference, report.scores, deck_of) if judged else None
         rows.append(with_hand_columns(
-            difficulty_rows(report, today, "D1", f"{feature_set}{chosen}", report.metrics, "deck shares", note, report.predictions),
-            shares_hand, judged, within))
-        rows.append(difficulty_rows(report, today, "D1", f"{feature_set}{chosen}", report.most_likely, "most likely class", note))
-        rows.append(with_hand_columns(
-            difficulty_rows(report, today, "D1", f"{feature_set}{chosen}", {}, "cut points of the rated cards", note,
-                            report.cut_point_predictions),
-            cut_hand, judged, within))
+            difficulty_rows(report, today, model, variant, report.metrics, "deck shares", note, report.predictions),
+            shares_hand, judged, within, diff))
+        rows.append(difficulty_rows(report, today, model, variant, report.most_likely, "most likely class", note))
+        if model == "D1":
+            rows.append(with_hand_columns(
+                difficulty_rows(report, today, model, variant, {}, "cut points of the rated cards", note, report.cut_point_predictions),
+                cut_hand, judged, within, diff))
         f1, kappa = report.metrics["macro_f1"], report.metrics["kappa"]
-        print(f"D1 {feature_set:20s} deck shares: macro-F1 {f1[0]:.3f} ± {f1[1]:.3f}, weighted kappa {kappa[0]:.3f} ± {kappa[1]:.3f}, "
+        print(f"{model} {variant:20s} deck shares: macro-F1 {f1[0]:.3f} ± {f1[1]:.3f}, weighted kappa {kappa[0]:.3f} ± {kappa[1]:.3f}, "
               f"accuracy {report.metrics['accuracy'][0]:.3f}, recall {report.metrics['recall_easy'][0]:.2f} / "
               f"{report.metrics['recall_medium'][0]:.2f} / {report.metrics['recall_hard'][0]:.2f} | most likely class: macro-F1 "
               f"{report.most_likely['macro_f1'][0]:.3f} | {report.unrated} unrated quizzes: {report.predicted_counts} "
               f"(cut points {report.counts(report.cut_point_predictions)}) ({report.seconds:.2f}s)")
-        if feature_set == DEFAULT_FEATURES:
+        if model == "D1" and report.feature_set == DEFAULT_FEATURES:
             print("   confusion (rows true, columns predicted, shares): "
                   + " | ".join(" ".join(f"{value:.2f}" for value in row) for row in report.confusion))
             parts = [part for part in report.decks.values() if part.measured]
@@ -379,19 +474,23 @@ def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | 
             print(f"   on the {judged} hand-labelled quizzes: deck shares macro-F1 {shares_hand['macro_f1']:.3f}, weighted kappa "
                   f"{shares_hand['kappa']:.3f}, accuracy {shares_hand['accuracy']:.3f}, Spearman of the score {shares_hand['spearman']:.3f} | "
                   f"cut points macro-F1 {cut_hand['macro_f1']:.3f}, weighted kappa {cut_hand['kappa']:.3f}, accuracy {cut_hand['accuracy']:.3f} | "
-                  f"within a deck {within[0]:.3f} of {within[1]} pairs in the hand order")
-    if rows:
-        for name, measures in report.baselines.items():
-            row = difficulty_rows(report, today, "baseline", name, measures, "deck shares" if name == "similarity" else "constant", note)
+                  f"within a deck {within[0]:.3f} of {within[1]} pairs in the hand order"
+                  + (f" | paired difference to {DEFAULT_FEATURES} {diff[0]:+.3f} [{diff[1]:+.3f}, {diff[2]:+.3f}]"
+                     if diff is not None and not math.isnan(diff[0]) else ""))
+            per_deck = within_deck_by_deck(labels, report.scores, deck_of)
+            print("   within a deck, per deck: " + ", ".join(f"{deck} {share:.2f} ({pairs})" for deck, (share, pairs) in sorted(per_deck.items())))
+    if chosen is not None:
+        for name, measures in chosen.baselines.items():
+            row = difficulty_rows(chosen, today, "baseline", name, measures, "deck shares" if name == "similarity" else "constant", note)
             if name == "always easy":
-                row = with_hand_columns(row, *hand_measures(labels, {card_id: "easy" for card_id in report.predictions}))
+                row = with_hand_columns(row, *hand_measures(labels, {card_id: "easy" for card_id in chosen.predictions}))
             rows.append(row)
             print(f"baseline {name:12s} macro-F1 {measures['macro_f1'][0]:.3f} ± {measures['macro_f1'][1]:.3f}, "
                   f"weighted kappa {measures['kappa'][0]:.3f} ± {measures['kappa'][1]:.3f}, accuracy {measures['accuracy'][0]:.3f}"
                   + (f" | on the hand-labelled quizzes: accuracy {row['hand_accuracy']}" if row.get("hand_judged") else ""))
         # The hand levels against the authored levels of the rated quizzes judged blind: how far the criterion
         # agrees with the quota the levels were written under (the truth is the authored level)
-        authored = {card_id: level for card_id, level in report.levels.items() if labels.get(card_id, {}).get("level") in LEVEL_OF}
+        authored = {card_id: level for card_id, level in chosen.levels.items() if labels.get(card_id, {}).get("level") in LEVEL_OF}
         if authored:
             hand = {card_id: labels[card_id]["level"] for card_id in authored}
             values, judged_rated = hand_measures({card_id: {"level": level} for card_id, level in authored.items()}, hand)
@@ -724,31 +823,12 @@ def quoted(text: str) -> list[str]:
     return [f"> {line}".rstrip() for line in (text or "").strip().splitlines()] or [">"]
 
 
-def no_options(card_id: str) -> None:
-    """The quiz options where no course file or no viewer gives them: none, the form lists the answer."""
-    return None
-
-
-def quiz_options_of(table_dir: Path) -> Callable[[str], Optional[object]]:
-    """A card's answer options by id for the hand-label form: the viewer's parser on the course file next to the
-    table's folder, where both are there (app.glue.course.quiz_options); otherwise none, until the course table
-    carries the options (app roadmap step 15)."""
-    course_file = Path(table_dir).parent / COURSE_NAME
-    if not course_file.is_file():
-        return no_options
-    try:
-        from app.glue.course import quiz_options
-    except ImportError:
-        return no_options
-    return quiz_options(course_file)
-
-
-def write_hand_labels_form(cards, quiz_of, labels: dict[str, dict], today: str, note: str, path: Path,
+def write_hand_labels_form(cards, labels: dict[str, dict], today: str, note: str, path: Path,
                            reference_decks=HAND_LABEL_REFERENCE_DECKS) -> tuple[int, int]:
     """The judging form of the hand labels: every unrated quiz and, blind, the rated quizzes of the reference decks,
-    each with its question in full, its options (`quiz_of(card id)`: the viewer's Quiz, or None, then the answer)
-    with their feedback, the three level boxes and a note line; the stored labels are marked. The authored levels
-    are never written. Returns the two counts."""
+    each with its question in full, its options with their feedback (the record's; the answer for a quiz without
+    options), the three level boxes and a note line; the stored labels are marked. The authored levels are never
+    written. Returns the two counts."""
     unrated, reference = label_sample(cards, reference_decks)
     decks = ", ".join(sorted({card.deck for card in reference}))
     lines = [
@@ -775,12 +855,11 @@ def write_hand_labels_form(cards, quiz_of, labels: dict[str, dict], today: str, 
         lines.append("")
         lines.extend(quoted(card.question))
         lines.append("")
-        quiz = quiz_of(card.id)
-        if quiz is None:
+        if not card.options:
             lines.append(f"- answer: {one_line(card.answer)}")
         else:
-            for position, (option, feedback) in enumerate(zip(quiz.options, quiz.answers)):
-                mark = "correct" if position in quiz.correct else "wrong"
+            for position, (option, feedback) in enumerate(zip(card.options, card.answers)):
+                mark = "correct" if position in card.correct else "wrong"
                 lines.append(f"- ({mark}) {one_line(option)}" + (f"  —  {one_line(feedback)}" if feedback.strip() else ""))
         row = labels.get(card.id, {})
         lines.extend(f"- [{'x' if row.get('level') == level else ' '}] {level}" for level in LEVELS)
@@ -1008,14 +1087,15 @@ def evaluate_similarity(cards, seeds, deck_ids: dict[str, str], today: str, note
 
 
 def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", today: Optional[str] = None,
-        run_key: Optional[str] = None, cache_dir: Optional[Path] = None, vectoriser=None) -> None:
+        run_key: Optional[str] = None, cache_dir: Optional[Path] = None, vectoriser=None, tagger_loader: Optional[Callable] = None) -> None:
     """The evaluation on the course table in `table_dir`, its rows into `results_dir`: one part or all three, every
     row stamped with the run's key (`run_key`, by default the start time to the minute). The hand side of a part
     runs where its file or its form is in `results_dir`: with the form, the file is kept and the form written again;
     with the file alone (the capstone), the hand columns are computed and nothing is written back; with neither,
     the hand columns stay empty and no form is written. The parts measure the app's vectoriser (`vectoriser`, by
     default embeddings.app_vectoriser with the embeddings cached in `cache_dir`), next to the similarity part's
-    variants."""
+    variants; the difficulty part takes D2's tags from the same cache or the NLI model (`tagger_loader` stands in
+    for the pipeline in the tests)."""
     files = result_files(results_dir)
     if vectoriser is None:
         vectoriser = embeddings.app_vectoriser(cache_dir)
@@ -1041,12 +1121,13 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
         print(f"{len(topics)} rows appended to {files.topics}")
     # D1: the difficulty model, into its own file, with the hand labels kept and their form written again
     if part in ("all", "difficulty"):
-        difficulty = stamped(evaluate_difficulty(cards, today, note, labels, vectoriser), run_key)
+        tags = difficulty_tags(cards, cache_dir, tagger_loader)
+        difficulty = stamped(evaluate_difficulty(cards, today, note, labels, vectoriser, tags), run_key)
         write_rows(difficulty, files.difficulty, DIFFICULTY_COLUMNS)
         print(f"{len(difficulty)} rows appended to {files.difficulty}")
         if labels_form:
             write_labels(labels, files.hand_labels)
-            unrated, reference = write_hand_labels_form(cards, quiz_options_of(table_dir), labels, today, note, files.hand_labels_form)
+            unrated, reference = write_hand_labels_form(cards, labels, today, note, files.hand_labels_form)
             print(f"hand labels: {unrated} unrated quizzes and {reference} rated ones judged blind in {files.hand_labels_form}; "
                   f"{len(labels)} judged, kept in {files.hand_labels}")
         elif with_labels:
@@ -1081,7 +1162,7 @@ def main() -> None:
                         help="the similarity models (B0, S1, C1), the difficulty model D1, the topic model T1, or all (default)")
     parser.add_argument("--judge", default="", help="who marked hand_check.md and hand_labels.md: written into hand_marks.csv "
                         "and hand_labels.csv with every new or changed mark")
-    parser.add_argument("--cache", default=None, help=f"the folder of the embeddings' cache, S2's (default: {default_cache_dir()})")
+    parser.add_argument("--cache", default=None, help=f"the folder of the cache of S2's embeddings and D2's tags (default: {default_cache_dir()})")
     arguments = parser.parse_args()
     table_dir = Path(arguments.table) if arguments.table else default_table_dir()
     missing = course_table.missing_files(table_dir)

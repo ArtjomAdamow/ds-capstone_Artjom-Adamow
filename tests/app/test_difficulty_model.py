@@ -1,5 +1,6 @@
 """The difficulty model D1: the split, features that ignore the course order, the deck shares, the out-of-fold metrics
-with their spread, and the predictions of the unrated quizzes (nothing of the viewer)."""
+with their spread, the predictions of the unrated quizzes, the feature set with D2's tags, and D2 alone judged the
+same way without folds (nothing of the viewer)."""
 
 import model_support  # noqa: F401  (the helper's package on the path)
 
@@ -11,7 +12,8 @@ import numpy as np
 from app.cards import CardRecord
 from app.models import similar
 from app.models.difficulty_model import (
-    COURSE_SHARES, FEATURE_SETS, LEVELS, band, band_labels, features, fit_difficulty, share_labels, split,
+    COURSE_SHARES, FEATURE_SETS, LEVELS, TAG_FEATURES, TEXT_FEATURES, band, band_labels, features, fit_difficulty, judge_tags,
+    share_labels, split,
 )
 
 TOPICS = model_support.TOPICS
@@ -21,7 +23,8 @@ course = model_support.difficulty_course
 
 def shuffled_and_renamed(cards: list[CardRecord]) -> list[CardRecord]:
     """The same cards in another order and with other ids: nothing a card's level may depend on."""
-    copies = [CardRecord(f"x{number:04d}", card.deck, card.question, card.answer, card.stack, card.difficulty, card.explain)
+    copies = [CardRecord(f"x{number:04d}", card.deck, card.question, card.answer, card.stack, card.difficulty, card.explain,
+                         card.options, card.answers, card.correct)
               for number, card in enumerate(cards)]
     random.Random(7).shuffle(copies)
     return copies
@@ -29,6 +32,17 @@ def shuffled_and_renamed(cards: list[CardRecord]) -> list[CardRecord]:
 
 def by_question(cards, mapping):
     return {card.question: mapping[card.id] for card in cards if card.id in mapping}
+
+
+def fake_tags(cards) -> dict[str, tuple[float, float, float]]:
+    """Stand-in tags of D2 by card id, a function of the question alone (so a shuffled, renamed course gets the
+    same): the hard probability grows with the question's length, as the course's hard quizzes are the long ones."""
+    tags = {}
+    for card in cards:
+        hard = min(0.8, len(card.question.split()) / 50)
+        medium = min(0.3, 1.0 - hard)
+        tags[card.id] = (1.0 - hard - medium, medium, hard)
+    return tags
 
 
 class SplitAndFeaturesTest(unittest.TestCase):
@@ -52,8 +66,8 @@ class SplitAndFeaturesTest(unittest.TestCase):
         other = shuffled_and_renamed(self.cards)
         other_index = similar.SimilarityIndex.fit(other)
         for feature_set in FEATURE_SETS:
-            mine = features(self.cards, self.index, feature_set)
-            theirs = features(other, other_index, feature_set)
+            mine = features(self.cards, self.index, feature_set, fake_tags(self.cards))
+            theirs = features(other, other_index, feature_set, fake_tags(other))
             row_of = {card.question: row for row, card in enumerate(other)}
             order = [row_of[card.question] for card in self.cards]
             np.testing.assert_allclose(mine.dense, theirs.dense[order], atol=1e-12, err_msg=feature_set)
@@ -63,6 +77,21 @@ class SplitAndFeaturesTest(unittest.TestCase):
     def test_an_unknown_feature_set_is_refused(self):
         with self.assertRaises(ValueError):
             features(self.cards, self.index, "card order")
+
+    def test_the_feature_set_with_the_tags_needs_them_and_puts_the_three_probabilities_after_the_statistics(self):
+        self.assertIn("text+tags", FEATURE_SETS)
+        with self.assertRaises(ValueError) as error:
+            features(self.cards, self.index, "text+tags")
+        self.assertIn("tags", str(error.exception))
+        tags = fake_tags(self.cards)
+        data = features(self.cards, self.index, "text+tags", tags)
+        self.assertEqual(data.dense.shape, (len(self.cards), len(TEXT_FEATURES) + len(TAG_FEATURES)))
+        self.assertIsNone(data.rows)
+        np.testing.assert_allclose(data.dense[:, -3:], [tags[card.id] for card in self.cards])
+        np.testing.assert_allclose(data.dense[:, :-3], features(self.cards, self.index, "text").dense)
+        # no tag is read from a label: the tags are the caller's, so a card's level never enters them
+        with self.assertRaises(KeyError):
+            features(self.cards[:1], self.index, "text+tags", {})
 
 
 class DeckSharesTest(unittest.TestCase):
@@ -190,6 +219,69 @@ class FitTest(unittest.TestCase):
         self.assertFalse(report.measured)
         self.assertEqual(report.predictions, {})
         self.assertTrue(report.note)
+
+    def test_the_feature_set_with_the_tags_is_measured_out_of_fold_like_the_others(self):
+        tags = fake_tags(self.cards)
+        report = fit_difficulty(self.cards, self.index, "text+tags", tags=tags)
+        self.assertEqual((report.feature_set, report.folds, report.repeats), ("text+tags", 3, 3))
+        self.assertTrue(report.measured)
+        self.assertEqual(set(report.predictions), set(self.report.predictions))
+        self.assertEqual(report.predicted_counts, (3, 3, 0))  # two per deck: an easy and a medium
+        other = shuffled_and_renamed(self.cards)
+        theirs = fit_difficulty(other, similar.SimilarityIndex.fit(other), "text+tags", tags=fake_tags(other))
+        self.assertEqual(by_question(other, theirs.predictions), by_question(self.cards, report.predictions))
+
+
+class JudgeTagsTest(unittest.TestCase):
+    """D2 alone: one pass on the expected level of the tags, no folds, the same label rules and measures."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cards = course()
+        cls.tags = fake_tags(cls.cards)
+        cls.report = judge_tags(cls.cards, cls.tags)
+
+    def test_the_rated_quizzes_are_measured_in_one_pass_without_folds(self):
+        report = self.report
+        self.assertEqual((report.feature_set, report.rated_counts, report.folds, report.repeats), ("premise", (24, 9, 3), 0, 0))
+        self.assertTrue(report.measured)
+        for name in ("macro_f1", "kappa", "accuracy", "recall_hard"):
+            mean, sd = report.metrics[name]
+            self.assertTrue(0.0 <= mean <= 1.0 and sd == 0.0, name)  # one pass: no spread
+        self.assertEqual(set(report.most_likely), set(report.metrics))
+        self.assertEqual(set(report.baselines), {"always easy"})
+        self.assertAlmostEqual(report.baselines["always easy"]["accuracy"][0], 24 / 36)
+        self.assertEqual(report.confusion.shape, (3, 3))
+        self.assertGreater(report.metrics["spearman"][0], 0.5)  # the fake tags grow with the question's length, as the levels do
+        self.assertEqual(report.decks, {})  # no parts: the page's live parts are D1's
+
+    def test_every_unrated_quiz_gets_a_level_by_its_decks_shares_and_its_score_is_the_expected_level(self):
+        report = self.report
+        unrated = [card for card in self.cards if card.stack == 2]
+        self.assertEqual(set(report.predictions), {card.id for card in unrated})
+        self.assertEqual(set(report.cut_point_predictions), set(report.predictions))
+        for card in unrated:
+            easy, medium, hard = self.tags[card.id]
+            self.assertAlmostEqual(report.scores[card.id], medium + 2 * hard)
+        for deck in TOPICS:
+            pair = [card for card in unrated if card.deck == deck]
+            self.assertEqual(sorted(report.predictions[card.id] for card in pair), ["easy", "medium"])
+            longer = max(pair, key=lambda card: len(card.question))
+            self.assertEqual(report.predictions[longer.id], "medium")
+
+    def test_the_judgement_does_not_depend_on_the_course_order(self):
+        other = shuffled_and_renamed(self.cards)
+        theirs = judge_tags(other, fake_tags(other))
+        self.assertEqual(by_question(other, theirs.predictions), by_question(self.cards, self.report.predictions))
+        for name, (mean, _sd) in self.report.metrics.items():
+            self.assertAlmostEqual(theirs.metrics[name][0], mean, places=9, msg=name)
+
+    def test_with_one_rated_level_nothing_is_measured_but_the_unrated_quizzes_get_their_bands(self):
+        cards = model_support.CARDS  # one rated card, one unrated quiz
+        report = judge_tags(cards, fake_tags(cards))
+        self.assertFalse(report.measured)
+        self.assertTrue(report.note)
+        self.assertEqual(report.predictions, {"201002": "easy"})  # one extra quiz of a deck: easy
 
 
 if __name__ == "__main__":

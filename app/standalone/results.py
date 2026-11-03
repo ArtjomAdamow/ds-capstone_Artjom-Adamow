@@ -48,7 +48,7 @@ D1_MEASURES: tuple[Measure, ...] = (
     ("macro_f1", "macro_f1_sd"), ("balanced_accuracy", "balanced_accuracy_sd"), ("kappa", "kappa_sd"), ("accuracy", "accuracy_sd"),
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated", "predicted_easy", "predicted_medium",
     "predicted_hard", "hand_judged", "hand_macro_f1", "hand_kappa", "hand_accuracy", "hand_spearman",
-    ("hand_within_deck", "hand_within_pairs"),
+    ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
 )
 MARGIN_SCOPE = "margin >= "
 STACK_SCOPE = "stack "
@@ -200,7 +200,10 @@ class Results:
             return [self._course(run)]
         if letter == "T":
             return self._topics(run, deck_id)
-        return [self._difficulty(run)]
+        tables = [self._difficulty(run)]
+        if any(row.get("model") == "D2" for row in run):
+            tables.append(self._tags(run))
+        return tables
 
     def _similarity(self, run: list[dict]) -> Table:
         variants = [row for row in run if row.get("model") == "S1"]
@@ -256,12 +259,26 @@ class Results:
         chosen = [CHOSEN in (row.get("variant") or "") and row.get("label_rule") == "deck shares" for row in rows]
         return transpose("D1 next to the baselines and the hand labels", rows, heads, chosen, D1_MEASURES, self.by_ids)
 
+    def _tags(self, run: list[dict]) -> Table:
+        """D2's rows of the run (the templates, each by the deck shares and by the most likely class) next to D1's
+        chosen row, which every paired difference is against."""
+        reference = [row for row in run if row.get("model") == "D1" and CHOSEN in (row.get("variant") or "")
+                     and row.get("label_rule") == "deck shares"][:1]
+        variants = [row for row in run if row.get("model") == "D2"]
+        rows = reference + variants
+        heads = [f"D1 {difficulty_head(row)}" for row in reference] + [difficulty_head(row) for row in variants]
+        chosen = [True] * len(reference) + [False] * len(variants)
+        return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES, self.by_ids)
+
 
 def difficulty_head(row: Mapping[str, str]) -> str:
-    """A column of D1's table: the feature set and the label rule, a baseline by its name, the hand row by its kind."""
+    """A column of the difficulty tables: D1's feature set and label rule, D2's template and label rule, a baseline
+    by its name, the hand row by its kind."""
     variant = row.get("variant") or ""
     if row.get("model") == "D1":
         return f"{variant} · {row.get('label_rule') or ''}"
+    if row.get("model") == "D2":
+        return f"D2 {variant} · {row.get('label_rule') or ''}"
     if row.get("model") == "baseline":
         return f"baseline: {variant}"
     return f"hand labels: {variant}"

@@ -1,6 +1,8 @@
-"""The card record the models read: the seven fields of the viewer's Flashcard (project.models) as a protocol, so
-the viewer's cards fit it as they are and the models need no import of the viewer; and a record of the helper's own
-(CardRecord) for the test fixtures and, later, the data package's cards table (roadmap step 21, the table loader).
+"""The card record the models read: the seven fields of the viewer's Flashcard (project.models) and, since app
+roadmap step 12, a quiz's answer options (the option texts, one feedback per option, the indices of the correct
+ones), which the viewer's parser keeps apart from the card (its Quiz). The glue builds the records from the viewer's
+cards with their quiz (glue.course.load_course), the course table carries the options in three columns
+(course_table), so the models read one record in both modes and need no import of the viewer.
 
 The stacks are the parser's: 1 a flashcard of the lecture notebooks, 2 an unrated quiz, 3 a rated quiz (with a
 difficulty), 4 a flashcard of the quiz file. The id is the comb_id: the stack, the deck id and the card id.
@@ -16,7 +18,7 @@ STACK_SOURCE = 4
 
 
 class Card(Protocol):
-    """What the models read of a card: the viewer's Flashcard and CardRecord both fit."""
+    """What the models read of a card: CardRecord, in both modes."""
 
     deck: str
     question: str
@@ -24,6 +26,9 @@ class Card(Protocol):
     stack: int
     difficulty: Optional[str]
     explain: Optional[str]
+    options: tuple[str, ...]  # a quiz's answer options in file order; empty for a card without
+    answers: tuple[str, ...]  # one feedback text per option
+    correct: tuple[int, ...]  # the indices of the correct options
 
     @property
     def id(self) -> str: ...
@@ -31,7 +36,7 @@ class Card(Protocol):
 
 @dataclass(frozen=True)
 class CardRecord:
-    """A card of the helper's own, in the order of the viewer's Flashcard fields."""
+    """A card of the helper's own, in the order of the viewer's Flashcard fields, with the quiz's options after them."""
 
     comb_id: str
     deck: str
@@ -40,6 +45,9 @@ class CardRecord:
     stack: int = STACK_PLAIN
     difficulty: Optional[str] = None
     explain: Optional[str] = None
+    options: tuple[str, ...] = ()
+    answers: tuple[str, ...] = ()
+    correct: tuple[int, ...] = ()
 
     @property
     def id(self) -> str:

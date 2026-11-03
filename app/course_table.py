@@ -4,7 +4,9 @@ viewer's parser from the refined course file, read here with the csv module (no 
 
 * cards.csv (CARD_COLUMNS): every card the parser keeps, in its order (the decks in name order, the cards in file
   order): the comb_id, the deck's id and name, the scripted topic's id, name and rest flag, the stack, the authored
-  difficulty, the question, the answer and the explanation, as the parser cleaned them;
+  difficulty, the question, the answer and the explanation, as the parser cleaned them, and a quiz's answer
+  options, their feedback and the indices of the correct ones as JSON lists in three cells (empty for a card
+  without options; the option texts carry markdown and commas);
 * decks.csv (DECK_COLUMNS): every deck in deck id order with its description (the viewer's placeholder for now);
 * topics.csv (TOPIC_COLUMNS): every deck's scripted topics in file order, the empty ones too, which cards.csv
   cannot carry: T1's seeds hold them (an emptied topic keeps its dot).
@@ -15,9 +17,10 @@ parser. An empty difficulty or explanation reads as None.
 """
 
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Sequence
 
 from .cards import CardRecord
 from .models.topic_model import TopicSeed
@@ -27,7 +30,9 @@ DECKS_NAME = "decks.csv"
 TOPICS_NAME = "topics.csv"
 CARD_COLUMNS = (
     "comb_id", "deck_id", "deck", "topic_id", "topic_name", "rest", "stack", "difficulty", "question", "answer", "explain",
+    "options", "answers", "correct",
 )
+LIST_COLUMNS = ("options", "answers", "correct")  # JSON lists in the cell, empty for a card without options
 DECK_COLUMNS = ("deck_id", "name", "description")
 TOPIC_COLUMNS = ("deck_id", "topic_id", "name", "rest")
 TRUE = "true"
@@ -66,6 +71,17 @@ def missing_files(folder: Path) -> list[Path]:
 
 def flag(value: bool) -> str:
     return TRUE if value else FALSE
+
+
+def encode_list(values: Sequence) -> str:
+    """A list cell: the values as a JSON list, an empty string for none."""
+    values = list(values or ())
+    return json.dumps(values, ensure_ascii=False) if values else ""
+
+
+def decode_list(cell: str) -> tuple:
+    """The values of a list cell (encode_list), an empty tuple for an empty cell."""
+    return tuple(json.loads(cell)) if cell else ()
 
 
 def _rows(path: Path, columns: tuple[str, ...]) -> list[dict[str, str]]:
@@ -120,6 +136,8 @@ def load_table(folder: Path) -> CourseTable:
         CardRecord(
             comb_id=row["comb_id"], deck=row["deck"], question=row["question"], answer=row["answer"], stack=int(row["stack"]),
             difficulty=_optional(row["difficulty"]), explain=_optional(row["explain"]),
+            options=decode_list(row["options"]), answers=decode_list(row["answers"]),
+            correct=tuple(int(index) for index in decode_list(row["correct"])),
         )
         for row in card_rows
     ]

@@ -35,7 +35,11 @@ CARDS = [
                "A list comprehension builds a new list from an iterable in one expression.", STACK_PLAIN,
                explain="Wikipedia's article on list comprehension."),
     CardRecord("201002", "Alpha", "How do you slice a Python list?",
-               "Slicing a list with start and stop indices returns a new list.", STACK_QUIZ),
+               "Slicing a list with start and stop indices returns a new list.", STACK_QUIZ,
+               options=("list[start:stop]", "list.slice(start, stop)", "slice(list)", "list(start, stop)"),
+               answers=("Slicing a list with start and stop indices returns a new list.", "Lists have no slice method.",
+                        "slice makes a slice object, not a list.", "list(...) builds a list from an iterable."),
+               correct=(0,)),
     CardRecord("301003", "Alpha", "What is a Python dictionary?",
                "A dictionary maps keys to values; a lookup by key in a dictionary is fast.", STACK_DIFFICULTY, "easy"),
     CardRecord("101004", "Alpha", "How many items are in a list or a dictionary?",
@@ -119,7 +123,7 @@ def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
     """The test course as a course table in `folder`, as export_course.py writes it from the course file (the
     standalone page's and the evaluation's input); or another course with its scripted topics (the moving course:
     `moving_cards()` with MOVING_SCRIPTED)."""
-    from app.course_table import flag, write_table
+    from app.course_table import encode_list, flag, write_table
 
     records = CARDS if cards is None else cards
     topic_of = TOPIC_OF if scripted is None else {card_id: key for key, ids in scripted.items() for card_id in ids}
@@ -130,7 +134,8 @@ def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
         cards.append({
             "comb_id": card.id, "deck_id": deck_id, "deck": card.deck, "topic_id": topic_id, "topic_name": name,
             "rest": flag(rest), "stack": card.stack, "difficulty": card.difficulty, "question": card.question,
-            "answer": card.answer, "explain": card.explain,
+            "answer": card.answer, "explain": card.explain, "options": encode_list(card.options),
+            "answers": encode_list(card.answers), "correct": encode_list(card.correct),
         })
     decks = [{"deck_id": deck_id, "name": name, "description": DESCRIPTIONS[deck_id]} for name, deck_id in DECK_IDS.items()]
     topics = [
@@ -166,9 +171,14 @@ def quiz(deck: str, number: int, level: str) -> tuple[str, str]:
     )
 
 
+OPTIONS = ("a", "b", "c")  # the unrated quizzes' options of the difficulty course, b the correct one
+ANSWERS = ("why a", "why b", "")
+CORRECT = (1,)
+
+
 def difficulty_course() -> list[CardRecord]:
     """Three decks, each with 12 rated quizzes listed easy → medium → hard (8 / 3 / 1, as in the course), a short and
-    a long unrated quiz, three plain flashcards and one flashcard of the quiz file (stack 4)."""
+    a long unrated quiz with three options, three plain flashcards and one flashcard of the quiz file (stack 4)."""
     cards = []
     for deck_number, deck in enumerate(TOPICS, start=1):
         topic, thing = TOPICS[deck]
@@ -176,8 +186,10 @@ def difficulty_course() -> list[CardRecord]:
         for number, level in enumerate(levels, start=1):
             question, answer = quiz(deck, number + deck_number, level)
             cards.append(CardRecord(f"3{deck_number:02d}{number:03d}", deck, question, answer, stack=STACK_DIFFICULTY, difficulty=level))
-        cards.append(CardRecord(f"2{deck_number:02d}101", deck, *quiz(deck, 20 + deck_number, "easy"), stack=STACK_QUIZ))
-        cards.append(CardRecord(f"2{deck_number:02d}102", deck, *quiz(deck, 21 + deck_number, "hard"), stack=STACK_QUIZ))
+        cards.append(CardRecord(f"2{deck_number:02d}101", deck, *quiz(deck, 20 + deck_number, "easy"), stack=STACK_QUIZ,
+                                options=OPTIONS, answers=ANSWERS, correct=CORRECT))
+        cards.append(CardRecord(f"2{deck_number:02d}102", deck, *quiz(deck, 21 + deck_number, "hard"), stack=STACK_QUIZ,
+                                options=OPTIONS, answers=ANSWERS, correct=CORRECT))
         for number in range(3):
             cards.append(CardRecord(f"1{deck_number:02d}2{number:02d}", deck, f"What does {topic} do with a {TERMS[number]}?",
                                     f"{topic} keeps the {TERMS[number]} of a {thing}.", stack=STACK_PLAIN))
@@ -244,3 +256,48 @@ class FakeEncoder:
 def fake_loader(model_name: str) -> FakeEncoder:
     """A loader for app.models.embeddings.SentenceEncoder: the fake model under the asked name."""
     return FakeEncoder(model_name=model_name)
+
+
+# --- a stand-in for D2's zero-shot pipeline -------------------------------------------------------------------
+
+
+class FakeClassifier:
+    """Stands in for transformers' zero-shot-classification pipeline without torch: a premise's logit for a label
+    is the mean of a fixed value per (word, label), seeded by their hash, plus a length bonus that grows with the
+    label's position, so a longer premise leans to the later labels (the harder ones) and the result is the same
+    on every run. Called as the pipeline is (the texts, candidate_labels, hypothesis_template, multi_label,
+    batch_size) and answering as it does (labels sorted by score, with the scores); `calls` counts the calls."""
+
+    def __init__(self, model_name: str = "fake-nli") -> None:
+        self.model_name = model_name
+        self.calls = 0
+
+    @staticmethod
+    def _value(word: str, label: str) -> float:
+        import hashlib
+
+        digest = hashlib.blake2s(f"{word.lower()}|{label}".encode("utf-8"), digest_size=4).digest()
+        return int.from_bytes(digest, "big") / 2**32 - 0.5
+
+    def __call__(self, texts, candidate_labels, hypothesis_template="{}", multi_label=False, batch_size=1):
+        import numpy as np
+
+        self.calls += 1
+        single = isinstance(texts, str)
+        results = []
+        for text in [texts] if single else list(texts):
+            words = [word for word in text.replace("`", " ").split() if word] or [""]
+            logits = np.array([
+                np.mean([self._value(word, label) for word in words]) + 0.3 * position * np.log1p(len(words))
+                for position, label in enumerate(candidate_labels)
+            ])
+            scores = np.exp(logits - logits.max())
+            scores /= scores.sum()
+            order = sorted(range(len(candidate_labels)), key=lambda position: -scores[position])
+            results.append({"sequence": text, "labels": [candidate_labels[i] for i in order], "scores": [float(scores[i]) for i in order]})
+        return results[0] if single else results
+
+
+def fake_classifier_loader(model_name: str) -> FakeClassifier:
+    """A loader for app.models.zero_shot.ZeroShotTagger: the fake pipeline under the asked name."""
+    return FakeClassifier(model_name=model_name)
