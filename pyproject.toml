@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 # The flashcards viewer: a separately licensed private package, see README "Third-party".
 viewer = ["sputnik"]
+embeddings = ["sentence-transformers>=6.2", "torch>=2.15"]   # torch listed directly so the source below applies
 
 [dependency-groups]
 dev = [
@@ -33,6 +34,12 @@ package = false
 
 [tool.uv.sources]
 sputnik = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git", tag = "v0.3.0" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true            # only torch comes from here; everything else stays on PyPI
 
 [tool.ruff]
 line-length = 100
