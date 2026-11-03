@@ -16,12 +16,13 @@ viewer's in its theme (assets/style.css holds the tokens):
   positions, nothing else. S, T and D keep their legends inside the map: plotly's legend at the top left, drawn from
   one marker per class the view holds (legend_traces), and S's and T's colour scale as a colour bar at the bottom
   left (scale_trace);
-* window A (`dot-panel`), under the map (beside it in portrait, at its height): the selected dot's ids and counts, a
-  click on a deck's or a topic's enters it; with nothing selected the dendrogram of the view's membership with the
-  preset's cut-off line, its leaves by id (figures.dendrogram_figure);
+* window A (`dot-panel`), under the map (beside it in portrait): the selected dot's ids and counts, a click on a
+  deck's or a topic's enters it; with nothing selected the dendrogram of the view's membership with the preset's
+  cut-off line, its leaves by id (figures.dendrogram_figure);
 * window B (`graph-window`), under window A at its width in both orientations, the expanded generation's graphs,
   shown with D or T expanded only: D's confusion matrix and the shares of the levels of the view's part of the course
-  (metrics_window), T's margins of the view's cards (margins_window);
+  (metrics_window), T's margins of the view's cards (margins_window). The two windows are one column (`windows`); in
+  portrait they take the map's height together, window A its content's and window B the rest (style.css);
 * the model panels (`box-S` to `box-D`), a column right of all three (under them in portrait): one per model letter, a
   row with its letter and name (`panel-S`, a click expands it and collapses any other) and a close box (`close-S`);
   expanded, a row per generation in a fixed order, the oldest on top (S1 above S2, D1 above D2; C1 and T1 alone:
@@ -732,8 +733,10 @@ def page_layout(home: dict) -> html.Main:
                         dcc.Graph(id="map", config={"displayModeBar": False, "scrollZoom": True}, responsive=True),
                         className="map-frame",
                     ),
-                    html.Div(id="dot-panel", n_clicks=0, className="window-a"),
-                    html.Div(id="graph-window", className=window_class(False)),
+                    html.Div(
+                        [html.Div(id="dot-panel", n_clicks=0, className="window-a"), html.Div(id="graph-window", className=window_class(False))],
+                        className="windows",
+                    ),
                     html.Div(model_panel_boxes(), id="model-panels", className="model-panels"),
                 ],
                 className="workspace",

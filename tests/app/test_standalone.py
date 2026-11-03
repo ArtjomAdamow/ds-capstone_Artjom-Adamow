@@ -6,7 +6,7 @@ lines, C1's positions with the connections, the centroid and the axes with C, T1
 colours of D1 or D2, the predicted quizzes as crosses in the predicted colour), the legends of S, T and D inside the
 map with S's and T's colour bars, the axes faded, the dot's ids in its panel, the dendrogram of the view's membership
 with the preset's line and its leaves by id, D1's and D2's scores in the D panel and their matrix and shares in window
-B under window A, T1's margins there, the portrait rule of window A's panel, C1's readout in
+B under window A, T1's margins there, the two windows at the map's height in portrait, C1's readout in
 the C panel, each generation's results tables of its newest run with their floor, a row's description opened by a
 click (one at a time, the close box, without the column's name again), the decks' hover and the line under the top
 bar by id, no learning material and no deck's or topic's name in any view or panel, and that neither the page nor the
@@ -1014,21 +1014,26 @@ class AppTest(unittest.TestCase):
         self.assertTrue(layout["map"].responsive)  # plotly follows the frame when the window resizes
         style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
         self.assertIn(".map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1;", style)
-        self.assertIn("grid-template-rows: auto auto auto 1fr;", style)  # the last row takes the panels' height: no gap under the map
-        self.assertIn(".model-panels { grid-column: 2; grid-row: 1 / span 4;", style)
+        self.assertIn("grid-template-rows: auto auto 1fr;", style)  # the last row takes the panels' height: no gap under the map
+        self.assertIn(".model-panels { grid-column: 2; grid-row: 1 / span 3;", style)
+        self.assertIn(".windows { grid-column: 1; grid-row: 2;", style)  # window A and window B, one column under the map
         self.assertIn(".window-b.collapsed { display: none; }", style)
         self.assertIn("--panel-font: 2;", style)  # the panels' text at double size
-        self.assertIn("@media (orientation: portrait)", style)  # window A beside the map, the panels under both
-        portrait = style[style.index("@media (orientation: portrait)"):]
-        self.assertIn(".window-b { grid-column: 2; grid-row: 2; }", portrait)  # under window A, at its width
-        self.assertIn(".window-a > .card-panel { min-height: 100%; }", portrait)  # window A's panel fills the map's height: no gap above B
+        self.assertIn("@media (orientation: portrait)", style)  # the windows beside the map, the panels under both
+        portrait = style[style.index("@media (orientation: portrait)"):style.index("@media (max-width")]
+        self.assertIn(".windows { grid-column: 2; grid-row: 1; height: var(--map-side); }", portrait)  # A and B: the map's height
+        self.assertIn(".window-a { flex: 0 1 auto; min-height: 0; max-height: 60%;", portrait)  # window A at its content's height, at most 60 %
+        self.assertIn(".window-a > .card-panel { min-height: 0; }", portrait)  # no empty space in it
+        self.assertIn(".window-b { flex: 1 1 0; min-height: 0;", portrait)  # window B the rest
+        self.assertIn(".windows:has(> .window-b.collapsed) > .window-a { flex: 1 1 auto; max-height: none; }", portrait)  # alone: all of it
         self.assertNotIn("legend", style[style.index("*/"):])  # every legend is the map's
         self.assertNotIn("measure-names", style)
         workspace = layout.children[2]
-        self.assertEqual([child.className for child in workspace.children], ["map-frame", "window-a", window_class(False), "model-panels"])
-        self.assertEqual(workspace.children[2].id, "graph-window")
+        self.assertEqual([child.className for child in workspace.children], ["map-frame", "windows", "model-panels"])
+        windows = workspace.children[1].children
+        self.assertEqual([(child.id, child.className) for child in windows], [("dot-panel", "window-a"), ("graph-window", window_class(False))])
         self.assertEqual((layout.children[-1].id, layout.children[-1].value), (ROW_INPUT, ""))
-        boxes = workspace.children[3].children
+        boxes = workspace.children[2].children
         self.assertEqual([box.id for box in boxes], [f"box-{letter}" for letter in PANEL_LETTERS])
         self.assertEqual({box.className for box in boxes}, {box_class(False)})
         head = boxes[0].children[0]

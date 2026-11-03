@@ -1,9 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 /* The standalone page (app.standalone): the viewer's theme, its tokens written anew here (no file of the
-   viewer is copied). The map, a square of 12.5 % of the window's area (map_side.js sets its side); the dendrogram's
-   window (window A) under it in landscape, beside it at its height in portrait, its panel filling that height; window B,
-   the expanded generation's graphs, under window A at its width in both, shown with D or T expanded; the model panels a
-   column right of all three in landscape, under them at the window's width in portrait, their text at double size
+   viewer is copied). The map, a square of 12.5 % of the window's area (map_side.js sets its side); the two windows in a
+   column (.windows): the dendrogram's window (window A) and under it window B, the expanded generation's graphs, shown
+   with D or T expanded; the column under the map in landscape, beside it in portrait, where window A and window B
+   together take the map's height (window A its content's, window B the rest; window A alone all of it); the model panels
+   a column right of all in landscape, under them at the window's width in portrait, their text at double size
    (--panel-font). The legends are the map's (plotly's), none is the page's. The page scrolls as a document. */
 
 :root {
@@ -35,16 +36,16 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 /* The hidden input a generation's or a results row's click sets (panel_rows.js); never shown, never focused by hand */
 .row-click { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-/* The workspace: landscape, the map, window A and window B in a column on the left, the model panels
-   on the right over all the rows; the last row takes the panels' extra height, so the three windows keep their own
-   heights and no gap opens between the map and window A */
-.workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); grid-template-rows: auto auto auto 1fr; gap: 28px; align-items: start; }
+/* The workspace: landscape, the map and the two windows in a column on the left, the model panels on the right over
+   all the rows; the last row takes the panels' extra height, so the map and the windows keep their own heights and no
+   gap opens between the map and window A */
+.workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); grid-template-rows: auto auto 1fr; gap: 28px; align-items: start; }
 .map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
 #map { width: 100%; height: 100%; }
-.window-a { grid-column: 1; grid-row: 2; min-width: 0; }
-.window-b { grid-column: 1; grid-row: 3; min-width: 0; }
+.windows { grid-column: 1; grid-row: 2; min-width: 0; display: flex; flex-direction: column; gap: 28px; }
+.window-a, .window-b { min-width: 0; }
 .window-b.collapsed { display: none; }
-.model-panels { grid-column: 2; grid-row: 1 / span 4; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.model-panels { grid-column: 2; grid-row: 1 / span 3; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
 /* The readout tables: C1's measures, S1's and T1's live measures, the selected dot's ids */
 .readout-scope { margin: 6px 0 2px; color: var(--ink); font: 0.72rem/1.35 'DM Mono', monospace; }
@@ -121,21 +122,27 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .model-panels .measure-text { font-size: calc(0.82rem * var(--panel-font)); }
 .model-panels .measure-close { width: calc(28px * var(--panel-font)); height: calc(28px * var(--panel-font)); font-size: calc(1rem * var(--panel-font)); }
 
-/* Portrait: window A beside the map at its height, its panel filling it (so no gap opens above window B, whatever the
-   panel holds), window B under window A at its width, the panels under all */
-@media (orientation: portrait) {
-  .workspace { grid-template-rows: auto auto auto; }
-  .window-a { grid-column: 2; grid-row: 1; height: var(--map-side); overflow-y: auto; }
-  .window-a > .card-panel { min-height: 100%; }
-  .window-b { grid-column: 2; grid-row: 2; }
-  .model-panels { grid-column: 1 / -1; grid-row: 3; }
+/* Portrait: the windows beside the map, window A and window B together at the map's height: window A at its content's
+   height (its panel without the minimum), at most 60 % of it, window B the rest; each scrolls what does not fit. With
+   window B collapsed window A takes the whole height, its panel filling it. The panels under all. Below 821 px the
+   narrow rules below hold instead. */
+@media (orientation: portrait) and (min-width: 821px) {
+  .workspace { grid-template-rows: auto auto; }
+  .windows { grid-column: 2; grid-row: 1; height: var(--map-side); }
+  .window-a { flex: 0 1 auto; min-height: 0; max-height: 60%; overflow-y: auto; }
+  .window-a > .card-panel { min-height: 0; }
+  .window-b { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+  .window-b > .card-panel { min-height: 100%; }
+  .windows:has(> .window-b.collapsed) > .window-a { flex: 1 1 auto; max-height: none; }
+  .windows:has(> .window-b.collapsed) > .window-a > .card-panel { min-height: 100%; }
+  .model-panels { grid-column: 1 / -1; grid-row: 2; }
 }
 
 @media (max-width: 820px) {
   .app-shell { padding: 22px 16px 28px; }
   .topbar, .toolbar { align-items: flex-start; flex-direction: column; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: none; }
-  .map-frame, .window-a, .window-b, .model-panels { grid-column: 1; grid-row: auto; height: auto; }
+  .map-frame, .windows, .model-panels { grid-column: 1; grid-row: auto; height: auto; }
   .window-b.collapsed { display: none; }
   :root { --panel-min: 220px; }
 }
