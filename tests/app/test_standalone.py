@@ -991,10 +991,11 @@ class EmbeddingsPanelTest(unittest.TestCase):
         content = str(contents[PANEL_LETTERS.index("S")])
         self.assertIn("S2 · similarity", content)
         self.assertIn("hybrid: TF-IDF + MiniLM (16 dimensions)", content)
-        for label in ("vectoriser", "vocabulary", "embedding dimensions", "embeddings", "hybrid minima", "hybrid weights", "minimum score"):
+        for label in ("vectoriser", "vocabulary", "embedding dimensions", "embeddings", "device", "hybrid minima", "hybrid weights", "minimum score"):
             self.assertIn(label, content)
         self.assertIn(f"{self.page.model.index.min_score:.2f}", content)  # the index's own minimum, as the readout rounds it
         self.assertIn("encoded in", content)  # no cache: encoded at the start
+        self.assertIn(f"s on {self.page.model.index.vectoriser.second.device}", content)  # and on which device
 
     def test_s2s_table_stands_next_to_s1s_chosen_variant(self):
         s1, s2 = self.page.results.tables("S")

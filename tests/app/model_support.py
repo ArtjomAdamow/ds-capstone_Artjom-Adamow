@@ -220,9 +220,10 @@ class FakeEncoder:
     by the word's hash), scaled to length 1, so two texts sharing words are close and the result is the same on
     every run. `fit_transform` and `transform` both encode, as S2's wrapper does; `calls` counts the encodings."""
 
-    def __init__(self, dimensions: int = 16, model_name: str = "fake-encoder") -> None:
+    def __init__(self, dimensions: int = 16, model_name: str = "fake-encoder", device: str = "cpu") -> None:
         self.dimensions = dimensions
         self.model_name = model_name
+        self.device = device
         self.calls = 0
 
     def _word(self, word: str):
@@ -253,9 +254,9 @@ class FakeEncoder:
         return self.encode(list(texts))
 
 
-def fake_loader(model_name: str) -> FakeEncoder:
-    """A loader for app.models.embeddings.SentenceEncoder: the fake model under the asked name."""
-    return FakeEncoder(model_name=model_name)
+def fake_loader(model_name: str, device: str = "cpu") -> FakeEncoder:
+    """A loader for app.models.embeddings.SentenceEncoder: the fake model under the asked name, on the asked device."""
+    return FakeEncoder(model_name=model_name, device=device)
 
 
 # --- a stand-in for D2's zero-shot pipeline -------------------------------------------------------------------
@@ -268,8 +269,9 @@ class FakeClassifier:
     on every run. Called as the pipeline is (the texts, candidate_labels, hypothesis_template, multi_label,
     batch_size) and answering as it does (labels sorted by score, with the scores); `calls` counts the calls."""
 
-    def __init__(self, model_name: str = "fake-nli") -> None:
+    def __init__(self, model_name: str = "fake-nli", device: str = "cpu") -> None:
         self.model_name = model_name
+        self.device = device
         self.calls = 0
 
     @staticmethod
@@ -298,6 +300,6 @@ class FakeClassifier:
         return results[0] if single else results
 
 
-def fake_classifier_loader(model_name: str) -> FakeClassifier:
-    """A loader for app.models.zero_shot.ZeroShotTagger: the fake pipeline under the asked name."""
-    return FakeClassifier(model_name=model_name)
+def fake_classifier_loader(model_name: str, device: str = "cpu") -> FakeClassifier:
+    """A loader for app.models.zero_shot.ZeroShotTagger: the fake pipeline under the asked name, on the asked device."""
+    return FakeClassifier(model_name=model_name, device=device)

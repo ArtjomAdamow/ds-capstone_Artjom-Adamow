@@ -1,6 +1,6 @@
 """S2 (app.models.embeddings) on the fixtures, with a fake encoder in place of the model: the embeddings' cache, the
-encoder as a vectoriser, the hybrid's blocks and weights, the app's vectoriser by name, and the one test on the
-real encoder, which skips without the library or the cached model."""
+encoder as a vectoriser, the device, the hybrid's blocks and weights, the app's vectoriser by name, and the tests on
+the real encoder, which skip without the library or the cached model, the GPU's without CUDA."""
 
 import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
 
@@ -112,6 +112,34 @@ class EncoderTest(unittest.TestCase):
         self.assertEqual(embeddings.describe(encoder), "MiniLM (16 dimensions)")
 
 
+class DeviceTest(unittest.TestCase):
+    def test_auto_is_the_gpu_where_there_is_one_else_the_cpu(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(embeddings.resolve_device(cuda=lambda: True), "cuda")
+            self.assertEqual(embeddings.resolve_device(cuda=lambda: False), "cpu")
+            self.assertEqual(embeddings.resolve_device("auto", cuda=lambda: True), "cuda")
+
+    def test_the_setting_or_app_device_chooses_and_cuda_without_a_gpu_is_the_cpu(self):
+        self.assertEqual(embeddings.resolve_device("cpu", cuda=lambda: True), "cpu")
+        self.assertEqual(embeddings.resolve_device("cuda", cuda=lambda: False), "cpu")
+        with mock.patch.dict("os.environ", {embeddings.DEVICE_VARIABLE: " CPU "}):
+            self.assertEqual(embeddings.resolve_device(cuda=lambda: True), "cpu")
+            self.assertEqual(embeddings.resolve_device("cuda", cuda=lambda: True), "cuda")  # the argument before the variable
+        with mock.patch.dict("os.environ", {embeddings.DEVICE_VARIABLE: "gpu"}), self.assertRaises(ValueError):
+            embeddings.resolve_device(cuda=lambda: True)
+
+    def test_the_encoder_resolves_its_device_at_the_load_and_hands_it_to_the_loader(self):
+        encoder = embeddings.SentenceEncoder(embeddings.MINILM, loader=model_support.fake_loader, device="cpu")
+        self.assertEqual(encoder.load().device, "cpu")
+        with mock.patch.object(embeddings, "cuda_available", return_value=True), \
+                mock.patch.dict("os.environ", {embeddings.DEVICE_VARIABLE: "auto"}):
+            encoder = embeddings.SentenceEncoder(embeddings.MINILM, loader=model_support.fake_loader)
+            self.assertIsNone(encoder.device)  # nothing resolved before the load
+            encoder.fit_transform(TEXTS)
+        self.assertEqual(encoder.device, "cuda")
+        self.assertEqual(encoder.load().device, "cuda")
+
+
 class HybridTest(unittest.TestCase):
     def setUp(self):
         self.tfidf = similar.tfidf_vectoriser(min_df=1)
@@ -178,7 +206,7 @@ class AppVectoriserTest(unittest.TestCase):
         self.assertIn(embeddings.MINILM, lines[0])
 
     def test_a_model_that_does_not_load_gives_tfidf_and_the_fetching_command(self):
-        def failing(model_name):
+        def failing(model_name, device):
             raise OSError("offline")
 
         lines = []
@@ -225,6 +253,23 @@ class RealEncoderTest(unittest.TestCase):
         self.assertTrue(np.allclose(np.linalg.norm(vectors, axis=1), 1.0, atol=1e-4))
         self.assertEqual(encoder.dimensions, 384)
         self.assertGreater(encoder.seconds, 0.0)
+
+
+@unittest.skipUnless(embeddings.encoder_available() and cached_model(embeddings.MINILM) and embeddings.cuda_available(),
+                     "sentence-transformers, the cached MiniLM or a CUDA GPU missing")
+class RealGpuTest(unittest.TestCase):
+    def test_minilm_on_the_gpu_gives_the_cpus_vectors_and_neighbours(self):
+        with mock.patch.dict("os.environ", {"HF_HUB_OFFLINE": "1"}), contextlib.redirect_stderr(io.StringIO()):
+            gpu = embeddings.SentenceEncoder(embeddings.MINILM, device="cuda")
+            cpu = embeddings.SentenceEncoder(embeddings.MINILM, device="cpu")
+            on_gpu, on_cpu = gpu.fit_transform(TEXTS), cpu.fit_transform(TEXTS)
+        self.assertEqual((gpu.device, cpu.device), ("cuda", "cpu"))
+        self.assertGreater(float(np.min(np.sum(on_gpu * on_cpu, axis=1))), 0.9999)  # fp32: the cache's key has no device
+
+        def nearest(vectors):
+            return np.sort(np.argsort(-(vectors @ vectors.T), axis=1)[:, 1:similar.TOP_K + 1], axis=1)
+
+        np.testing.assert_array_equal(nearest(on_gpu), nearest(on_cpu))
 
 
 if __name__ == "__main__":

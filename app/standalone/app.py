@@ -560,8 +560,10 @@ class Page:
         ]
         if isinstance(encoder, embeddings.SentenceEncoder):
             rows.append(("embedding dimensions", f"{encoder.dimensions:,}" if encoder.dimensions else "–", "The length of the encoder's vectors."))
-            rows.append(("embeddings", "from the cache" if encoder.cached else f"encoded in {encoder.seconds:.1f} s",
-                         "Whether the start read the course's embeddings from the cache (a derived file keyed by the model and the texts) or encoded them."))
+            rows.append(("embeddings", "from the cache" if encoder.cached else f"encoded in {encoder.seconds:.1f} s on {encoder.device}",
+                         "Whether the start read the course's embeddings from the cache (a derived file keyed by the model and the texts) or encoded them, and on which device."))
+            rows.append(("device", encoder.device or "–",
+                         "Where the encoder runs, the requests' texts as well: cuda (the GPU) where torch sees one, else cpu; APP_DEVICE chooses (auto, cpu, cuda)."))
         if isinstance(vectoriser, embeddings.HybridVectoriser):
             rows.append(("hybrid minima", " / ".join(number(value) for value in vectoriser.minima),
                          "Each half's own minimum: the 10th percentile of its fifth neighbour's cosine (TF-IDF, then the encoder)."))
