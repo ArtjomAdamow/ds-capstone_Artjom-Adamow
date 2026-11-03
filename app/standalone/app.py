@@ -22,16 +22,18 @@ time (the `level` key of the store, None for the newest). The expanded generatio
   Page.neighbour_pairs); the selected card's neighbours with their scores and where they lie in the panel, their
   count by place in window A; S2 without the encoder shows nothing;
 * D1 or D2: the cards coloured as the viewer does after Helper (a rated quiz by its level, a quiz the generation
-  predicted in the predicted colour as a cross with its level on the hover, a flashcard grey; Page.d_markers), with
-  the legend inside the map, and the difficulty window under the dendrogram's window with the generation's confusion
-  matrix and the shares of the levels of the view's part (Page.difficulty_window); D2 without cached tags says so;
+  predicted in the predicted colour as a cross with its level on the hover, a flashcard grey; Page.d_markers), and
+  window B under the dendrogram's window with the generation's confusion matrix and the shares of the levels of the
+  view's part (Page.graph_window); D2 without cached tags says so;
 * C: T1's membership at C1's positions (the decks', the cards' directions), the connections below the preset, the
   centroid and the axes;
 * T: the same positions, the centroid and the axes, no connections, and T1's markers: a card's margin on a teal
   scale, a cross below the threshold, a violet diamond for a card T1 moved in from another scripted topic, an open
   pink diamond for a card scripted here that T1 moved elsewhere, placed at the normalised mean direction of its most
   similar cards among the topic's members; an emptied topic as an open circle, a topic's dot grown with its share of
-  cards below the threshold.
+  cards below the threshold; and window B with the margins of the view's cards.
+
+The legends of S, T and D are the map's (layout.map_figure), not the panels'.
 
 A change of membership keeps the view (T1 keeps the scripted topic ids); a selected card the new membership does
 not hold is unselected. The dendrogram's window shows the tree of the view's membership with the preset's line in
@@ -64,7 +66,7 @@ from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
 import numpy as np
-from dash import Dash, Input, Output, State, dcc, html
+from dash import Dash, Input, Output, State, html
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
@@ -78,8 +80,8 @@ from ..models.layout import as_dense, fibonacci_sphere
 from .layout import (
     CARDS_VIEW, CROSS_SYMBOL, DECKS_VIEW, GENERATIONS, GREY, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL,
     NO_NEIGHBOUR_SYMBOL, PANEL_LETTERS, PREDICTED, TOPICS_NOTE, TOPICS_VIEW, box_class, card_class, card_panel, class_style,
-    deck_panel, generation_rows, level_section, map_figure, margin_color, margin_histogram, metrics_panel, metrics_window,
-    model_readout, overview_panel, page_layout, s_legend, share_color, t1_legend, topic_panel, window_class,
+    MARGINS_NOTE, deck_panel, generation_rows, level_section, map_figure, margin_color, margins_window, metrics_panel,
+    metrics_window, model_readout, overview_panel, page_layout, share_color, topic_panel, window_class,
 )
 from .results import LEVEL_FILES, Results, course_note, read_glossary
 
@@ -136,7 +138,7 @@ DESCRIPTIONS = {
     "D2": "Zero-shot tags: an NLI model reads each quiz with its resolution against the hand criterion's three demands "
           "(the criterion template), nothing fitted; the expected level is cut by the deck shares. Within noise of D1's "
           "order on the hand labels, so a judge of the evaluation and D1 stays the app's. The page reads the tags from "
-          "the launcher's cache; the map and the difficulty window show its levels.",
+          "the launcher's cache; the map and window B show its levels.",
 }
 
 
@@ -605,20 +607,22 @@ class Page:
         return part.for_topic(topic.name, topic.ids), self.scope(state)
 
     def metrics(self, state: dict, report: Optional[DifficultyReport] = None):
-        """The report's scores of the view in the D panel, D1's by default (the matrix and the shares are the
-        difficulty window's)."""
+        """The report's scores of the view in the D panel, D1's by default (the matrix and the shares are window
+        B's)."""
         return metrics_panel(*self.metrics_report(state, report))
 
-    def difficulty_window(self, state: dict) -> tuple[list, str]:
-        """The difficulty window's content and class: with D expanded, the expanded generation's confusion matrix and
-        the shares of the levels of the view's part (D2 without cached tags: why not); otherwise empty and
-        collapsed."""
+    def graph_window(self, state: dict) -> tuple[list, str]:
+        """Window B's content and class: with D expanded, the expanded generation's confusion matrix and the shares of
+        the levels of the view's part (D2 without cached tags: why not); with T, the margins of the view's cards;
+        otherwise empty and collapsed."""
+        if state.get("panel") == "T":
+            return [margins_window(self.margins(self.view_ids(state)), self.topic_model.margin, self.scope(state))], window_class(True)
         if state.get("panel") != "D":
             return [], window_class(False)
         report = self.difficulty_of(state)
         if report is None:
             empty = html.Div([html.Div(f"Difficulty model {self.level_of(state)}", className="card-label"), html.P(NO_TAGS, className="empty-state")],
-                             className="card-panel difficulty-window")
+                             className="card-panel graph-panel")
             return [empty], window_class(True)
         return [metrics_window(*self.metrics_report(state, report))], window_class(True)
 
@@ -683,6 +687,10 @@ class Page:
 
     # --- the model panels --------------------------------------------------------------------------------------
 
+    def margins(self, ids) -> list[float]:
+        """T1's margins of these cards, where it has one."""
+        return [self.topic_model.margin_of[card_id] for card_id in ids if card_id in self.topic_model.margin_of]
+
     def view_ids(self, state: dict) -> list[str]:
         """The cards of the view under T1: the course's, the entered deck's, or the entered topic's."""
         if state["view"] == DECKS_VIEW:
@@ -712,7 +720,7 @@ class Page:
     def _live_similarity(self, level: str, state: dict) -> list:
         """S1's or S2's live measures over the course: its vectoriser, whether the app runs it, its vocabulary, the
         encoder's dimensions and cache, the hybrid's minima and weights, its minimum score and coverage; with a card
-        selected in the cards view, the card's neighbours; the legend of the map."""
+        selected in the cards view, the card's neighbours (the legend is the map's)."""
         index = self.indexes.get(level)
         if index is None:
             return [html.P(NO_ENCODER, className="empty-state")]
@@ -748,7 +756,7 @@ class Page:
         if state["view"] == CARDS_VIEW and selected in self.card_by_id:
             near = [(other, f"{score:.2f} · {where}", "The neighbour's cosine and where it lies.") for other, score, where in self.neighbours_of(selected, state)]
             sections.append((f"card {selected}'s neighbours", near or [("none", "–", "No neighbour above the minimum score.")]))
-        return model_readout(f"All {len(index.ids):,} cards", sections) + [s_legend(level)]
+        return model_readout(f"All {len(index.ids):,} cards", sections)
 
     def _live_course(self, level: str, state: dict) -> list:
         live = model_readout(*self.measures(state))
@@ -775,11 +783,7 @@ class Page:
         if state["view"] == CARDS_VIEW and topic is not None and selected in self.card_by_id and selected in self.topic_model.topic_of:
             rows += [(f"card {selected}: {label}", value, "The selected card, with T.") for label, value in self.t1_rows(selected, topic)]
         scope = {DECKS_VIEW: f"All {len(ids):,} cards", TOPICS_VIEW: f"This deck: {len(ids)} cards", CARDS_VIEW: f"This topic: {len(ids)} cards"}[state["view"]]
-        margins = [self.topic_model.margin_of[card_id] for card_id in ids if card_id in self.topic_model.margin_of]
-        return model_readout(scope, [("T1 (nearest centroid)", rows)]) + [
-            dcc.Graph(figure=margin_histogram(margins, self.topic_model.margin), config={"displayModeBar": False}, className="margin-histogram"),
-            t1_legend(self.margin_scale, self.topic_model.margin),
-        ]
+        return model_readout(scope, [("T1 (nearest centroid)", rows)]) + [html.Div(MARGINS_NOTE, className="card-hint")]
 
     def _live_difficulty(self, level: str, state: dict) -> list:
         report = self.reports.get(level)
@@ -879,8 +883,8 @@ class Page:
 
 def register_callback(app: Dash, page: Page):
     """The page's one callback; returns the function (for tests). Its outputs: the map, window A, the view, the
-    line under the top bar, Open's and Back's disabled state, the four panels' contents and their classes, then the
-    difficulty window's content and class. Its inputs end with the hidden input of a generation's or a results row's
+    line under the top bar, Open's and Back's disabled state, the four panels' contents and their classes, then
+    window B's content and class. Its inputs end with the hidden input of a generation's or a results row's
     click and the view's state."""
 
     @app.callback(
@@ -892,8 +896,8 @@ def register_callback(app: Dash, page: Page):
         Output("back", "disabled"),
         *[Output(f"content-{letter}", "children") for letter in PANEL_LETTERS],
         *[Output(f"box-{letter}", "className") for letter in PANEL_LETTERS],
-        Output("difficulty-window", "children"),
-        Output("difficulty-window", "className"),
+        Output("graph-window", "children"),
+        Output("graph-window", "className"),
         Input("map", "clickData"),
         Input("open", "n_clicks"),
         Input("back", "n_clicks"),
@@ -908,7 +912,7 @@ def register_callback(app: Dash, page: Page):
 
         state = page.step(rest[-1], ctx.triggered_id, click_data, measure=rest[-2])
         contents, classes = page.panels(state)
-        window, window_class_name = page.difficulty_window(state)
+        window, window_class_name = page.graph_window(state)
         return (
             map_figure(page, state),
             page.dot_panel(state),

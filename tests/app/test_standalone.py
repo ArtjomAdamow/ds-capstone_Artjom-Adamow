@@ -3,9 +3,10 @@ the three views through the callback (select, Open, a click on the panel, Back),
 expanded at a time, the close box) with a row per generation (the newest expanded, one at a time), the map per
 generation (random positions and the scripted topics with every panel collapsed, S1's and S2's neighbour shares and
 lines, C1's positions with the connections, the centroid and the axes with C, T1's markers with T, the difficulty
-colours of D1 or D2, the predicted quizzes as crosses in the predicted colour and the legend inside the map), the
-dot's ids in its panel, the dendrogram of the view's membership with the preset's line and its leaves by id, D1's
-and D2's scores in the D panel and their matrix and shares in the difficulty window under window A, C1's readout in
+colours of D1 or D2, the predicted quizzes as crosses in the predicted colour), the legends of S, T and D inside the
+map with S's and T's colour bars, the axes faded, the dot's ids in its panel, the dendrogram of the view's membership
+with the preset's line and its leaves by id, D1's and D2's scores in the D panel and their matrix and shares in window
+B under window A, T1's margins there, the portrait rule of window A's panel, C1's readout in
 the C panel, each generation's results tables of its newest run with their floor, a row's description opened by a
 click (one at a time, the close box, without the column's name again), the decks' hover and the line under the top
 bar by id, no learning material and no deck's or topic's name in any view or panel, and that neither the page nor the
@@ -35,9 +36,10 @@ from app.standalone.app import (
     ASSETS_DIR, CARD_PART, DECK_PART, HOME, NO_ENCODER, NO_TAGS, PANEL_LETTERS, ROW_INPUT, Page, create_app, register_callback,
 )
 from app.standalone.layout import (
-    AXIS_RANGE, AXIS_TICKS, CROSS_SYMBOL, EMPTIED_SYMBOL, GENERATIONS, GREY, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL,
-    MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, NO_NEIGHBOUR_SYMBOL, PREDICTED_SYMBOL, SELECTED_LINE, SHARE_HIGH, SHARE_LOW, TOPICS_NOTE,
-    WINDOW_NOTE, box_class, margin_color, page_layout, share_color, window_class,
+    AXIS_ALPHA, AXIS_FONT, AXIS_RANGE, AXIS_TICKS, BETWEEN, CROSS_SYMBOL, EMPTIED, EMPTIED_SYMBOL, GENERATIONS, GREY, GROWN,
+    LEVEL_COLORS, MARGINS_NOTE, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, NEIGHBOUR_PAIRS,
+    NO_NEIGHBOUR, NO_NEIGHBOUR_SYMBOL, PREDICTED_SYMBOL, SELECTED_LINE, SELECTED_PAIRS, SHARE_HIGH, SHARE_LOW, TOPICS_NOTE,
+    WINDOW_NOTE, box_class, faded, margin_color, page_layout, share_color, window_class,
 )
 from app.standalone.results import NO_FOLDER, Results, course_note, read_glossary
 
@@ -45,8 +47,8 @@ OUT = {"figure": 0, "panel": 1, "view": 2, "where": 3, "open_disabled": 4, "back
 for _index, _letter in enumerate(PANEL_LETTERS):
     OUT[f"content_{_letter}"] = 6 + _index
     OUT[f"class_{_letter}"] = 6 + len(PANEL_LETTERS) + _index
-OUT["window_d"] = 6 + 2 * len(PANEL_LETTERS)  # the difficulty window's content, then its class
-OUT["class_d"] = OUT["window_d"] + 1
+OUT["window_b"] = 6 + 2 * len(PANEL_LETTERS)  # window B's content, then its class
+OUT["class_b"] = OUT["window_b"] + 1
 INPUTS = 5 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the four rows, the four close boxes, the row input
 
 
@@ -157,6 +159,11 @@ class PageDriver(unittest.TestCase):
         figure = result[OUT["figure"]]
         return [trace.name for trace in figure.data if trace.showlegend] if figure.layout.showlegend else []
 
+    def colorbar(self, result):
+        """The colour bar inside the map: (its title, its top); None without it."""
+        scale = self.trace(result, "Scale")
+        return (scale.marker.colorbar.title.text, scale.marker.cmax) if scale is not None else None
+
     def colors(self, result):
         trace = self.trace(result, "Cards")
         return dict(zip(trace.customdata, trace.marker.color))
@@ -237,6 +244,9 @@ class StandaloneTest(PageDriver):
             self.assertTrue(axis.visible)
             self.assertEqual((list(axis.range), list(axis.tickvals), axis.title.text), (AXIS_RANGE, AXIS_TICKS, name))
             self.assertFalse(axis.showspikes)  # the hover stays the dot's id
+            self.assertEqual(axis.tickfont.color, faded("#9fb3c8"))  # MUTED at AXIS_ALPHA
+        self.assertEqual(AXIS_FONT["color"], faded("#9fb3c8"))
+        self.assertEqual(faded("#9fb3c8"), "rgba(159, 179, 200, 0.7)")
         content = str(result[OUT["content_C"]])
         self.assertIn("C1 · course model", content)
         self.assertIn("All 3 decks, 13 cards", content)  # C1's readout moved into the panel
@@ -304,6 +314,12 @@ class StandaloneTest(PageDriver):
         symbols = dict(zip(topics.customdata, topics.marker.symbol))
         self.assertEqual(symbols["01:03"], EMPTIED_SYMBOL)  # "Empty": no cards
         self.assertEqual(symbols["01:01"], "circle")
+        self.assertEqual(self.legend(result), [])  # no legend with every panel collapsed
+        result = self.expand("T")
+        self.assertEqual(self.legend(result), [EMPTIED, GROWN])  # the emptied topic, the topic grown most
+        self.assertEqual(result[OUT["figure"]].layout.legend.title.text, "Topics by T1")
+        self.assertIn("Topic model T1 · deck 01", str(result[OUT["window_b"]]))
+        self.close("T")
         result = self.click("01:03")
         self.assertEqual(
             id_rows(result[OUT["panel"]]),
@@ -363,8 +379,15 @@ class StandaloneTest(PageDriver):
         self.assertTrue(self.axes_visible(result))
         content = str(result[OUT["content_T"]])
         self.assertIn("T1 · topics", content)
-        self.assertIn("margin-histogram", content)
-        self.assertIn("moved in by T1", content)  # the legend
+        self.assertIn(MARGINS_NOTE, content)
+        self.assertNotIn("margin-histogram", content)  # the histogram is window B's
+        self.assertEqual(self.legend(result), [BETWEEN])  # the legend is the map's: the classes the view holds
+        self.assertEqual(result[OUT["figure"]].layout.legend.title.text, "Cards by T1")
+        self.assertEqual(self.colorbar(result), ("margin", self.page.margin_scale))
+        self.assertEqual(result[OUT["class_b"]], window_class(True))
+        window = str(result[OUT["window_b"]])
+        self.assertIn("margin-histogram", window)
+        self.assertIn("Topic model T1 · deck 01 › topic 01", window)
         result = self.click(model_support.HIDDEN)
         rows = id_rows(result[OUT["panel"]])
         self.assertEqual(rows["between two topics"], "yes")
@@ -410,33 +433,34 @@ class StandaloneTest(PageDriver):
         self.call("map", {"points": [{"x": 0}]})  # the surface or a connection: no id
         self.assertEqual(self.state, HOME)
 
-    def test_the_scores_live_in_the_d_panel_and_the_difficulty_window_opens_with_it_and_follows_the_view(self):
+    def test_the_scores_live_in_the_d_panel_and_window_b_opens_with_it_and_follows_the_view(self):
         result = self.call(None)
-        self.assertEqual((result[OUT["window_d"]], result[OUT["class_d"]]), ([], window_class(False)))  # collapsed without D
+        self.assertEqual((result[OUT["window_b"]], result[OUT["class_b"]]), ([], window_class(False)))  # collapsed without D
         result = self.expand("D")  # D2, the newest, without cached tags: both say how to get them
         self.assertEqual(level_rows(result[OUT["content_D"]]), {"D1": False, "D2": True})
         self.assertIn(NO_TAGS, str(result[OUT["content_D"]]))
-        self.assertEqual(result[OUT["class_d"]], window_class(True))
-        self.assertIn(NO_TAGS, str(result[OUT["window_d"]]))
+        self.assertEqual(result[OUT["class_b"]], window_class(True))
+        self.assertIn(NO_TAGS, str(result[OUT["window_b"]]))
         result = self.generation("D1")
         self.assertEqual(level_rows(result[OUT["content_D"]]), {"D1": True, "D2": False})
         self.assertIn("Difficulty model D1 · all decks", str(result[OUT["content_D"]]))
         self.assertIn(self.page.difficulty.note, str(result[OUT["content_D"]]))  # the test course is too small for D1
-        self.assertEqual(result[OUT["class_d"]], window_class(True))
-        self.assertIn("Difficulty model D1 · all decks", str(result[OUT["window_d"]]))
-        self.assertIn(self.page.difficulty.note, str(result[OUT["window_d"]]))  # nothing measured: the note, no figure
-        self.assertNotIn("Graph", str(result[OUT["window_d"]]))
+        self.assertEqual(result[OUT["class_b"]], window_class(True))
+        self.assertIn("Difficulty model D1 · all decks", str(result[OUT["window_b"]]))
+        self.assertIn(self.page.difficulty.note, str(result[OUT["window_b"]]))  # nothing measured: the note, no figure
+        self.assertNotIn("Graph", str(result[OUT["window_b"]]))
         self.assertNotIn("color-legend", dumped(result))  # no legend in a panel or a window: the map carries it
+        self.assertIsNone(self.colorbar(result))
         self.click("01")
         result = self.call("open")
         self.assertIn("Difficulty model D1 · deck 01", str(result[OUT["content_D"]]))
-        self.assertIn("Difficulty model D1 · deck 01", str(result[OUT["window_d"]]))
+        self.assertIn("Difficulty model D1 · deck 01", str(result[OUT["window_b"]]))
         result = self.enter_topic("01", "01")
         self.assertEqual(self.state["panel"], "D")
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(result[OUT["content_D"]]))
-        self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(result[OUT["window_d"]]))
-        result = self.expand("S")
-        self.assertEqual((result[OUT["window_d"]], result[OUT["class_d"]]), ([], window_class(False)))  # another panel: collapsed
+        self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(result[OUT["window_b"]]))
+        result = self.expand("C")
+        self.assertEqual((result[OUT["window_b"]], result[OUT["class_b"]]), ([], window_class(False)))  # a panel without graphs: collapsed
 
     def test_the_axes_show_with_the_models_positions_only(self):
         for letter, visible in ((None, False), ("S", False), ("C", True), ("T", True), ("D", False)):
@@ -482,7 +506,8 @@ class StandaloneTest(PageDriver):
         self.assertIn(NO_ENCODER, content)
         self.assertIsNone(self.page.indexes["S2"])
         self.assertEqual(self.colors(self.enter_topic("01", "01")), {card_id: GREY for card_id in ("101001", "201002", "101004")})
-        self.assertIsNone(self.trace(self.call(None), "Neighbours"))
+        self.assertIsNone(self.trace(self.call(None), NEIGHBOUR_PAIRS))
+        self.assertIsNone(self.colorbar(self.call(None)))  # S2 without the encoder: no scale either
         result = self.generation("S1")
         content = str(result[OUT["content_S"]])
         self.assertIs(self.page.indexes["S1"], self.page.model.index)  # without the encoder S1's index is the app's
@@ -532,6 +557,7 @@ class StandaloneTest(PageDriver):
             self.assertEqual(color, share_color(inside / total) if total else GREY, deck_id)
             self.assertTrue(text.startswith(f"{deck_id} · "))
         self.assertEqual(self.points(result, "Decks"), Page.random_points(["01", "02", "03"]))  # S places nothing
+        self.assertEqual(self.colorbar(result), ("neighbours in its deck", 1.0))
         self.assertFalse(self.axes_visible(result))
         self.assertEqual((share_color(0.0), share_color(1.0)), (SHARE_LOW, SHARE_HIGH))
         result = self.enter_topic("02", "01")
@@ -540,9 +566,11 @@ class StandaloneTest(PageDriver):
         topic = self.page.entered(self.state)
         pairs = {frozenset((card_id, other)) for card_id in topic.ids for other, _score in index.neighbours[card_id] if other in topic.ids}
         self.assertTrue(pairs)
-        lines = self.trace(result, "Neighbours")
+        lines = self.trace(result, NEIGHBOUR_PAIRS)
         self.assertEqual(list(lines.x).count(None), len(pairs))  # each pair once, along the surface
-        self.assertIsNone(self.trace(result, "Selected neighbours"))
+        self.assertIsNone(self.trace(result, SELECTED_PAIRS))
+        self.assertEqual(self.colorbar(result), ("neighbours in this topic", 1.0))
+        self.assertEqual(result[OUT["figure"]].layout.legend.title.text, "S1's neighbours")
         symbols = self.symbols(result)
         for card_id, color, text in zip(cards.customdata, cards.marker.color, cards.text):
             inside, total = Page.neighbour_share(index, [card_id], set(topic.ids))
@@ -553,7 +581,7 @@ class StandaloneTest(PageDriver):
                 self.assertEqual((color, symbols[card_id]), (GREY, NO_NEIGHBOUR_SYMBOL))
         selected = sorted(next(iter(pairs)))[0]
         result = self.click(selected)
-        own = self.trace(result, "Selected neighbours")
+        own = self.trace(result, SELECTED_PAIRS)
         self.assertEqual(own.line.color, SELECTED_LINE["color"])
         self.assertEqual(list(own.x).count(None), sum(selected in pair for pair in pairs))
         rows = id_rows(result[OUT["panel"]])
@@ -561,7 +589,12 @@ class StandaloneTest(PageDriver):
         content = str(result[OUT["content_S"]])
         self.assertIn(f"card {selected}'s neighbours", content)
         self.assertIn("this topic", content)
-        self.assertIn("The map with S1", content)  # the legend
+        others = any(selected not in pair for pair in pairs)
+        self.assertEqual(self.legend(result), (  # the map's: the kinds of lines drawn, the open circle where a card has no neighbour
+            [SELECTED_PAIRS] + ([NEIGHBOUR_PAIRS] if others else []) + ([NO_NEIGHBOUR] if NO_NEIGHBOUR_SYMBOL in symbols.values() else [])
+        ))
+        self.assertNotIn("color-legend", dumped(result))
+        self.assertEqual((result[OUT["window_b"]], result[OUT["class_b"]]), ([], window_class(False)))  # S has no graph
 
     def test_a_scripted_topics_dendrogram_is_the_clustering_of_its_cards(self):
         result = self.enter_topic("01", "01")  # every panel collapsed: the scripted membership
@@ -674,7 +707,9 @@ class MovingCourseTest(PageDriver):
             self.assertAlmostEqual(points[moved][axis], mean[axis] / length)  # the mean direction of its two members
         rows = id_rows(self.click(moved)[OUT["panel"]])
         self.assertEqual(rows["T1's topic"], Page.topic_label(self.page.topic("03", "02")))
-        self.assertIn("moved out", str(self.expand("T")[OUT["content_T"]]))
+        result = self.expand("T")
+        self.assertIn("moved out", str(result[OUT["content_T"]]))
+        self.assertEqual(self.legend(result), [MOVED_OUT])
         result = self.expand("C")  # with C the card that left is not drawn
         self.assertEqual(set(self.trace(result, "Cards").customdata), {"103001", "103004"})
         self.assertIsNone(self.state["selected"])
@@ -918,21 +953,26 @@ class MeasuredMetricsTest(unittest.TestCase):
     def graphs(self, panel):
         return [child.className for child in panel.children if type(child).__name__ == "Graph"]
 
-    def test_the_scores_are_the_d_panels_and_the_matrix_and_the_shares_the_difficulty_windows(self):
+    def test_the_scores_are_the_d_panels_and_the_matrix_and_the_shares_window_bs(self):
         panel = self.page.metrics(HOME)
         self.assertIn("All decks: 36 rated quizzes", str(panel))
         self.assertEqual(self.graphs(panel), [])  # no figure in the panel
         self.assertIn(WINDOW_NOTE, str(panel))  # it says where they are
-        (window,), class_name = self.page.difficulty_window({**HOME, "panel": "D", "level": "D1"})
+        (window,), class_name = self.page.graph_window({**HOME, "panel": "D", "level": "D1"})
         self.assertEqual(class_name, window_class(True))
         self.assertEqual(self.graphs(window), ["difficulty-confusion", "difficulty-shares"])
+        for graph in window.children:
+            if type(graph).__name__ == "Graph":  # the axes' titles and tick labels at AXIS_ALPHA
+                for axis in (graph.figure.layout.xaxis, graph.figure.layout.yaxis):
+                    self.assertTrue(axis.tickfont.color.endswith(f", {AXIS_ALPHA})"), graph.className)
+                    self.assertTrue(axis.title.font.color.endswith(f", {AXIS_ALPHA})"), graph.className)
         self.assertNotIn("color-legend", str(window))  # the legend is the map's
         deck = self.page.metrics({**HOME, "view": "topics", "deck": "01"})
         self.assertIn("This deck: its 12 rated quizzes", str(deck))
         topic = self.page.metrics({**HOME, "view": "cards", "deck": "01", "topic": "01"})
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(topic))
         self.assertIn("This topic:", str(topic))
-        (window,), _class = self.page.difficulty_window({**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D", "level": "D1"})
+        (window,), _class = self.page.graph_window({**HOME, "view": "cards", "deck": "01", "topic": "01", "panel": "D", "level": "D1"})
         self.assertIn("Difficulty model D1 · deck 01 › topic 01", str(window))
 
     def test_a_predicted_card_says_so_and_is_a_cross_in_the_predicted_colour_with_d(self):
@@ -969,22 +1009,24 @@ class AppTest(unittest.TestCase):
             self.assertIn(selector, rows)
         self.assertFalse(Path(app.config.assets_folder, "measure_rows.js").exists())
 
-    def test_the_map_is_a_square_with_window_a_the_difficulty_window_and_the_panels_beside_them(self):
+    def test_the_map_is_a_square_with_window_a_window_b_and_the_panels_beside_them(self):
         layout = page_layout(HOME)
         self.assertTrue(layout["map"].responsive)  # plotly follows the frame when the window resizes
         style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
         self.assertIn(".map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1;", style)
         self.assertIn("grid-template-rows: auto auto auto 1fr;", style)  # the last row takes the panels' height: no gap under the map
         self.assertIn(".model-panels { grid-column: 2; grid-row: 1 / span 4;", style)
-        self.assertIn(".window-d.collapsed { display: none; }", style)
+        self.assertIn(".window-b.collapsed { display: none; }", style)
         self.assertIn("--panel-font: 2;", style)  # the panels' text at double size
         self.assertIn("@media (orientation: portrait)", style)  # window A beside the map, the panels under both
         portrait = style[style.index("@media (orientation: portrait)"):]
-        self.assertIn(".window-d { grid-column: 2; grid-row: 2; }", portrait)  # under window A, at its width
+        self.assertIn(".window-b { grid-column: 2; grid-row: 2; }", portrait)  # under window A, at its width
+        self.assertIn(".window-a > .card-panel { min-height: 100%; }", portrait)  # window A's panel fills the map's height: no gap above B
+        self.assertNotIn("legend", style[style.index("*/"):])  # every legend is the map's
         self.assertNotIn("measure-names", style)
         workspace = layout.children[2]
         self.assertEqual([child.className for child in workspace.children], ["map-frame", "window-a", window_class(False), "model-panels"])
-        self.assertEqual(workspace.children[2].id, "difficulty-window")
+        self.assertEqual(workspace.children[2].id, "graph-window")
         self.assertEqual((layout.children[-1].id, layout.children[-1].value), (ROW_INPUT, ""))
         boxes = workspace.children[3].children
         self.assertEqual([box.id for box in boxes], [f"box-{letter}" for letter in PANEL_LETTERS])

@@ -1,9 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 /* The standalone page (app.standalone): the viewer's theme, its tokens written anew here (no file of the
    viewer is copied). The map, a square of 12.5 % of the window's area (map_side.js sets its side); the dendrogram's
-   window (window A) under it in landscape, beside it at its height in portrait; the difficulty window under window A
-   at its width in both, shown with D expanded; the model panels a column right of all three in landscape, under them at the window's
-   width in portrait, their text at double size (--panel-font). The page scrolls as a document. */
+   window (window A) under it in landscape, beside it at its height in portrait, its panel filling that height; window B,
+   the expanded generation's graphs, under window A at its width in both, shown with D or T expanded; the model panels a
+   column right of all three in landscape, under them at the window's width in portrait, their text at double size
+   (--panel-font). The legends are the map's (plotly's), none is the page's. The page scrolls as a document. */
 
 :root {
   --ink: #f7f2e8;
@@ -34,15 +35,15 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 /* The hidden input a generation's or a results row's click sets (panel_rows.js); never shown, never focused by hand */
 .row-click { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-/* The workspace: landscape, the map, window A and the difficulty window in a column on the left, the model panels
+/* The workspace: landscape, the map, window A and window B in a column on the left, the model panels
    on the right over all the rows; the last row takes the panels' extra height, so the three windows keep their own
    heights and no gap opens between the map and window A */
 .workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); grid-template-rows: auto auto auto 1fr; gap: 28px; align-items: start; }
 .map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
 #map { width: 100%; height: 100%; }
 .window-a { grid-column: 1; grid-row: 2; min-width: 0; }
-.window-d { grid-column: 1; grid-row: 3; min-width: 0; }
-.window-d.collapsed { display: none; }
+.window-b { grid-column: 1; grid-row: 3; min-width: 0; }
+.window-b.collapsed { display: none; }
 .model-panels { grid-column: 2; grid-row: 1 / span 4; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 
 /* The readout tables: C1's measures, S1's and T1's live measures, the selected dot's ids */
@@ -52,12 +53,12 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .readout-table td { padding: 0 16px 0 8px; }
 .readout-table .readout-value { padding: 0; text-align: right; color: var(--ink); }
 
-/* Window A: the selected dot's ids, or the dendrogram; the difficulty window: D1's matrix and shares */
+/* Window A: the selected dot's ids, or the dendrogram; window B: D's matrix and shares, T's margins */
 .card-panel { min-height: var(--panel-min); padding: 30px; border: 1px solid var(--gold); background: rgba(16, 42, 67, 0.72); display: flex; flex-direction: column; justify-content: center; }
 .dot-panel-enter { cursor: pointer; }
 .dot-panel-enter:hover { background: rgba(16, 42, 67, 0.9); }
-.overview-panel, .difficulty-window { justify-content: flex-start; }
-.difficulty-window { min-height: 0; }
+.overview-panel, .graph-panel { justify-content: flex-start; }
+.graph-panel { min-height: 0; }
 .id-table { width: auto; margin: 14px 0; color: var(--muted); font: 0.9rem/1.6 'DM Mono', monospace; }
 .deck-description { margin: 4px 0 8px; color: var(--muted); font-size: 0.95rem; line-height: 1.4; }
 .card-hint, .empty-state { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
@@ -84,16 +85,9 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .results-block { margin-top: 14px; }
 .results-scroll { overflow-x: auto; }
 
-/* D1's scores; the T panel's legend and histogram */
+/* D's scores in the panel; T's histogram in window B */
 .tool-panel { padding: 14px 0 6px; }
-.color-legend { display: flex; align-items: center; gap: 6px 18px; flex-wrap: wrap; margin: 10px 0 6px; color: var(--muted); font: 0.78rem 'DM Mono', monospace; }
-.legend-item { display: inline-flex; align-items: center; gap: 7px; }
-.legend-swatch { width: 11px; height: 11px; display: inline-block; border-radius: 50%; }
-.legend-glyph { font-size: 1rem; line-height: 1; }
-.t1-legend { flex-direction: column; align-items: flex-start; gap: 4px; }
-.margin-scale { width: 90px; height: 10px; display: inline-block; background: linear-gradient(90deg, #ccfbf1, #14b8a6); }
-.share-scale { width: 90px; height: 10px; display: inline-block; background: linear-gradient(90deg, #3987e5, #cde2fb); }
-.margin-histogram { width: 100%; height: 150px; margin-top: 8px; }
+.margin-histogram { width: 100%; height: 200px; margin-top: 8px; }
 .metrics-heading { margin-top: 10px; }
 .difficulty-scores { margin: 6px 0; border-collapse: collapse; font: 0.8rem 'DM Mono', monospace; }
 .difficulty-scores th, .difficulty-scores td { padding: 2px 10px 2px 0; text-align: right; color: var(--muted); font-weight: normal; }
@@ -124,17 +118,16 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .model-panels .readout-scope, .model-panels .readout-table { font-size: calc(0.72rem * var(--panel-font)); }
 .model-panels .difficulty-scores { font-size: calc(0.8rem * var(--panel-font)); }
 .model-panels .results-table th { max-width: calc(150px * var(--panel-font)); }
-.model-panels .color-legend { font-size: calc(0.78rem * var(--panel-font)); }
-.model-panels .legend-glyph { font-size: calc(1rem * var(--panel-font)); }
 .model-panels .measure-text { font-size: calc(0.82rem * var(--panel-font)); }
 .model-panels .measure-close { width: calc(28px * var(--panel-font)); height: calc(28px * var(--panel-font)); font-size: calc(1rem * var(--panel-font)); }
 
-/* Portrait: window A beside the map at its height, the difficulty window under window A at its width, the panels
-   under all */
+/* Portrait: window A beside the map at its height, its panel filling it (so no gap opens above window B, whatever the
+   panel holds), window B under window A at its width, the panels under all */
 @media (orientation: portrait) {
   .workspace { grid-template-rows: auto auto auto; }
   .window-a { grid-column: 2; grid-row: 1; height: var(--map-side); overflow-y: auto; }
-  .window-d { grid-column: 2; grid-row: 2; }
+  .window-a > .card-panel { min-height: 100%; }
+  .window-b { grid-column: 2; grid-row: 2; }
   .model-panels { grid-column: 1 / -1; grid-row: 3; }
 }
 
@@ -142,7 +135,7 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
   .app-shell { padding: 22px 16px 28px; }
   .topbar, .toolbar { align-items: flex-start; flex-direction: column; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: none; }
-  .map-frame, .window-a, .window-d, .model-panels { grid-column: 1; grid-row: auto; height: auto; }
-  .window-d.collapsed { display: none; }
+  .map-frame, .window-a, .window-b, .model-panels { grid-column: 1; grid-row: auto; height: auto; }
+  .window-b.collapsed { display: none; }
   :root { --panel-min: 220px; }
 }

@@ -6,7 +6,8 @@ and stores nothing.
 * `app`: `Page`, the fitted models and what the three views and the four model panels show of them; `create_app`,
   the Dash app with its one callback (the views' interaction and the panels: select, Open, Back, expand, close, a
   results row's description).
-* `layout`: the layout, the map figure, the dendrogram's window, the difficulty window and the model panels.
+* `layout`: the layout, the map figure with the models' legends, the dendrogram's window (window A), window B with
+  the expanded generation's graphs, and the model panels.
 * `results`: the results files for the panels (the newest run per level, the tables, the glossary).
 * `assets/style.css`: the viewer's tokens, written anew; `assets/map_side.js`: the square map's side;
   `assets/panel_rows.js`: a generation's or a results row's click into the hidden input the callback reads.
