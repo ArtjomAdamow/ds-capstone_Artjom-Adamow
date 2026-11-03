@@ -1,7 +1,8 @@
 """The standalone page's layout, map and panels (Dash and plotly; nothing of the viewer), written anew after the
 viewer's in its theme (assets/style.css holds the tokens):
 
-* the top bar: the title, Back and Open;
+* the top bar: the title, Back and Open, and the Sputnik link (`viewer-link`) where the launcher serves the viewer
+  next to the page (a URL; nothing of the viewer is imported), none without it;
 * the map (`map`), a square of 12.5 % of the window's area (assets/map_side.js): the view's dots on the sphere, and
   what the expanded model generation adds (app.Page decides, map_figure draws): with S1 or S2 the generation's
   neighbours (every dot coloured by the share of its cards' neighbours in its own deck or topic, a card by the share
@@ -18,7 +19,8 @@ viewer's in its theme (assets/style.css holds the tokens):
   left (scale_trace);
 * window A (`dot-panel`), under the map (beside it in portrait): the selected dot's ids and counts, a click on a
   deck's or a topic's enters it; with nothing selected the dendrogram of the view's membership with the preset's
-  cut-off line, its leaves by id (figures.dendrogram_figure);
+  cut-off line, its leaves by id (figures.dendrogram_figure); in the topics view the deck's tree of its topics (the
+  topic vectors' clustering, app.Page.topic_tree), the full tree, its leaves by label;
 * window B (`graph-window`), under window A at its width in both orientations, the expanded generation's graphs,
   shown with D or T expanded only: D's confusion matrix and the shares of the levels of the view's part of the course
   (metrics_window), T's margins of the view's cards (margins_window). The two windows are one column (`windows`); in
@@ -127,15 +129,17 @@ GENERATION_NAMES = {
 }
 NO_LINKS = {
     DECKS_VIEW: "No connections between the decks.",
-    TOPICS_VIEW: "No connections between topics: the model has no topic vectors yet.",
+    TOPICS_VIEW: "No tree of the topics: the model clusters a deck of at least two topics with cards.",
     CARDS_VIEW: "No connections: the model connects a topic of at least two cards.",
 }
+VIEWER_LINK = "Sputnik"  # the top bar's link to the viewer served next to the page
+VIEWER_LINK_TITLE = "The viewer Sputnik, served next to this page: the map with the Helper button, in a new tab"
 OVERVIEW_HINT = {
     DECKS_VIEW: "Select a deck to see its ids; Open enters it.",
     TOPICS_VIEW: "Select a topic to see its ids and its cards' counts; Open enters it. Back goes up to the decks.",
     CARDS_VIEW: "Select a card to see its ids and its level. Back goes up to the topics.",
 }
-TOPICS_NOTE = "The model's connections are not drawn in this view: connections visualization is not yet decided in this view."
+TOPICS_NOTE = "The topic connections are not drawn on the map: the topics stand at random, so a line would say nothing; the dendrogram in window A shows the deck's tree."
 WINDOW_NOTE = "The confusion matrix and the shares of the levels are in the window under the dendrogram's window."
 MARGINS_NOTE = "The histogram of the margins is in the window under the dendrogram's window; the markers' legend is on the map."
 HISTOGRAM_HEIGHT = 200
@@ -263,8 +267,8 @@ def scale_trace(colorscale, top: float, title: str, tickformat: str) -> go.Scatt
 
 
 def disagreement_trace(points: Mapping, ids: Sequence[str]) -> Optional[go.Scatter3d]:
-    """With D: an open ring behind every predicted quiz the two generations put at different levels (app roadmap
-    step 15), the legend's entry DISAGREE, neither hoverable nor clickable; None without one. It says "look here"
+    """With D: an open ring behind every predicted quiz the two generations put at different levels,
+    the legend's entry DISAGREE, neither hoverable nor clickable; None without one. It says "look here"
     and names no winner: the hand labels say who is right."""
     ids = [card_id for card_id in ids if card_id in points]
     if not ids:
@@ -732,21 +736,23 @@ def box_class(expanded: bool) -> str:
 # --- the page ---------------------------------------------------------------------------------------------------
 
 
-def page_layout(home: dict) -> html.Main:
+def page_layout(home: dict, viewer_url: Optional[str] = None) -> html.Main:
     """The page; the callback fills the map, window A, window B and the panels at load. The hidden
-    input `row-click` carries a click on a generation's or a measure's row (assets/panel_rows.js) to the callback."""
+    input `row-click` carries a click on a generation's or a measure's row (assets/panel_rows.js) to the callback.
+    With `viewer_url` the top bar holds the Sputnik link next to Back and Open, opening the viewer in a new tab."""
+    actions = [
+        html.Button("Back", id="back", className="top-button", n_clicks=0, disabled=True),
+        html.Button("Open", id="open", className="top-button", n_clicks=0, disabled=True),
+    ]
+    if viewer_url:
+        actions.append(html.A(VIEWER_LINK, id="viewer-link", href=viewer_url, target="_blank", rel="noopener", title=VIEWER_LINK_TITLE,
+                              className="top-button top-link"))
     return html.Main(
         [
             html.Header(
                 [
                     html.Div([html.P("GUIDED LEARNING · THE MODELS", className="eyebrow"), html.H1("What the models see.")]),
-                    html.Div(
-                        [
-                            html.Button("Back", id="back", className="top-button", n_clicks=0, disabled=True),
-                            html.Button("Open", id="open", className="top-button", n_clicks=0, disabled=True),
-                        ],
-                        className="topbar-actions",
-                    ),
+                    html.Div(actions, className="topbar-actions"),
                 ],
                 className="topbar",
             ),

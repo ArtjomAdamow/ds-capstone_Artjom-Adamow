@@ -167,7 +167,7 @@ class TagsOfTest(unittest.TestCase):
         control = tags_of(self.cards, self.folder, LEVEL_NAMES, loader=model_support.fake_classifier_loader)
         self.assertEqual(control.template, LEVEL_NAMES)
         self.assertEqual(len(list((self.folder / CACHE_FOLDER).glob("*.npy"))), 2)
-        self.assertEqual(NLI_MODEL, LARGE_MODEL)  # the app's D2 since app roadmap step 15
+        self.assertEqual(NLI_MODEL, LARGE_MODEL)  # the app's D2
         base = tags_of(self.cards, self.folder, model_name=BASE_MODEL, loader=model_support.fake_classifier_loader)
         self.assertEqual((base.model_name, base.template, base.cached), (BASE_MODEL, CRITERION, False))  # another model: its own file
         self.assertEqual(len(list((self.folder / CACHE_FOLDER).glob("*.npy"))), 3)

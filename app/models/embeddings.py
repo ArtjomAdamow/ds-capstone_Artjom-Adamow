@@ -1,5 +1,5 @@
 """S2: a sentence encoder as a vectoriser of the similarity pipeline, the hybrid with TF-IDF, and the cache of the
-embeddings (app roadmap step 23; docs/draft/helper/models/similarity.md, "S2").
+embeddings (docs/draft/helper/models/similarity.md, "S2").
 
     card text ──┬→ TF-IDF → unit rows · √(1/(1 − m₁)) ─┐
                 │                                       ├→ the blocks side by side → SimilarityIndex (unit rows, cosine)

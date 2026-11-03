@@ -123,6 +123,21 @@ class NearestCentroidTest(unittest.TestCase):
         share, agreement = model.kept(0.5)
         self.assertEqual((share, agreement), (0.8, 1.0))  # m is the only card below 0.5
 
+    def test_the_share_threshold_keeps_the_highest_margins(self):
+        from app.models.topic_model import share_threshold
+
+        margins = [0.3, 0.1, 0.5, 0.2, 0.4]
+        self.assertEqual(share_threshold(margins, 1.0), 0.0)  # every card
+        self.assertEqual(share_threshold(margins, 1.5), 0.0)
+        self.assertEqual(share_threshold(margins, 0.6), 0.3)  # three cards: 0.5, 0.4, 0.3
+        self.assertEqual(share_threshold(margins, 0.2), 0.5)  # one card
+        self.assertGreater(share_threshold(margins, 0.05), 0.5)  # rounds to none: above the highest
+        self.assertEqual(share_threshold(margins, 0.0), 1.5)
+        self.assertEqual(share_threshold([], 0.5), 0.0)
+        model = self.model
+        self.assertEqual(model.threshold_for_share(1.0), 0.0)
+        self.assertEqual(model.kept(model.threshold_for_share(0.5))[0] >= 0.5, True)  # at least the share kept (ties keep more)
+
     def test_the_threshold_is_a_parameter(self):
         strict = fit(CLEAR, CLEAR_ROWS, CLEAR_SEEDS, margin=0.9)
         self.assertEqual(strict.hidden, {card_id for card_id, margin in strict.margin_of.items() if margin < 0.9})

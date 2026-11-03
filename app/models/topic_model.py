@@ -13,8 +13,11 @@ the state. The raw scripted topics stay in the course file, so nothing is ever r
 
 * The decision for the state: the membership is the nearest centroid, for every card (the app shows them all); a
   topic is never removed, and an emptied one keeps its dot. The margin is kept as a measure: a card below
-  FOCUS_MARGIN sits between two topics (`hidden`, for the evaluation and a later focus slider), and the runner-up
-  topic next to it (`second_of`, for the standalone page's card panel).
+  FOCUS_MARGIN sits between two topics (`hidden`, for the evaluation), and the runner-up topic next to it
+  (`second_of`, for the standalone page's card panel). The viewer's margin slider (the glue's focus, step 28) runs on
+  a share scale: `share_threshold` gives the margin that keeps a share of the cards, the highest margins first, so
+  100 % keeps every card and 1 % the eleven with the highest margins on the course (models/topic.md, "The margin on
+  a share scale").
 * The derived course file the viewer reads (the raw file with the cards' "topic" set by the model) is the glue's
   (glue.derived.write_derived_course): it is written in the viewer's format with the viewer's parser.
 * The measures: the agreement with the scripted topics (the share of cards whose nearest centroid is their scripted
@@ -24,7 +27,7 @@ the state. The raw scripted topics stay in the course file, so nothing is ever r
 * T1 is deterministic (the vectoriser and the means): the derived file and the viewer's dot ids are the same at
   every start; a changed course or vectoriser changes them, and the state starts fresh (the viewer's rule).
 
-Edge cases (the user's, 2026-10-25): a topic with one scripted card has no centroid under leave-one-out, so its card
+Edge cases: a topic with one scripted card has no centroid under leave-one-out, so its card
 goes to the nearest other topic and the topic is emptied; a card with a single centroid to compare with (its own
 topic the deck's only one with other cards) takes it with the full margin; an empty topic has no centroid and no
 coherence. Ties go to the topic that comes first in the file.
@@ -68,6 +71,21 @@ def unit(vector: np.ndarray) -> np.ndarray:
     """The vector scaled to length 1 (a zero vector stays zero)."""
     length = float(np.linalg.norm(vector))
     return vector / length if length > 0 else vector
+
+
+def share_threshold(margins: Sequence[float], share: float) -> float:
+    """The margin that keeps `share` (0 to 1) of these cards in focus, the highest margins first: 0.0 at a share of
+    1 or more (every margin is 0 or above), the k-th highest margin for a share that rounds (half up) to k cards,
+    and above the highest margin for a share that rounds to no card; 0.0 without margins."""
+    ordered = sorted((float(margin) for margin in margins), reverse=True)
+    if not ordered:
+        return 0.0
+    kept = max(0, min(len(ordered), int(share * len(ordered) + 0.5)))  # rounded half up: 50 % of 5 cards keeps 3
+    if kept >= len(ordered):
+        return 0.0
+    if kept == 0:
+        return ordered[0] + 1.0
+    return ordered[kept - 1]
 
 
 class TopicModel:
@@ -159,6 +177,10 @@ class TopicModel:
             return math.nan, math.nan
         kept = [card_id for card_id, margin in self.margin_of.items() if margin >= threshold]
         return len(kept) / len(self.topic_of), self.agreement_of(kept)
+
+    def threshold_for_share(self, share: float) -> float:
+        """The margin the slider's share stands for over the model's cards (share_threshold)."""
+        return share_threshold(list(self.margin_of.values()), share)
 
     @property
     def moved(self) -> int:

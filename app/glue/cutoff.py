@@ -3,8 +3,8 @@ that the connected parts below it stay small enough to read.
 
 The viewer replays a view's shown connections in their order (project.services.dendrogram, a module's first): a
 connection that joins two separate parts is a merge with its rank (1, 2, 3, ...), and the cut-off line keeps the
-merges up to a share of the merge count. The preset is measured over the model's connections alone (2026-10-29,
-roadmap step 22; until then over every stored connection of the view): the model's pairs among the view's dots, in
+merges up to a share of the merge count. The preset is measured over the model's connections alone:
+the model's pairs among the view's dots, in
 merge order, are a forest, so each is a merge, and the preset is the share of them kept until the next would make a
 part larger than the size (models.clustering.preset_rank). On them the preset cuts the clustering tree at a height;
 the line then cuts the shown replay. A tree within the size is kept whole (1).

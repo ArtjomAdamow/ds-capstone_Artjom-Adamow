@@ -4,8 +4,8 @@ these options (project.services.actions.ActionOption); Helper.run (button.py) ru
 
     | View   | Models offered                             | Note while checked                        |
     |--------|--------------------------------------------|-------------------------------------------|
-    | decks  | Topics, Positions, Connections, Difficulty | Topics: the topics and cards views; the   |
-    |        |                                            | others: the cards view                    |
+    | decks  | Topics, Positions, Connections, Difficulty | Topics and Connections: the topics and    |
+    |        |                                            | cards views; the others: the cards view   |
     | topics | Topics, Positions, Connections, Difficulty | every model: the cards view               |
     | cards  | Positions, Connections, Difficulty         | none (no sublevel)                        |
 
@@ -13,7 +13,8 @@ these options (project.services.actions.ActionOption); Helper.run (button.py) ru
   the cards view: T1 decides a deck's topics, not one topic's.
 * Positions places the decks (the decks view) and every checked topic's cards on their spheres; the topic dots keep
   the viewer's positions.
-* Connections writes the model's connections and the cut-off presets: the decks' and every checked topic's.
+* Connections writes the model's connections and the cut-off presets: the decks', every deck's topic connections
+  (the topic dots, shown in the dendrogram) and every checked topic's.
 * Difficulty fills the difficulty and predicted groups of the view's cards (decks are not rated).
 
 The run order is Topics, Positions, Connections, Difficulty: T1 decides the membership the layouts and the trees
@@ -38,9 +39,10 @@ VIEW_NAMES = {DECKS: "decks", TOPICS: "topics", CARDS: "cards"}
 
 
 def sublevels(view: str, model: str) -> tuple[str, ...]:
-    """The views below `view` whose objects a model started there changes: T1 on the decks view changes the topics
-    and the cards; every other model on the decks or topics view the cards; nothing reaches below the cards view."""
-    if view == DECKS and model == MODEL_TOPICS:
+    """The views below `view` whose objects a model started there changes: T1 and Connections on the decks view
+    change the topics (the model's topics; the topic connections) and the cards; every other model on the decks or
+    topics view the cards; nothing reaches below the cards view."""
+    if view == DECKS and model in (MODEL_TOPICS, MODEL_CONNECTIONS):
         return (TOPICS, CARDS)
     if view in (DECKS, TOPICS):
         return (CARDS,)

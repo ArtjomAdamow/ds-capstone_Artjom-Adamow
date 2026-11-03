@@ -11,8 +11,11 @@
 * `cutoff`: the cut-off presets over the model's pairs (models.clustering.preset_rank).
 * `difficulty_groups`: the difficulty and predicted groups as generated groups of the card state.
 * `difficulty_metrics`: the back of the card panel, D1's metrics per view (Dash and Plotly).
+* `related`: the card section under the card panel: the selected card's neighbours with where they lie, the next
+  card first by the learner's progress (the viewer's `card_section` hook).
+* `focus`: the margin slider of the cards view: T1's margins on the share scale (the viewer's `focus` hook).
 
 What the glue needed of the viewer beyond its hooks (the navigation rules, the groups apart, the topic reload) is
-the viewer's own since 2026-10-28 (roadmap step 21.2.1): `compose`'s refill_groups and after_save, the groups'
+the viewer's own: `compose`'s refill_groups and after_save, the groups'
 kind and origin, and `TopicIndex.reload`.
 """

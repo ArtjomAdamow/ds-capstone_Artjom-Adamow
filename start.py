@@ -1,20 +1,23 @@
 """Start the guided learning app: the capstone's launcher. It is developed with the package app/ in the flashcards
 workspace (modules/helper/start.py) and exported next to it into the capstone's root, where only the export changes
-it (tools/export/export.md). It takes no arguments: the folders and the commands are written below.
+it (tools/export/export.md). It needs no arguments: the folders and the commands are written below.
 From the capstone's root:
 
     uv run start.py
 
 It searches for sputnik, the viewer (the capstone's `viewer` extra, imported as `project`). Found, it asks "Launch
 Sputnik? (y/n)": y, or no input, starts the full app, n the standalone page. Not found, it starts the standalone page
-without asking and prints the command that installs the viewer.
+without asking and prints the command that installs the viewer. `--mode full|standalone` skips the question.
 
     standalone  the models on a page of their own (app.standalone), on the course table in data/course/
-                (cards.csv, decks.csv, topics.csv); nothing is stored
+                (cards.csv, decks.csv, topics.csv); nothing is stored; `--port` names its port
     full        sputnik's map with the models behind the Helper button (app.glue), on the course file
                 data/topics.json with the card images in data/images/; the state goes into data/state/: the
                 viewer's state file user_state.json, the derived course file helper_topics.json and the model
-                state model_state.json
+                state model_state.json. The standalone page runs next to it as a process of its own on port 8051
+                (this file again with `--mode standalone --port 8051`, app.launch.start_standalone): the viewer's
+                top bar has the Models button, a link that opens the page in a new tab (where sputnik's top bar
+                takes links, since 0.4.0), and the page a Sputnik link back to the viewer; Ctrl+C stops both
 
 Both modes run the app's vectoriser (app.models.embeddings.app_vectoriser): S2's sentence encoder with the course's
 embeddings cached in data/cache/embeddings/ where sentence-transformers is installed (the embeddings extra), TF-IDF
@@ -34,13 +37,15 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+import sys
 import uuid
 from importlib import metadata
 from pathlib import Path
-from typing import Callable, MutableMapping, Optional
+from typing import Callable, MutableMapping, Optional, Sequence
 
 from app.launch import (
-    MODE_VARIABLE, STANDALONE, VIEWER_RELEASE, choose_mode, mode_of_child, viewer_available,
+    MODE_VARIABLE, MODELS_URL, STANDALONE, VIEWER_RELEASE, VIEWER_URL, choose_mode, mode_of_child, requested_port,
+    standalone_url, start_standalone, stop_standalone, viewer_available,
 )
 
 ROOT = Path(__file__).resolve().parent  # the capstone's root: start.py sits next to the package
@@ -93,8 +98,9 @@ def viewer_too_old(version: Callable = metadata.version) -> Optional[str]:
     return installed if _release(installed) < _release(VIEWER_RELEASE) else None
 
 
-def run_standalone(table_dir: Path = TABLE_DIR, cache_dir: Path = CACHE_DIR) -> None:
-    """The standalone page on the course table, with the app's vectoriser and the embeddings' cache; without the
+def run_standalone(table_dir: Path = TABLE_DIR, cache_dir: Path = CACHE_DIR, port: Optional[int] = None, viewer_url: Optional[str] = None) -> None:
+    """The standalone page on the course table, with the app's vectoriser and the embeddings' cache, on `port`
+    (Dash's default without one), with the Sputnik link to `viewer_url` (the viewer served next to it); without the
     table, stop with the data hint."""
     from app.course_table import missing_files
 
@@ -104,13 +110,18 @@ def run_standalone(table_dir: Path = TABLE_DIR, cache_dir: Path = CACHE_DIR) -> 
         raise SystemExit(f"No course table in {table_dir} ({names} missing). {DATA_HINT}")
     from app.standalone import main as standalone_main
 
-    standalone_main(table_dir, RESULTS_DIR, cache_dir=cache_dir)
+    standalone_main(table_dir, RESULTS_DIR, cache_dir=cache_dir, port=port, viewer_url=viewer_url)
 
 
-def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE, cache_dir: Path = CACHE_DIR) -> None:
+def run_full(
+    root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE, cache_dir: Path = CACHE_DIR,
+    environ: MutableMapping[str, str] = os.environ,
+) -> None:
     """Sputnik's app with the Helper button, served with the debug reloader. The reloader's parent composes the
     viewer's app on the raw course file without the models and stores nothing (its random positions would read as
-    stored ones); the child fits the models, writes the derived course file and saves the state at the start."""
+    stored ones); the child fits the models, writes the derived course file and saves the state at the start. The
+    Models button links the page's URL where the environment names it (MODELS_URL, set by main) and the viewer's
+    top bar takes links."""
     if not course_file.is_file():
         raise SystemExit(f"No course file at {course_file}. {DATA_HINT}")
     too_old = viewer_too_old()
@@ -118,13 +129,13 @@ def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Pat
         raise SystemExit(
             f"sputnik {too_old} is installed, the app needs {VIEWER_RELEASE} or newer: {INSTALL_VIEWER}, then {START}"
         )
-    from app.glue.composition import compose_model, serving_process
+    from app.glue.composition import compose_model, models_links, serving_process
     from app.models.embeddings import app_vectoriser
 
     serving = serving_process(RELOADER)
     state_file.parent.mkdir(parents=True, exist_ok=True)
     # The app's vectoriser at its own minimum, made in the serving process only (the parent fits nothing)
-    composition = compose_model(root, uuid.uuid4().hex, course_file, state_file, fit=serving,
+    composition = compose_model(root, uuid.uuid4().hex, course_file, state_file, fit=serving, links=models_links(environ),
                                 vectoriser=app_vectoriser(cache_dir) if serving else None, min_score=None)
     if serving:
         # The startup save writes everything: the checked decks and topics, the shown cards, the positions,
@@ -133,7 +144,11 @@ def run_full(root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Pat
     composition.dash_app.run(debug=True, use_reloader=RELOADER)
 
 
-def main(ask: Callable = input, environ: MutableMapping[str, str] = os.environ) -> None:
+def main(ask: Callable = input, environ: MutableMapping[str, str] = os.environ, arguments: Optional[Sequence[str]] = None) -> None:
+    """The start: the mode (the question, or `--mode` among `arguments`, sys.argv's by default), then the page alone
+    or the full app with the page as a process of its own next to it (the reloader's child starts no second page;
+    the page's own process runs this file with `--mode standalone --port`)."""
+    arguments = list(sys.argv[1:] if arguments is None else arguments)
     missing = missing_libraries()
     if missing:
         raise SystemExit(
@@ -141,17 +156,26 @@ def main(ask: Callable = input, environ: MutableMapping[str, str] = os.environ) 
             f"then start with: {START}"
         )
     found = viewer_available()
-    if environ.get("WERKZEUG_RUN_MAIN") == "true":
+    child = environ.get("WERKZEUG_RUN_MAIN") == "true"
+    if child:
         mode = mode_of_child(environ, found)  # the reloader's child asks nothing
     else:
         if not found:
             print(f"Sputnik not found: starting the standalone page. For the full app: {INSTALL_VIEWER}")
-        mode = choose_mode(found, ask)
+        mode = choose_mode(found, ask, arguments)
         environ[MODE_VARIABLE] = mode  # the reloader's child runs the same mode
     if mode == STANDALONE:
-        run_standalone()
-    else:
-        run_full()
+        run_standalone(port=requested_port(arguments), viewer_url=environ.get(VIEWER_URL) or None)
+        return
+    page = None
+    if not child:  # the page next to the viewer, started once; the child inherits the URL
+        page = start_standalone(Path(__file__), environ=environ)
+        environ[MODELS_URL] = standalone_url()
+    try:
+        run_full(environ=environ)
+    finally:
+        if page is not None:
+            stop_standalone(page)
 
 
 if __name__ == "__main__":

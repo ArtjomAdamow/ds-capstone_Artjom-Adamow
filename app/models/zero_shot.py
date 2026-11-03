@@ -1,4 +1,4 @@
-"""D2: zero-shot difficulty tags (app roadmap step 12; docs/draft/helper/models/difficulty.md, "D2"): the demand on a
+"""D2: zero-shot difficulty tags (docs/draft/helper/models/difficulty.md, "D2"): the demand on a
 learner read off the quiz with its resolution by natural language inference, nothing trained.
 
     the question, its options, the correct feedback, the explanation ─→ NLI model, three hypotheses, one softmax
@@ -12,7 +12,7 @@ learner read off the quiz with its resolution by natural language inference, not
 * `Template`: the hypothesis template and its three labels, one per level. CRITERION, the primary: the hand
   criterion's three demands (recall, apply, analyse), written before D2 existed, so nothing is tuned; LEVEL_NAMES,
   the control: the lesson's own form with the level names. NLI_MODELS: the base model and the large one of the same
-  family (app roadmap step 15), each read by the evaluation with both templates; NLI_MODEL the one the app reads.
+  family, each read by the evaluation with both templates; NLI_MODEL the one the app reads.
 * `ZeroShotTagger`: transformers' zero-shot-classification pipeline on S2's device (embeddings.resolve_device), the library imported when the
   model is loaded, so the package imports without torch; `scores(cards)` gives one row of three probabilities per
   card (one softmax over the three hypotheses), from the cache where it holds them (the embeddings' cache class,
@@ -37,8 +37,8 @@ from .difficulty_model import LEVELS, split
 from .embeddings import CACHE_FOLDER, EmbeddingCache, resolve_device
 
 # The models: trained for zero-shot classification with a hypothesis template, an 8,192-token window, so no premise
-# is cut (difficulty.md, "D2", "Decisions"): the base model (299 MB, step 12) and the large one of the same family
-# (792 MB, app roadmap step 15), both measured by the evaluation. NLI_MODEL is the app's D2: the large one, with
+# is cut (difficulty.md, "D2", "Decisions"): the base model (299 MB) and the large one of the same family
+# (792 MB), both measured by the evaluation. NLI_MODEL is the app's D2: the large one, with
 # which alone the criterion template reads above chance on the hand labels (53 against 41 of 77 pairs; a choice
 # between two on the labels, declared in difficulty.md, "D2", "Decisions"); the page reads its tags from the cache
 BASE_MODEL = "MoritzLaurer/ModernBERT-base-zeroshot-v2.0"

@@ -35,10 +35,11 @@ What it measures (docs/draft/helper/models/, each model's file):
     quizzes; D2, the zero-shot tags (app.models.zero_shot, where transformers and the NLI models are there, the
     tags cached in `--cache`): D2 alone per model and template, judged the same way without folds (model D2, the
     variant naming the template and the model's size, the model in `params`), built on D1's frame and supplying
-    no feature to it (app roadmap step 15);
+    no feature to it;
   * T1, the topic model (models/topic.md): the agreement with the scripted topics of the nearest centroid rule, of
     the neighbour rule (the nearest other card of the deck) and of a logistic regression per deck, leave-one-out,
     next to chance by the topic sizes; by stack and per deck; T1's margin table (the cards kept at a threshold and
+    the margin slider's marks, the share scale of the viewer's focus, and
     their agreement), the coherence per topic, the moved cards and the emptied topics.
 
 Every run appends one row per model and variant to the results folder (`--results`, by default results/ next to
@@ -134,11 +135,12 @@ LABEL_HEADING = re.compile(r"^### (\S+) \(")
 LEVEL_MARK = re.compile(r"^- \[[xX]\] (easy|medium|hard)\b")
 NOTE_LINE = re.compile(r"^- note:\s?(.*)$")
 TOPICS_COLUMNS = [
-    "date", "run", "model", "scope", "cards", "topics", "agreement", "kept_share", "coherence_median", "coherence_below_half",
+    "date", "run", "model", "scope", "cards", "topics", "agreement", "kept_share", "margin", "coherence_median", "coherence_below_half",
     "coherence_at_one", "moved", "emptied", "seconds", "notes",
 ]
 RUN_FORMAT = "%Y-%m-%dT%H:%M"  # the run column: the run's start time to the minute
 MARGINS = (0.0, 0.02, 0.05, 0.10, 0.15)  # the margin table of models/topic.md
+FOCUS_SHARES = (100, 75, 50, 25, 1)  # the margin slider's marks (glue.focus.MARKS): the share of the cards in focus
 CANDIDATE = re.compile(r"^- \[([xX ])\] (\S+) \(")
 NONE_RELEVANT = re.compile(r"^- \[[xX]\] none\b")  # judged: no candidate of this card is relevant
 HEADING = re.compile(r"^## (\S+) \(")
@@ -201,7 +203,7 @@ CHOSEN = "chosen: uni+bigrams, min_df=2, sublinear, explain"  # the reference ev
 
 
 def variants() -> list[Variant]:
-    """The vectoriser variants of the roadmap (step 3) plus the chosen settings, last. Every variant stays: the
+    """The vectoriser variants plus the chosen settings, last. Every variant stays: the
     chosen one is the reference every interval is paired against."""
     return [
         tfidf_variant("unigrams, min_df=2", ngram_range=(1, 1)),
@@ -260,7 +262,7 @@ def write_rows(rows: list[dict], path: Path, columns: list[str] = COLUMNS) -> No
         if rewrite:
             writer.writeheader()
         for row in stored + rows:
-            writer.writerow({column: row.get(column) or "" for column in columns})
+            writer.writerow({column: "" if row.get(column) is None else row[column] for column in columns})  # a count of 0 stays 0
 
 
 def fmt(value) -> str:
@@ -616,8 +618,16 @@ def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: st
     print("   | Margin at least | Share of the course | Agreement among them |")
     for threshold in MARGINS:
         share, agreement = model.kept(threshold)
-        rows.append(topic_row(today, "T1", f"margin >= {threshold:.2f}", round(share * len(all_ids)), agreement, note, kept_share=fmt(share)))
+        rows.append(topic_row(today, "T1", f"margin >= {threshold:.2f}", round(share * len(all_ids)), agreement, note,
+                              kept_share=fmt(share), margin=fmt(threshold)))
         print(f"   | {threshold:.2f} | {share:.0%} | {agreement:.3f} |")
+    print("   | Slider mark | Margin | Cards in focus | Agreement among them |")
+    for mark in FOCUS_SHARES:  # the slider's share scale (models/topic.md, "The margin on a share scale")
+        threshold = model.threshold_for_share(mark / 100)
+        share, agreement = model.kept(threshold)
+        rows.append(topic_row(today, "T1", f"focus {mark} %", round(share * len(all_ids)), agreement, note,
+                              kept_share=fmt(share), margin=fmt(threshold)))
+        print(f"   | {mark} % | {threshold:.3f} | {round(share * len(all_ids))} | {agreement:.3f} |")
     return rows
 
 

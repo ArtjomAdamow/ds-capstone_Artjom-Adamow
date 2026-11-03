@@ -7,7 +7,7 @@ per topic are too few to measure).
 
 * The back (metrics_panel): a table of the key scores, D1 as mean ± sd over the repeats, next to the two baselines
   (always "easy", and the similarity baseline as a classifier); it is also the table view of the numbers.
-* The window under the card's window (metrics_window; app roadmap step 25): the confusion matrix of the rated
+* The window under the card's window (metrics_window): the confusion matrix of the rated
   quizzes, out of fold (rows are the true level, columns the predicted one, each row's shares, so the diagonal is
   the recall of each level; one hue, dark for 0 and light for 1, on the dark panel) and the shares of the levels
   (the rated quizzes, training, next to the predicted unrated quizzes, test, no labels). A viewer without the

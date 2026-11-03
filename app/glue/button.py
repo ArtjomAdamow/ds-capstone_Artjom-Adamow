@@ -1,12 +1,15 @@
-"""The Helper button (glue): the viewer's module action, left of Random. It opens a dialog under itself (2026-10-29,
-roadmap step 22; until then one click ran every model at once): the viewer draws the models the view offers from
+"""The Helper button (glue): the viewer's module action, left of Random. It opens a dialog under itself:
+the viewer draws the models the view offers from
 Helper.options (the catalogue, dialog.py), and Confirm runs the checked ones on the level the user is on and its
 sublevels (Helper.run), in the run order Topics, Positions, Connections, Difficulty:
   * decks view: Topics gives every deck the model's topics; Positions places the decks and every checked topic's
-    cards; Connections writes the decks' connections and every checked topic's, with their cut-off presets (no
-    connected part above five decks, four cards); Difficulty fills the difficulty groups of every loaded card;
-  * topics view: the same for the entered deck and its checked topics (the topic dots keep the viewer's positions,
-    and topic connections are roadmap step 19);
+    cards; Connections writes the decks' connections, every checked deck's topic connections (between its loaded
+    topic dots, from the clustering of the topic vectors of the membership in force, the model's or the scripted
+    one; n - 1 per deck, none for an emptied topic; no preset: the full tree, shown in the topics view's dendrogram
+    and not on its map) and every checked topic's, with the decks' and the topics' cut-off presets (no connected
+    part above five decks, four cards); Difficulty fills the difficulty groups of every loaded card;
+  * topics view: the same for the entered deck, its topic connections and its checked topics (the topic dots keep
+    the viewer's positions);
   * cards view: Positions, Connections and Difficulty for the entered topic's cards. A scripted topic is laid out on
     the spot.
 Each model runs alone (give_model_topics, place_cards, connect_cards, fill_groups): Topics alone makes the new dots
@@ -35,7 +38,7 @@ presets and Display's check again (preset_cutoffs).
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Collection, Iterable, Mapping, Optional
+from typing import Collection, Iterable, Mapping, Optional, Sequence
 
 from project.content.parser import CardsFile
 from project.content.topics import TopicInfo
@@ -78,11 +81,13 @@ class Helper:
         derived_path: Path,
         model_state_path: Path,
         stored: Optional[Mapping[str, Mapping]] = None,
+        cards: Sequence[Card] = (),
     ) -> None:
         """`stored` is the model state as read (derived.read_model_state), one mapping per model; none at a fresh
-        start."""
+        start. `cards` are the course's records (the card section's labels: the questions by card id)."""
         self.model = model
         self.difficulty = difficulty
+        self.questions: dict[str, str] = {card.id: card.question for card in cards}
         self.cards_path = Path(cards_path)
         self.derived_path = Path(derived_path)
         self.model_state_path = Path(model_state_path)
@@ -164,7 +169,11 @@ class Helper:
         if not card_pairs:
             return
         for deck_id in sorted(info.deck_id for info in router.decks.infos):
-            for topic in self._checked_topics(router, deck_id):
+            topics = self._checked_topics(router, deck_id)
+            dots = {topic.dot_id for topic in topics}
+            if any(pair[0] in dots and pair[1] in dots for pair in card_pairs):
+                router.show_origin(deck_key(deck_id), LINK_ORIGIN)  # the topic connections: no preset, the full tree
+            for topic in topics:
                 members = set(topic.card_ids)
                 pairs = [pair for pair in card_pairs if pair[0] in members and pair[1] in members]
                 if pairs:
@@ -200,6 +209,8 @@ class Helper:
                 self.place_cards(state, topic)
         if MODEL_CONNECTIONS in models:
             written += self.connect_decks(state)
+            for deck_id in self._checked_deck_ids(state):
+                written += self.connect_topics(state, deck_id)
             for topic in topics:
                 written += self.connect_cards(state, topic)
         if MODEL_DIFFICULTY in models:
@@ -218,6 +229,7 @@ class Helper:
             for topic in topics:
                 self.place_cards(state, topic)
         if MODEL_CONNECTIONS in models:
+            written += self.connect_topics(state, state.entered_deck)
             for topic in topics:
                 written += self.connect_cards(state, topic)
         if MODEL_DIFFICULTY in models:
@@ -279,6 +291,25 @@ class Helper:
             state.show_origin(DECKS, LINK_ORIGIN)
         return written
 
+    def topic_pairs(self, state, deck_id: str) -> list[tuple[str, str]]:
+        """The deck's topic connections in merge order, between its topic dots: the clustering of the topic vectors
+        of the membership in force (the viewer's topic index: the model's for a deck with the model's topics, the
+        scripted one otherwise; CourseModel.topic_links); a topic without cards gets none."""
+        topics = list(state.topics.topics(deck_id))
+        dot_of = {topic.topic_id: topic.dot_id for topic in topics}
+        pairs = self.model.topic_links(deck_id, [(topic.topic_id, topic.card_ids) for topic in topics])
+        return [(dot_of[source], dot_of[target]) for source, target in pairs]
+
+    def connect_topics(self, state, deck_id: str) -> int:
+        """A deck's topic connections of the model in merge order (replacing its earlier ones among the deck's
+        dots) and Display's check of them in the deck's topics view; no preset (the full tree). A pair with an
+        unloaded dot (an unchecked topic) is left out. Returns the connections written."""
+        dots = [topic.dot_id for topic in state.topics.topics(deck_id)]
+        written = set_links(state.cards_state, self.topic_pairs(state, deck_id), dots)
+        if written:
+            state.show_origin(deck_key(deck_id), LINK_ORIGIN)
+        return written
+
     def layout(self, topic: TopicInfo) -> TopicLayout:
         """The topic's layout: the model's own, or one made on the spot for a scripted topic (CourseModel.layout_of)."""
         return self.model.layout_of(topic.deck_id, topic.topic_id, topic.card_ids, topic.name)
@@ -331,6 +362,11 @@ class Helper:
 def topic_key(topic: TopicInfo) -> str:
     """The key of a topic's cut-off line and Display in the router (as ViewRouter.view_key names the cards view's)."""
     return f"{CARDS}:{topic.dot_id}"
+
+
+def deck_key(deck_id: str) -> str:
+    """The key of a deck's topics view in the router: its cut-off line and Display (ViewRouter.view_key)."""
+    return f"{TOPICS}:{deck_id}"
 
 
 def shown_ids(state, topic: TopicInfo) -> list[str]:

@@ -6,7 +6,9 @@ results files of the offline evaluation, and answers what the three views and th
 shown is the models', nothing is stored.
 
 The views: the decks on the sphere; a deck's topics (an entered deck) at random positions, since the model places
-no topic (draft roadmap step 19); a topic's cards (an entered topic) on the surface of its sphere.
+no topic yet, with the deck's tree of its topics in the dendrogram's window (topic_tree: the clustering of the topic
+vectors of the membership in force, the full tree, no line on the map); a topic's cards (an entered topic) on the
+surface of its sphere.
 
 The panels (one per model letter, S, C, T and D; one expanded at a time, in the `view` store) hold a row per model
 generation (layout.GENERATIONS: S1 and S2, C1, T1, D1 and D2), the newest expanded when the panel opens, one at a
@@ -109,6 +111,7 @@ NO_TAGS = (
     "group (transformers and the model) into the launcher's cache, where the page reads them at its start (the "
     "criterion template on the large model, the app's D2)."
 )
+TOPIC_TREE_NOTE = "The clustering of the deck's topics by their vectors, the mean of their cards', the full tree: the topic connections the viewer's Helper writes."
 # The readout's hints, a row's tooltip
 TRUSTWORTHINESS = "scikit-learn's trustworthiness of the map for the text vectors: 1 when none of a dot's k nearest on the map is a stranger by text."
 OVERLAP = "The share of a dot's k most similar by text that are also among its k nearest on the map, averaged over the dots."
@@ -136,7 +139,7 @@ DESCRIPTIONS = {
     "D1": "The difficulty model the app runs: logistic regression on the question's statistics, labelled by the deck "
           "shares, predicts the level of the unrated quizzes; it reads neither C1 nor T1, so the map shows the scripted "
           "topics.",
-    "D2": "Zero-shot tags: an NLI model (the large ModernBERT since step 15) reads each quiz with its resolution against "
+    "D2": "Zero-shot tags: an NLI model (the large ModernBERT) reads each quiz with its resolution against "
           "the hand criterion's three demands (the criterion template), nothing fitted, on D1's frame: the expected level "
           "is cut by the deck shares. Within noise of D1's order on the hand labels and below it, so a judge of the "
           "evaluation and D1 stays the app's. The page reads the tags from the launcher's cache; the map and window B "
@@ -246,8 +249,8 @@ class Page:
         return self.reports.get("D2" if report.model == "D1" else "D1")
 
     def disagreements(self, ids: Iterable[str], report: DifficultyReport) -> dict[str, str]:
-        """The quizzes among `ids` the generation predicted at another level than the other generation did (app
-        roadmap step 15): card id -> the other generation's level; empty without the other generation's report."""
+        """The quizzes among `ids` the generation predicted at another level than the other generation did:
+        card id -> the other generation's level; empty without the other generation's report."""
         other = self.other_report(report)
         if other is None:
             return {}
@@ -312,7 +315,7 @@ class Page:
         return self.random_points(ids)
 
     def topic_points(self, deck_id: Optional[str], state: Optional[dict] = None) -> dict[str, Point]:
-        """The deck's topics at random on the sphere: the model has no topic positions (draft roadmap step 19)."""
+        """The deck's topics at random on the sphere: the model has no topic positions yet."""
         return self.random_points([self.topic_dot(topic) for topic in self.topics(deck_id, state)])
 
     def card_points(self, topic: TopicLayout, state: Optional[dict] = None) -> dict[str, Point]:
@@ -546,6 +549,18 @@ class Page:
             return None
         return merges_of(self._vectors(topic.ids)), list(topic.ids)
 
+    def topic_tree(self, deck_id: Optional[str], state: dict):
+        """(the merges, the dot ids of their rows, the labels by dot id) of the deck's topics under the state's
+        membership: the clustering of the topic vectors (CourseModel.topic_vectors, the mean of a topic's cards'
+        unit rows), the tree the viewer's topic connections replay to; None below two topics with cards."""
+        topics = self.topics(deck_id, state)
+        names, vectors = self.model.topic_vectors(deck_id, [(topic.topic_id, topic.ids) for topic in topics])
+        if len(names) < 2:
+            return None
+        by_id = {topic.topic_id: topic for topic in topics}
+        ids = [self.topic_dot(by_id[name]) for name in names]
+        return merges_of(vectors), ids, {self.topic_dot(by_id[name]): self.topic_label(by_id[name]) for name in names}
+
     # --- what a view shows -------------------------------------------------------------------------------------
 
     def dots(self, state: dict) -> list[str]:
@@ -601,12 +616,17 @@ class Page:
                 self.card_by_id[selected], state["deck"], state["topic"], report.predictions.get(selected) if report else None,
                 between=selected in self.between, extra=extra, by=report.model if report else self.level_of(state), other=other,
             )
+        labels: dict = {}
         if view == DECKS_VIEW:
             tree = self.deck_tree()
             kept = self.deck_rank
             title, subtitle = "Constellations of decks", "The model's deck connections, cut into parts of at most five decks."
         elif view == TOPICS_VIEW:
-            tree, kept, title, subtitle = None, None, self.scope(state), None
+            topic_tree = self.topic_tree(state["deck"], state)
+            tree = topic_tree[:2] if topic_tree is not None else None
+            labels = topic_tree[2] if topic_tree is not None else {}
+            kept = len(tree[1]) - 1 if tree is not None else None  # no preset: the full tree
+            title, subtitle = self.scope(state), TOPIC_TREE_NOTE
         else:
             tree = self.card_tree(topic)
             kept = len(self.card_links(topic, state))
@@ -615,7 +635,7 @@ class Page:
         figure = None
         if tree is not None:
             merges, ids = tree
-            figure = dendrogram_figure(merges, ids, {}, kept)  # no labels: the leaves by id
+            figure = dendrogram_figure(merges, ids, labels, kept)  # the leaves by id (a topic by its label)
         return overview_panel(title, figure, view, subtitle)
 
     def metrics_report(self, state: dict, report: Optional[DifficultyReport] = None) -> tuple[DifficultyReport, str]:
@@ -756,7 +776,7 @@ class Page:
         with_neighbour = sum(bool(index.neighbours.get(card_id)) for card_id in index.ids)
         distinct = {other for items in index.neighbours.values() for other, _score in items}
         rows = [
-            ("vectoriser", embeddings.describe(vectoriser), "S1's TF-IDF, or S2's sentence encoder or its hybrid with TF-IDF (app roadmap step 23)."),
+            ("vectoriser", embeddings.describe(vectoriser), "S1's TF-IDF, or S2's sentence encoder or its hybrid with TF-IDF."),
             ("the app's index", "yes" if index is self.model.index else "no", "Whether the app's neighbours, positions and topics come from this generation's vectors."),
             ("vocabulary", f"{len(vocabulary):,}" if vocabulary is not None else "–", "The terms of the fitted TF-IDF: unigrams and bigrams in at least two cards."),
         ]
@@ -954,9 +974,10 @@ def register_callback(app: Dash, page: Page):
     return update
 
 
-def create_app(page: Page) -> Dash:
-    """The Dash app of the page, in the viewer's theme (assets/style.css), with its callback."""
+def create_app(page: Page, viewer_url: Optional[str] = None) -> Dash:
+    """The Dash app of the page, in the viewer's theme (assets/style.css), with its callback; with `viewer_url` the
+    Sputnik link in the top bar (the viewer served next to the page)."""
     app = Dash(__name__, assets_folder=str(ASSETS_DIR), title=TITLE)
-    app.layout = page_layout(HOME)
+    app.layout = page_layout(HOME, viewer_url)
     register_callback(app, page)
     return app

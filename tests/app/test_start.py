@@ -18,7 +18,7 @@ from app import launch
 
 
 class StartModeTest(unittest.TestCase):
-    def start(self, found, answer=None, environ=None):
+    def start(self, found, answer=None, environ=None, arguments=()):
         """main with the viewer found or not and the runs mocked: (the mode that ran, the ask mock, the environ)."""
         ask = mock.Mock(side_effect=EOFError) if answer is None else mock.Mock(return_value=answer)
         environ = {} if environ is None else environ
@@ -27,11 +27,48 @@ class StartModeTest(unittest.TestCase):
             mock.patch.object(start, "viewer_available", return_value=found),
             mock.patch.object(start, "run_standalone") as standalone,
             mock.patch.object(start, "run_full") as full,
+            mock.patch.object(start, "start_standalone", return_value="page") as page,
+            mock.patch.object(start, "stop_standalone") as stop,
             mock.patch("builtins.print"),
         ):
-            start.main(ask, environ)
+            start.main(ask, environ, list(arguments))
         self.assertEqual(standalone.call_count + full.call_count, 1)
+        self.page, self.stop, self.standalone = page, stop, standalone
         return (launch.STANDALONE if standalone.called else launch.FULL), ask, environ
+
+    def test_the_full_app_starts_the_page_next_to_it_and_stops_it_after(self):
+        ran, _ask, environ = self.start(True, "y")
+        self.assertEqual(ran, launch.FULL)
+        self.page.assert_called_once()  # the page's process: this file again, --mode standalone --port 8051
+        self.assertEqual(str(self.page.call_args[0][0]), str(Path(start.__file__)))
+        self.assertIs(self.page.call_args[1]["environ"], environ)
+        self.assertEqual(environ[launch.MODELS_URL], "http://127.0.0.1:8051/")  # the viewer's Models button reads it
+        self.stop.assert_called_once_with("page")  # waited for once the viewer has stopped
+        ran, _ask, _environ = self.start(True, "y", {"WERKZEUG_RUN_MAIN": "true", launch.MODE_VARIABLE: launch.FULL})
+        self.assertEqual(ran, launch.FULL)
+        self.page.assert_not_called()  # the reloader's child starts no second page
+        self.stop.assert_not_called()
+
+    def test_the_page_is_stopped_even_when_the_full_app_fails(self):
+        with (
+            mock.patch.object(start, "missing_libraries", return_value=[]),
+            mock.patch.object(start, "viewer_available", return_value=True),
+            mock.patch.object(start, "run_full", side_effect=RuntimeError("the viewer")),
+            mock.patch.object(start, "start_standalone", return_value="page"),
+            mock.patch.object(start, "stop_standalone") as stop,
+        ):
+            with self.assertRaises(RuntimeError):
+                start.main(lambda question: "y", {}, [])
+        stop.assert_called_once_with("page")
+
+    def test_mode_standalone_with_the_port_runs_the_page_alone_with_the_viewers_url(self):
+        ran, ask, environ = self.start(True, "y", {launch.VIEWER_URL: "http://127.0.0.1:8050/"}, ["--mode", "standalone", "--port", "8051"])
+        self.assertEqual(ran, launch.STANDALONE)
+        ask.assert_not_called()  # the argument skips the question: the page's own process asks nothing
+        self.standalone.assert_called_once_with(port=8051, viewer_url="http://127.0.0.1:8050/")
+        self.page.assert_not_called()
+        ran, _ask, _environ = self.start(False)
+        self.standalone.assert_called_once_with(port=None, viewer_url=None)  # a start without the viewer: no link
 
     def test_without_sputnik_the_standalone_page_starts_and_nothing_is_asked(self):
         ran, ask, environ = self.start(False, "y")
@@ -84,6 +121,12 @@ class StartDataTest(unittest.TestCase):
         message = str(stop.exception.code)
         self.assertIn("cards.csv", message)
         self.assertIn(start.DATA_HINT, message)
+
+    def test_standalone_passes_the_port_and_the_viewers_url_to_the_page(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch("app.standalone.main") as standalone_main:
+            table = model_support.write_test_table(Path(folder) / "course")
+            start.run_standalone(table, Path(folder) / "cache", port=8051, viewer_url="http://127.0.0.1:8050/")
+        standalone_main.assert_called_once_with(table, start.RESULTS_DIR, cache_dir=Path(folder) / "cache", port=8051, viewer_url="http://127.0.0.1:8050/")
 
     def test_the_full_app_without_the_course_file_stops_with_the_data_hint_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as folder:

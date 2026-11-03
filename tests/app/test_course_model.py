@@ -95,6 +95,28 @@ class CourseModelTest(unittest.TestCase):
             self.assertIn(source, {"01", "02", "03"})
             self.assertIn(target, {"01", "02", "03"})
 
+    def test_a_decks_topics_are_connected_by_their_vectors_one_merge_per_pair_none_for_an_emptied_topic(self):
+        from app.models import clustering
+
+        names, vectors = self.model.topic_vectors("01")
+        self.assertEqual(names, ["01", "02"])  # Lists and Dictionaries; the empty topic has no vector
+        self.assertEqual(vectors.shape[0], 2)
+        for row in vectors:
+            self.assertAlmostEqual(float(np.linalg.norm(row)), 1.0)
+        self.assertEqual(self.model.topic_links("01"), [("01", "02")])  # n - 1 for two topics with cards
+        self.assertEqual(self.model.topic_links("02"), [("01", "02")])
+        self.assertEqual(self.model.topic_links("03"), [("01", "02")])
+        self.assertEqual(self.model.topic_links("99"), [])
+        self.assertEqual(self.model.topic_links("01", [("01", ["101001", "201002"])]), [])  # one topic: no merge
+        # Another membership (a scripted deck): the same rule on the given cards, in merge order of the clustering
+        members = [("a", ["103001", "103004"]), ("b", ["103002"]), ("c", ["103003"]), ("d", [])]
+        pairs = self.model.topic_links("03", members)
+        self.assertEqual(len(pairs), 2)  # three topics with cards, none for the empty one
+        self.assertTrue(all({source, target} <= {"a", "b", "c"} for source, target in pairs))
+        names, vectors = self.model.topic_vectors("03", members)
+        self.assertEqual(pairs, clustering.merge_links(names, vectors))
+        self.assertEqual(pairs[0], ("b", "c"))  # the two p value cards are the closest pair
+
     def test_related_cards_come_from_the_index(self):
         related = self.model.related("102001")  # git commit
         self.assertTrue(related)

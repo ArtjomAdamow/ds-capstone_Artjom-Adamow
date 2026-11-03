@@ -7,7 +7,11 @@ topics, positions and connections the Helper button puts on the viewer's map.
 * Topics: the topic model T1 (models.topic_model) takes the scripted topics of the course file as its input and
   decides every card's topic and margin; the glue writes them into the derived course file the viewer reads once
   the Helper button has given a deck the model's topics (the topic dots stay the viewer's own, at random around the
-  deck's centroid; the model places none).
+  deck's centroid; the model places none). A deck's topic vectors (topic_vectors: per topic the mean of its members'
+  unit rows, normalised, as a deck's vector is made of its cards) and their clustering give the topic connections
+  (topic_links: one per merge in merge order, n - 1 for a deck's n topics with cards, none for an emptied topic), for
+  the model's membership or any other (a deck with scripted topics); the glue writes them between the viewer's topic
+  dots, the standalone page draws the deck's tree from them (step 28).
 * Cards view, for each topic of the model: the layout step on the topic's card vectors, centred on the topic's mean
   (the start's own centring), with the neighbours within the topic (k = min(5, n - 1)), gives one unit direction per
   card, and that direction is the position: every card sits on the surface of its topic's sphere (radius 1), as the
@@ -163,3 +167,29 @@ class CourseModel:
     def related(self, card_id: str) -> list[tuple[str, float]]:
         """The neighbours of a card across the whole course, best first."""
         return self.index.related(card_id)
+
+    # --- the topic vectors and connections ---------------------------------------
+
+    def topic_vectors(self, deck_id: str, members=None) -> tuple[list[str], np.ndarray]:
+        """(the topic ids with cards, one unit vector each): per topic the mean of its members' unit rows,
+        normalised, in the membership's order; `members` is the membership, (topic id, card ids) pairs (a deck with
+        scripted topics: the viewer's), by default the model's own; a topic without cards the model was fitted on
+        gets no vector."""
+        if members is None:
+            members = [(placed.topic_id, placed.ids) for placed in self.topics_of_deck(deck_id)]
+        labels: list[str] = []
+        rows: list[int] = []
+        for topic_id, card_ids in members:
+            for card_id in card_ids:
+                if card_id in self._row_of:
+                    labels.append(topic_id)
+                    rows.append(self._row_of[card_id])
+        if not rows:
+            return [], np.zeros((0, self.index.vectors.shape[1]))
+        return similar.deck_vectors(labels, self.index.vectors[rows])
+
+    def topic_links(self, deck_id: str, members=None) -> list[tuple[str, str]]:
+        """The deck's topic connections: the clustering of its topic vectors (topic_vectors), one connection per
+        merge in merge order, between topic ids; n - 1 for n topics with cards, none below two."""
+        names, vectors = self.topic_vectors(deck_id, members)
+        return clustering.merge_links(names, vectors)

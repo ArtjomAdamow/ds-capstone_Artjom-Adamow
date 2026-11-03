@@ -31,6 +31,7 @@ h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; 
 .top-button { border: 1px solid var(--gold); background: transparent; color: var(--gold); padding: 12px 18px; font: 600 0.9rem 'Space Grotesk', sans-serif; cursor: pointer; }
 .top-button:hover { background: var(--hover); }
 .top-button:disabled { opacity: 0.4; cursor: not-allowed; }
+a.top-button { display: inline-block; text-decoration: none; }  /* the Sputnik link to the viewer served next to the page */
 .toolbar { padding: 12px 0; }
 .card-count { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.8rem; }
 /* The hidden input a generation's or a results row's click sets (panel_rows.js); never shown, never focused by hand */

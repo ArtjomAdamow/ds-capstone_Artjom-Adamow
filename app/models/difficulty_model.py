@@ -9,15 +9,15 @@ the flattened quizzes that have none, learned from the quizzes that have one (do
 
 * Features come from a card's own text, its answer options and the fitted similarity index only: text statistics
   (the chosen set), and as variants its centrality and neighbour scores, its TF-IDF row (the hand-labelled sample of
-  docs/draft/helper/models/difficulty.md found no gain in them) and the option statistics (`text+options`, app
-  roadmap step 15: code and digits in the options, the spread of their lengths and the closest distractor's cosine
+  docs/draft/helper/models/difficulty.md found no gain in them) and the option statistics (`text+options`:
+  code and digits in the options, the spread of their lengths and the closest distractor's cosine
   on the index's vectoriser; never the number of options or of correct ones, which every rated quiz shares, nor a
   feedback length, which tells the rated quizzes from the unrated ones). Never the card order, the ids, the deck
   or the stack: the course lists every deck's rated quizzes easy → medium → hard, so the order would score
   perfectly in training and mean nothing for a new card. The rated cards are put into an order of their texts
   before the cross-validation, so not even the folds depend on the course order.
 * D2 alone is judged by `judge_tags`, built on D1's frame (the split, the deck shares, the report with its deck
-  parts) and supplying no feature to it (app roadmap step 15): nothing is fitted, so one pass with no folds and no
+  parts) and supplying no feature to it: nothing is fitted, so one pass with no folds and no
   spread, the same label rules and measures on the expected level of its tags (zero_shot.tags_of), the decks' parts
   measured on their own quizzes as D1's are.
 * A difficulty is relative to its deck (every deck's 12 rated quizzes are 8 easy, 3 medium and 1 hard), so labels
@@ -64,7 +64,7 @@ TEXT_FEATURES = (
     "digits in the question", "scenario words", "commas in the question",
 )
 COURSE_FEATURES = ("centrality", "first neighbour", "fifth neighbour")
-# The answer options' statistics (app roadmap step 15): what a classifier fitted on the rated quizzes can learn of them
+# The answer options' statistics: what a classifier fitted on the rated quizzes can learn of them
 OPTION_FEATURES = ("code in the options", "digits in the options", "option length spread (log)", "closest distractor")
 SCENARIO = re.compile(r"\b(why|which|best|most likely|scenario|would)\b", re.IGNORECASE)
 METRICS = ("macro_f1", "balanced_accuracy", "kappa", "accuracy", "spearman", "recall_easy", "recall_medium", "recall_hard")

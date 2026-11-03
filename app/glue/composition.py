@@ -10,8 +10,7 @@ read at a start with a stored card state, so a restart reads the same topics, th
 connections come back, and so do the presets and Display's check of the model's connections in the views that hold
 them (both runtime only, like the viewer's cut-off line); forgotten at a fresh card state.
 
-The viewer's hooks (2026-10-28, roadmap step 21.2.1; until then the helper's viewer part in modules/helper/delta/
-did their work): compose takes the Helper's refill of its generated groups (refill_groups) and its write of the
+The viewer's hooks: compose takes the Helper's refill of its generated groups (refill_groups) and its write of the
 model state (after_save); the groups apart, the read only generated groups and the navigation rules are the
 viewer's own, and the Helper button reloads the viewer's topic index (TopicIndex.reload).
 
@@ -19,10 +18,16 @@ The difficulty model D1 (models.difficulty_model) is fitted with the course mode
 the card panel (the viewer's overview_back, difficulty_metrics): with nothing selected, Enter or a click on the
 panel turns it over, to the scores of the course in the decks view, of the entered deck in the topics view, and
 of the entered topic's counts with the deck's metrics in the cards view (metrics_back); the confusion matrix and
-the shares of the levels go to the window under the card's window (the viewer's overview_window hook, app roadmap
-step 25; window_back). The viewer's newer hooks are used where the viewer has them (viewer_hooks: the window and
-the top bar links, a release after sputnik 0.3.0, the capstone's); on a viewer without the window the back keeps
-the figures, and links are passed where the top bar can take them.
+the shares of the levels go to the window under the card's window (the viewer's overview_window hook;
+window_back). The viewer's newer hooks are used where the viewer has them (viewer_hooks: the window and
+the top bar links since sputnik 0.4.0, the card section and the focus slider since 0.5.0; the capstone's 0.3.0 has
+none): on a viewer without the window the back keeps the figures, links are passed where the top bar can take them,
+and the card section (glue.related: the selected card's neighbours with the next card first) and the margin slider
+(glue.focus: T1's margins on the share scale) go where the viewer draws them.
+
+The Models button (models_links): a link to the standalone page's URL that the launcher put into the environment
+(MODELS_URL, the same name in both launchers), passed as a TopBarLink where the viewer takes links; none without the
+URL.
 
 With Dash's reloader the launcher's parent process composes too, but never serves and never saves, so it composes
 the viewer's app on the raw course file without the models.
@@ -46,15 +51,32 @@ from .button import Helper
 from .course import load_course
 from .derived import DERIVED_NAME, MODEL_STATE_NAME, read_model_state
 from .difficulty_metrics import metrics_panel, metrics_window
+from .focus import helper_focus
+from .related import helper_section
 
 LINKS_HOOK = "links"  # compose's top bar links (services.actions.TopBarLink)
 WINDOW_HOOK = "overview_window"  # compose's window under the card's window
+SECTION_HOOK = "card_section"  # compose's card section under the card panel (services.actions.ModuleSection)
+FOCUS_HOOK = "focus"  # compose's focus slider of the cards view (services.actions.ModuleFocus)
+NEWER_HOOKS = (LINKS_HOOK, WINDOW_HOOK, SECTION_HOOK, FOCUS_HOOK)
+MODELS_URL = "HELPER_MODELS_URL"  # the launchers' variable with the standalone page's URL (app.launch.MODELS_URL)
+MODELS_LABEL = "Models"
+MODELS_TITLE = "The models' page, served next to this viewer: the model panels with the offline results, in a new tab"
 
 
 def viewer_hooks(compose_function: Optional[Callable] = None) -> set[str]:
-    """The newer hooks this viewer's compose takes (this module's `compose` unless one is given), among LINKS_HOOK
-    and WINDOW_HOOK (none on sputnik 0.3.0)."""
-    return {LINKS_HOOK, WINDOW_HOOK} & set(inspect.signature(compose_function or compose).parameters)
+    """The newer hooks this viewer's compose takes (this module's `compose` unless one is given), among NEWER_HOOKS
+    (none on sputnik 0.3.0; the links and the window since 0.4.0, the section and the focus since 0.5.0)."""
+    return set(NEWER_HOOKS) & set(inspect.signature(compose_function or compose).parameters)
+
+
+def models_links(environ: Mapping[str, str] = os.environ) -> list:
+    """The Models button: a TopBarLink to the standalone page's URL the launcher put into the environment; none
+    without it (the capstone's launcher sets it in full mode too, since step 28)."""
+    from project.services.actions import TopBarLink
+
+    url = environ.get(MODELS_URL, "")
+    return [TopBarLink(MODELS_LABEL, url, MODELS_TITLE)] if url else []
 
 
 @dataclass(frozen=True)
@@ -68,6 +90,8 @@ class ModelComposition:
     overview_back: Optional[Callable] = None  # the back of the card panel, as passed to compose (with the model)
     overview_window: Optional[Callable] = None  # the window under it, where the viewer has the hook
     links: tuple = ()  # the top bar links passed to compose (none where the viewer has no hook)
+    card_section: Optional[object] = None  # the card section passed to compose (the related cards), where the viewer has the hook
+    focus: Optional[object] = None  # the margin slider passed to compose, where the viewer has the hook
 
     @property
     def action(self) -> Optional[ModuleAction]:
@@ -149,21 +173,30 @@ def compose_model(
     fresh_cards = is_fresh(state_path)
     hooks = viewer_hooks()
     extra = {LINKS_HOOK: list(links)} if links and LINKS_HOOK in hooks else {}
+    course = load_course(cards_path) if fit or model is not None else None  # read once: the model, D1 and the section's labels
     if fit and model is None:
-        model = build_model(cards_path, vectoriser, min_score)
+        model = CourseModel(course.cards, course.deck_ids, course.seeds, vectoriser, min_score=min_score)
     if model is None:
         composition = compose(base_dir, boot_id, cards_path, state_path, **extra)
         return ModelComposition(composition=composition, model=None, fresh_cards=fresh_cards, links=tuple(extra.get(LINKS_HOOK, ())))
     if difficulty is None:
-        difficulty = build_difficulty(cards_path, model)
+        difficulty = fit_difficulty(course.cards, model.index)
     model_state = derived_path.with_name(MODEL_STATE_NAME)
-    helper = Helper(model, difficulty, cards_path, derived_path, model_state, {} if fresh_cards else read_model_state(model_state))
+    helper = Helper(
+        model, difficulty, cards_path, derived_path, model_state, {} if fresh_cards else read_model_state(model_state), course.cards,
+    )
     helper.write_course()
     windowed = WINDOW_HOOK in hooks
     back = lambda state: metrics_back(state, difficulty, figures=not windowed)  # noqa: E731
     window = (lambda state: window_back(state, difficulty)) if windowed else None
     if windowed:
         extra[WINDOW_HOOK] = window
+    section = helper_section(model, helper.questions, difficulty.scores) if SECTION_HOOK in hooks else None
+    focus = helper_focus(helper) if FOCUS_HOOK in hooks else None
+    if section is not None:
+        extra[SECTION_HOOK] = section
+    if focus is not None:
+        extra[FOCUS_HOOK] = focus
     composition = compose(
         base_dir, boot_id, derived_path, state_path,
         card_positions=helper.card_positions, action=helper.action, overview_back=back,
@@ -176,6 +209,7 @@ def compose_model(
     return ModelComposition(
         composition=composition, model=model, fresh_cards=fresh_cards, helper=helper, difficulty=difficulty,
         derived_path=derived_path, overview_back=back, overview_window=window, links=tuple(extra.get(LINKS_HOOK, ())),
+        card_section=section, focus=focus,
     )
 
 

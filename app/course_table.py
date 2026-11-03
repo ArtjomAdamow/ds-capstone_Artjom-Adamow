@@ -1,5 +1,5 @@
-"""The course table: the models' input without the viewer's parser (roadmap step 22; step 21's table of the data
-package). Three CSV files in one folder (data/course/ here), written by modules/helper/export_course.py over the
+"""The course table: the models' input without the viewer's parser (the data
+package's table). Three CSV files in one folder (data/course/ here), written by modules/helper/export_course.py over the
 viewer's parser from the refined course file, read here with the csv module (no pandas in the module env):
 
 * cards.csv (CARD_COLUMNS): every card the parser keeps, in its order (the decks in name order, the cards in file

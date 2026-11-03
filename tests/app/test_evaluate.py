@@ -732,6 +732,12 @@ class RunTest(unittest.TestCase):
         topics = read_csv(self.files.topics)
         self.assertEqual(topics[0]["model"], "T1")
         self.assertEqual({row["scope"] for row in topics if row["scope"].startswith("deck ")}, {"deck 01", "deck 02", "deck 03"})  # by id
+        focus = [row for row in topics if row["scope"].startswith("focus ")]  # the margin slider's marks (step 28)
+        self.assertEqual([row["scope"] for row in focus], ["focus 100 %", "focus 75 %", "focus 50 %", "focus 25 %", "focus 1 %"])
+        self.assertEqual((focus[0]["margin"], focus[0]["kept_share"], focus[0]["cards"]), ("0.000", "1.000", "13"))
+        self.assertEqual(focus[-1]["cards"], "0")  # 1 % of 13 cards rounds to none
+        self.assertGreater(float(focus[1]["margin"]), 0.0)
+        self.assertEqual(next(row for row in topics if row["scope"] == "margin >= 0.05")["margin"], "0.050")
         self.assertTrue(all(name not in row["scope"] for row in topics for name in model_support.DECK_IDS))
         self.assertEqual(sorted(path.name for path in self.results.iterdir()), ["difficulty.csv", "results.csv", "topics.csv"])
 

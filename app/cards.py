@@ -1,5 +1,5 @@
-"""The card record the models read: the seven fields of the viewer's Flashcard (project.models) and, since app
-roadmap step 12, a quiz's answer options (the option texts, one feedback per option, the indices of the correct
+"""The card record the models read: the seven fields of the viewer's Flashcard (project.models) and a
+quiz's answer options (the option texts, one feedback per option, the indices of the correct
 ones), which the viewer's parser keeps apart from the card (its Quiz). The glue builds the records from the viewer's
 cards with their quiz (glue.course.load_course), the course table carries the options in three columns
 (course_table), so the models read one record in both modes and need no import of the viewer.

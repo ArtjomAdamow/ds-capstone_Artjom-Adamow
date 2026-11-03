@@ -1,4 +1,4 @@
-"""The models import nothing of the viewer (roadmap step 21, the split): no source of app.models or
+"""The models import nothing of the viewer: no source of app.models or
 its card record imports `project`, and the models import, fit and measure in a process where `project` cannot be
 imported at all, as in the capstone's CI without the private viewer package. The glue, by contrast, is the part
 that imports the viewer."""

@@ -5,14 +5,13 @@
   topic ids and names, cards and ids, in the viewer's format, so its parser, TopicIndex, dialogs and state work
   unchanged. The viewer's compose reads it as its course file; the raw file is the models' input. Rewritten in the
   serving process at every start and never backed up.
-* The model state (MODEL_STATE_NAME, read_model_state, write_model_state; 2026-10-28, roadmap step 21.2.1, until
-  then helper_model_state.json with the views of the user's groups), one entry per model:
+* The model state (MODEL_STATE_NAME, read_model_state, write_model_state), one entry per model:
 
       {"version": 1, "topic_model": {"decks": [...], "groups": []}, "difficulty_model": {"groups": [...]},
        "course_model": {"links": {"decks": [[source, target], ...], "cards": [...]}}}
 
   the deck ids with the model's topics, each model's generated groups with their members (CardGroup records; the
-  topic model has none yet), and the course model's connections by state (2026-10-29, roadmap step 22): the decks
+  topic model has none yet), and the course model's connections by state: the decks
   state's and the card state's, each in the live list's order (merge order per scope). Further models get entries
   of their own. The generated groups and connections are never in the viewer's state file, which holds the user's
   groups with their kinds and the user's connections. Read at a start with a stored card state, so a restart

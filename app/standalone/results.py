@@ -50,7 +50,7 @@ T1_MEASURES: tuple[Measure, ...] = (
 )
 T1_DECK_MEASURES: tuple[Measure, ...] = ("cards", "topics", "agreement")
 T1_STACK_MEASURES: tuple[Measure, ...] = ("cards", "agreement")
-T1_MARGIN_MEASURES: tuple[Measure, ...] = ("cards", "kept_share", "agreement")
+T1_MARGIN_MEASURES: tuple[Measure, ...] = ("cards", "margin", "kept_share", "agreement")
 COURSE_SCOPE = "all"  # evaluate.COURSE_SCOPE: a row over the course; a deck's rows read "deck <id>"
 D1_DECK_MEASURES: tuple[Measure, ...] = (
     "rated", "unrated", "hand_judged", ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
@@ -62,6 +62,7 @@ D1_MEASURES: tuple[Measure, ...] = (
     ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
 )
 MARGIN_SCOPE = "margin >= "
+FOCUS_SCOPE = "focus "  # the margin slider's marks: the share of the course's cards in focus
 STACK_SCOPE = "stack "
 T1_JUDGES = ("T1", "1-NN", "LR", "chance")
 
@@ -202,7 +203,7 @@ class Results:
 
     def tables(self, level: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
         """The tables of a level, from its newest run: S1 (next to B0), S2 (next to S1's chosen variant), C1 (its
-        three layouts), T1 (the course or the entered deck, the stacks, the margins), D1 (next to the baselines and
+        three layouts), T1 (the course or the entered deck, the stacks, the margins, the slider's marks), D1 (next to the baselines and
         the hand row) or D2 (next to D1's chosen row), the two with the entered deck's rows as a second table; None
         without the file, empty without the level's rows."""
         rows = self.rows.get(LEVEL_FILES[level])
@@ -272,6 +273,10 @@ class Results:
         if margins:
             heads = [row["scope"] for row in margins]
             tables.append(transpose("T1's cards kept at a margin", margins, heads, [False] * len(margins), T1_MARGIN_MEASURES, self.by_ids))
+        focus = [row for row in run if row.get("model") == "T1" and (row.get("scope") or "").startswith(FOCUS_SCOPE)]
+        if focus:
+            heads = [row["scope"] for row in focus]
+            tables.append(transpose("The margin slider: the cards in focus at its marks", focus, heads, [False] * len(focus), T1_MARGIN_MEASURES, self.by_ids))
         return tables
 
     def _difficulty(self, run: list[dict]) -> Table:
@@ -293,7 +298,7 @@ class Results:
         return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES, self.by_ids)
 
     def _deck_difficulty(self, run: list[dict], level: str, deck_id: Optional[str]) -> list[Table]:
-        """The entered deck's rows of the run (scope "deck <id>"; app roadmap step 15): D1's variants' within-deck
+        """The entered deck's rows of the run (scope "deck <id>"): D1's variants' within-deck
         order on the hand labels, or D2's variants next to D1's chosen row; none without a deck or its rows."""
         if not deck_id:
             return []

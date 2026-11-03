@@ -284,8 +284,11 @@ class StandaloneTest(PageDriver):
         for x, y, z in zip(topics.x, topics.y, topics.z):
             self.assertAlmostEqual(math.sqrt(x * x + y * y + z * z), 1.0)  # at random on the sphere, never a ring
         self.assertEqual([trace for trace in result[OUT["figure"]].data if trace.name == "Centroid"], [])  # no model: no centroid
-        self.assertIsNone(self.trace(result, "Connections"))
-        self.assertIn("No connections between topics", str(result[OUT["panel"]]))
+        self.assertIsNone(self.trace(result, "Connections"))  # no line on the map: the topics stand at random
+        tree = dendrogram(result[OUT["panel"]])  # the deck's tree of its topics, its leaves by label (step 28)
+        self.assertEqual(sorted(tree.layout.xaxis.ticktext), sorted(Page.topic_label(self.page.topic("02", topic_id)) for topic_id in ("01", "02")))
+        self.assertEqual(tree.layout.meta["kept"], 1)  # no preset: the full tree, one merge of two topics
+        self.assertIn("the full tree", str(result[OUT["panel"]]))
 
     def test_the_topics_view_shows_the_centroid_with_the_model_and_never_draws_connections(self):
         self.call(None)
@@ -1125,6 +1128,30 @@ class AppTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, mock.patch("dash.Dash.run") as run, mock.patch("builtins.print"):
             standalone_main(write_test_table(Path(folder)), None, port=8051)
         run.assert_called_once_with(debug=False, port=8051)
+
+    def test_the_sputnik_link_stands_in_the_top_bar_with_the_viewers_url_and_nowhere_without(self):
+        from app.standalone.layout import VIEWER_LINK
+
+        layout = page_layout(HOME)
+        actions = layout.children[0].children[1].children
+        self.assertEqual([child.id for child in actions], ["back", "open"])  # none without a URL
+        layout = page_layout(HOME, "http://127.0.0.1:8050/")
+        actions = layout.children[0].children[1].children
+        self.assertEqual([child.id for child in actions], ["back", "open", "viewer-link"])
+        link = actions[2]
+        self.assertEqual((link.children, link.href, link.target, link.rel), (VIEWER_LINK, "http://127.0.0.1:8050/", "_blank", "noopener"))
+        self.assertEqual(link.className, "top-button top-link")
+        self.assertEqual(VIEWER_LINK, "Sputnik")
+        with tempfile.TemporaryDirectory() as folder:
+            page = Page(load_table(write_test_table(Path(folder))), results_dir=None)
+            self.assertNotIn("viewer-link", str(create_app(page).layout))
+            app = create_app(page, "http://127.0.0.1:8050/")
+            self.assertEqual(app.layout["viewer-link"].href, "http://127.0.0.1:8050/")
+            with mock.patch("dash.Dash.run"), mock.patch("builtins.print"), mock.patch("app.standalone.create_app", wraps=create_app) as created:
+                standalone_main(write_test_table(Path(folder) / "again"), None, port=8051, viewer_url="http://127.0.0.1:8050/")
+            self.assertEqual(created.call_args[0][1], "http://127.0.0.1:8050/")
+        style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
+        self.assertIn("a.top-button { display: inline-block; text-decoration: none; }", style)
 
 
 NO_VIEWER = """
