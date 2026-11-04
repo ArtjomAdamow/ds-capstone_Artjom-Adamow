@@ -14,17 +14,19 @@ the cards in focus and the threshold; nothing is stored.
 
 from typing import Optional
 
-from project.services.actions import ModuleFocus
-
 FOCUS_LABEL = "Margin"
 MARKS = {1: "1 %", 25: "25 %", 50: "50 %", 75: "75 %", 100: "100 %"}  # the share of the course's cards in focus
 START = 100  # every card in focus until the slider moves
 
 
-def helper_focus(helper) -> ModuleFocus:
+def helper_focus(helper):
     """The viewer's focus over T1's margins: the share scale's marks, the start at 100 %, the threshold of a value
     (share_threshold over the model's margins) and a card's margin as its score where its deck has the model's
-    topics (`helper` is the Helper: its model and its model_decks, read at every call)."""
+    topics (`helper` is the Helper: its model and its model_decks, read at every call). ModuleFocus is imported
+    here, not with the module: a viewer older than sputnik 0.5.0 has none, and the composition calls this only
+    where the viewer's compose takes the hook."""
+    from project.services.actions import ModuleFocus
+
     topic_model = helper.model.topic_model
 
     def threshold_of(value: float) -> float:

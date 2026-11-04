@@ -11,7 +11,7 @@ per topic are too few to measure).
   quizzes, out of fold (rows are the true level, columns the predicted one, each row's shares, so the diagonal is
   the recall of each level; one hue, dark for 0 and light for 1, on the dark panel) and the shares of the levels
   (the rated quizzes, training, next to the predicted unrated quizzes, test, no labels). A viewer without the
-  window hook (sputnik 0.3.0, the capstone's) gets the figures on the back itself (`figures=True`).
+  window hook (sputnik 0.3.0) gets the figures on the back itself (`figures=True`).
 
 The figures, the score table's rows and the subtitle are the helper's shared figures (app.figures), which the
 standalone page draws too; this module wraps them in the viewer's panels (Dash).

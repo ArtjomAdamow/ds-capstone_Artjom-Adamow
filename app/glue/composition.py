@@ -20,7 +20,7 @@ panel turns it over, to the scores of the course in the decks view, of the enter
 of the entered topic's counts with the deck's metrics in the cards view (metrics_back); the confusion matrix and
 the shares of the levels go to the window under the card's window (the viewer's overview_window hook;
 window_back). The viewer's newer hooks are used where the viewer has them (viewer_hooks: the window and
-the top bar links since sputnik 0.4.0, the card section and the focus slider since 0.5.0; the capstone's 0.3.0 has
+the top bar links since sputnik 0.4.0, the card section and the focus slider since 0.5.0, the capstone's pin; 0.3.0 has
 none): on a viewer without the window the back keeps the figures, links are passed where the top bar can take them,
 and the card section (glue.related: the selected card's neighbours with the next card first) and the margin slider
 (glue.focus: T1's margins on the share scale) go where the viewer draws them.
@@ -70,13 +70,16 @@ def viewer_hooks(compose_function: Optional[Callable] = None) -> set[str]:
     return set(NEWER_HOOKS) & set(inspect.signature(compose_function or compose).parameters)
 
 
-def models_links(environ: Mapping[str, str] = os.environ) -> list:
+def models_links(environ: Mapping[str, str] = os.environ, compose_function: Optional[Callable] = None) -> list:
     """The Models button: a TopBarLink to the standalone page's URL the launcher put into the environment; none
-    without it (the capstone's launcher sets it in full mode too, since step 28)."""
+    without it (the capstone's launcher sets it in full mode too, since step 28), and none where the viewer's
+    compose takes no links (older than sputnik 0.4.0, which has no TopBarLink either)."""
+    url = environ.get(MODELS_URL, "")
+    if not url or LINKS_HOOK not in viewer_hooks(compose_function):
+        return []
     from project.services.actions import TopBarLink
 
-    url = environ.get(MODELS_URL, "")
-    return [TopBarLink(MODELS_LABEL, url, MODELS_TITLE)] if url else []
+    return [TopBarLink(MODELS_LABEL, url, MODELS_TITLE)]
 
 
 @dataclass(frozen=True)

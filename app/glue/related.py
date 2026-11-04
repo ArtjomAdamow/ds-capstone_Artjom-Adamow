@@ -21,7 +21,6 @@ by its deck. Nothing here is stored: the entries are made for every draw of the 
 
 from typing import Mapping, Optional, Sequence
 
-from project.services.actions import ModuleSection, SectionEntry
 from project.services.views import CARDS
 
 SECTION_TITLE = "Related cards"
@@ -52,11 +51,13 @@ def shorten(text: str, length: int = LABEL_LENGTH) -> str:
     return text if len(text) <= length else text[: length - 1] + "…"
 
 
-def helper_section(model, questions: Mapping[str, str], scores: Optional[Mapping[str, float]] = None) -> ModuleSection:
+def helper_section(model, questions: Mapping[str, str], scores: Optional[Mapping[str, float]] = None):
     """The viewer's card section: `entries(state, dot)` lists the selected card's neighbours with the next card
     first (the module docstring); nothing for a deck, a topic dot or outside the cards view. `questions` are the
     course's by card id (the entries' labels), `scores` D1's by card id (the next card's order among the extra
-    quizzes)."""
+    quizzes). ModuleSection and SectionEntry are imported here, not with the module: a viewer older than sputnik
+    0.5.0 has none, and the composition calls this only where the viewer's compose takes the hook."""
+    from project.services.actions import ModuleSection, SectionEntry
 
     def place(state, other: str) -> str:
         topic = state.topics.topic_of(other)
@@ -68,7 +69,7 @@ def helper_section(model, questions: Mapping[str, str], scores: Optional[Mapping
         info = state.decks.by_id.get(deck_id) if deck_id is not None else None
         return info.name if info is not None else f"deck {deck_id or '–'}"
 
-    def entries(state, dot) -> list[SectionEntry]:
+    def entries(state, dot) -> list:
         if state.view != CARDS or dot is None or state.is_topic(dot.id):
             return []
         loaded = state.cards_state.card_by_id
