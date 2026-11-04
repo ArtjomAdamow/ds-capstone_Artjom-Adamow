@@ -1,5 +1,4 @@
-"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the glue's back of the card panel
-(glue.difficulty_metrics) and by the standalone page (standalone) alike:
+"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the standalone page (standalone):
 
 * the difficulty models D1 and D2 (models.difficulty_model.DifficultyReport): the line that says what was measured
   (metrics_subtitle), the score table's rows (score_header, score_rows), the confusion matrix (confusion_figure) and

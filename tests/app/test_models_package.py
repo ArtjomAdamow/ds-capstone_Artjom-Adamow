@@ -46,7 +46,6 @@ class ModelsWithoutTheViewerTest(unittest.TestCase):
         importing = [path.name for path in GLUE_SOURCES if VIEWER_IMPORT.search(path.read_text(encoding="utf-8"))]
         self.assertIn("composition.py", importing)
         self.assertIn("course.py", importing)
-        self.assertNotIn("difficulty_metrics.py", importing)  # Dash and Plotly, but nothing of the viewer's own
 
     def test_the_models_import_fit_and_measure_where_the_viewer_cannot_be_imported(self):
         result = subprocess.run(
