@@ -17,10 +17,11 @@ viewer's own, and the Helper button reloads the viewer's topic index (TopicIndex
 The difficulty model D1 (models.difficulty_model) is fitted with the course model for the Helper's difficulty
 groups and the card section's ranking; its metrics are the standalone page's (the Models button), not the viewer's:
 the card panel has no back here. The viewer's newer hooks are used where the viewer has them (viewer_hooks: the top
-bar links since sputnik 0.4.0, the card section and the focus slider since 0.5.0, the capstone's pin; 0.3.0 has
-none): links are passed where the top bar can take them, and the card section (glue.related: the selected card's
-neighbours with the next card first) and the margin slider (glue.focus: T1's margins on the share scale) go where the
-viewer draws them.
+bar links since sputnik 0.4.0, the card section and the focus slider since 0.5.0, the Ask dialog with step 26's
+release; 0.3.0 has none): links are passed where the top bar can take them, and the card section (glue.related: the
+selected card's neighbours with the next card first), the margin slider (glue.focus: T1's margins on the share scale)
+and the Ask dialog (glue.prompt: P1's answer as the viewer's targets) go where the viewer draws them. P1's model
+(models.prompt_model) is fitted only for the dialog, after the course model, and kept in memory with it.
 
 The Models button (models_links): a link to the standalone page's URL that the launcher put into the environment
 (MODELS_URL, the same name in both launchers), passed as a TopBarLink where the viewer takes links; none without the
@@ -43,16 +44,19 @@ from project.store import state as state_store
 from ..models import similar
 from ..models.course_model import CourseModel
 from ..models.difficulty_model import DifficultyReport, fit_difficulty
+from ..models.prompt_model import PromptModel
 from .button import Helper
 from .course import load_course
 from .derived import DERIVED_NAME, MODEL_STATE_NAME, read_model_state
 from .focus import helper_focus
+from .prompt import helper_prompt
 from .related import helper_section
 
 LINKS_HOOK = "links"  # compose's top bar links (services.actions.TopBarLink)
 SECTION_HOOK = "card_section"  # compose's card section under the card panel (services.actions.ModuleSection)
 FOCUS_HOOK = "focus"  # compose's focus slider of the cards view (services.actions.ModuleFocus)
-NEWER_HOOKS = (LINKS_HOOK, SECTION_HOOK, FOCUS_HOOK)
+PROMPT_HOOK = "prompt"  # compose's Ask dialog of the top bar (services.actions.ModulePrompt)
+NEWER_HOOKS = (LINKS_HOOK, SECTION_HOOK, FOCUS_HOOK, PROMPT_HOOK)
 MODELS_URL = "HELPER_MODELS_URL"  # the launchers' variable with the standalone page's URL (app.launch.MODELS_URL)
 MODELS_LABEL = "Models"
 MODELS_TITLE = "The models' page, served next to this viewer: the model panels with the offline results, in a new tab"
@@ -60,7 +64,8 @@ MODELS_TITLE = "The models' page, served next to this viewer: the model panels w
 
 def viewer_hooks(compose_function: Optional[Callable] = None) -> set[str]:
     """The newer hooks this viewer's compose takes (this module's `compose` unless one is given), among NEWER_HOOKS
-    (none on sputnik 0.3.0; the links since 0.4.0, the section and the focus since 0.5.0)."""
+    (none on sputnik 0.3.0; the links since 0.4.0, the section and the focus since 0.5.0, the prompt with step 26's
+    release)."""
     return set(NEWER_HOOKS) & set(inspect.signature(compose_function or compose).parameters)
 
 
@@ -87,6 +92,7 @@ class ModelComposition:
     links: tuple = ()  # the top bar links passed to compose (none where the viewer has no hook)
     card_section: Optional[object] = None  # the card section passed to compose (the related cards), where the viewer has the hook
     focus: Optional[object] = None  # the margin slider passed to compose, where the viewer has the hook
+    prompt: Optional[object] = None  # the Ask dialog passed to compose, where the viewer has the hook
 
     @property
     def action(self) -> Optional[ModuleAction]:
@@ -183,10 +189,13 @@ def compose_model(
     helper.write_course()
     section = helper_section(model, helper.questions, difficulty.scores) if SECTION_HOOK in hooks else None
     focus = helper_focus(helper) if FOCUS_HOOK in hooks else None
+    prompt = helper_prompt(PromptModel(model.index, model.topic_model, course.cards)) if PROMPT_HOOK in hooks else None
     if section is not None:
         extra[SECTION_HOOK] = section
     if focus is not None:
         extra[FOCUS_HOOK] = focus
+    if prompt is not None:
+        extra[PROMPT_HOOK] = prompt
     composition = compose(
         base_dir, boot_id, derived_path, state_path,
         card_positions=helper.card_positions, action=helper.action,
@@ -199,6 +208,6 @@ def compose_model(
     return ModelComposition(
         composition=composition, model=model, fresh_cards=fresh_cards, helper=helper, difficulty=difficulty,
         derived_path=derived_path, links=tuple(extra.get(LINKS_HOOK, ())),
-        card_section=section, focus=focus,
+        card_section=section, focus=focus, prompt=prompt,
     )
 

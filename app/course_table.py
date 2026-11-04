@@ -9,7 +9,9 @@ viewer's parser from the refined course file, read here with the csv module (no 
   without options; the option texts carry markdown and commas);
 * decks.csv (DECK_COLUMNS): every deck in deck id order with its description (the viewer's placeholder for now);
 * topics.csv (TOPIC_COLUMNS): every deck's scripted topics in file order, the empty ones too, which cards.csv
-  cannot carry: T1's seeds hold them (an emptied topic keeps its dot).
+  cannot carry: T1's seeds hold them (an emptied topic keeps its dot); with the course file's headings and sources
+  of each topic, joined by " | " (TEXT_SEPARATOR), which the parser does not keep (topic_texts reads them from the
+  course file with the json module, for the export and for glue.course alike).
 
 load_table gives what glue.course.load_course gives with the parser (the CardRecords, the deck ids by name, the
 TopicSeeds in deck name order and file order), plus the deck list; the ids agree because both come from the same
@@ -34,7 +36,8 @@ CARD_COLUMNS = (
 )
 LIST_COLUMNS = ("options", "answers", "correct")  # JSON lists in the cell, empty for a card without options
 DECK_COLUMNS = ("deck_id", "name", "description")
-TOPIC_COLUMNS = ("deck_id", "topic_id", "name", "rest")
+TOPIC_COLUMNS = ("deck_id", "topic_id", "name", "rest", "headings", "sources")
+TEXT_SEPARATOR = " | "  # a topic's headings in one cell, and its sources (a source's own files are joined by "; ")
 TRUE = "true"
 FALSE = "false"
 
@@ -82,6 +85,27 @@ def encode_list(values: Sequence) -> str:
 def decode_list(cell: str) -> tuple:
     """The values of a list cell (encode_list), an empty tuple for an empty cell."""
     return tuple(json.loads(cell)) if cell else ()
+
+
+def join_texts(values: Sequence[str]) -> str:
+    """A text cell: the headings or the sources joined by TEXT_SEPARATOR, an empty string for none."""
+    return TEXT_SEPARATOR.join(values or ())
+
+
+def split_texts(cell: str) -> tuple[str, ...]:
+    """The headings or the sources of a text cell (join_texts), an empty tuple for an empty cell."""
+    return tuple(cell.split(TEXT_SEPARATOR)) if cell else ()
+
+
+def topic_texts(course_file: Path) -> dict[tuple[str, str], tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Every topic's headings and sources in the course file (version 3), read with the json module, since the
+    viewer's parser keeps neither: (deck name, topic id) -> (headings, sources); a missing list reads as empty."""
+    data = json.loads(Path(course_file).read_text(encoding="utf-8"))
+    return {
+        (deck["name"], topic["topic_id"]): (tuple(topic.get("headings") or ()), tuple(topic.get("sources") or ()))
+        for deck in data.get("decks", [])
+        for topic in deck.get("topics", [])
+    }
 
 
 def _rows(path: Path, columns: tuple[str, ...]) -> list[dict[str, str]]:
@@ -150,5 +174,8 @@ def load_table(folder: Path) -> CourseTable:
             if deck_name.get(topic["deck_id"]) != name:
                 continue
             ids = tuple(row["comb_id"] for row in members if row["topic_id"] == topic["topic_id"])
-            seeds.append(TopicSeed(name, topic["topic_id"], topic["name"], topic["rest"] == TRUE, ids))
+            seeds.append(TopicSeed(
+                name, topic["topic_id"], topic["name"], topic["rest"] == TRUE, ids,
+                split_texts(topic["headings"]), split_texts(topic["sources"]),
+            ))
     return CourseTable(cards, {deck.name: deck.deck_id for deck in decks}, seeds, decks)

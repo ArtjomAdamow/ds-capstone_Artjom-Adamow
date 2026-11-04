@@ -1,17 +1,17 @@
 """The standalone page's models and its one callback (Dash; nothing of the viewer).
 
-Page fits the course model and D1 on the course table once, as the viewer's serving process does, S1's TF-IDF index
-next to it where the app runs S2's encoder, and D2's report from the tags the launcher's cache holds; it reads the
-results files of the offline evaluation, and answers what the three views and the four model panels show; everything
-shown is the models', nothing is stored.
+Page fits the course model, D1 and P1 on the course table once, as the viewer's serving process does, S1's TF-IDF
+index next to it where the app runs S2's encoder, and D2's report from the tags the launcher's cache holds; it reads
+the results files of the offline evaluation, and answers what the three views and the five model panels show;
+everything shown is the models', nothing is stored.
 
 The views: the decks on the sphere; a deck's topics (an entered deck) at random positions, since the model places
 no topic yet, with the deck's tree of its topics in the dendrogram's window (topic_tree: the clustering of the topic
 vectors of the membership in force, the full tree, no line on the map); a topic's cards (an entered topic) on the
 surface of its sphere.
 
-The panels (one per model letter, S, C, T and D; one expanded at a time, in the `view` store) hold a row per model
-generation (layout.GENERATIONS: S1 and S2, C1, T1, D1 and D2), the newest expanded when the panel opens, one at a
+The panels (one per model letter, S, C, T, D and P; one expanded at a time, in the `view` store) hold a row per model
+generation (layout.GENERATIONS: S1 and S2, C1, T1, D1 and D2, P1), the newest expanded when the panel opens, one at a
 time (the `level` key of the store, None for the newest). The expanded generation decides what the map shows:
 
 * every panel collapsed, S or D expanded: the scripted topics' membership, random positions on the sphere
@@ -33,7 +33,12 @@ time (the `level` key of the store, None for the newest). The expanded generatio
   scale, a cross below the threshold, a violet diamond for a card T1 moved in from another scripted topic, an open
   pink diamond for a card scripted here that T1 moved elsewhere, placed at the normalised mean direction of its most
   similar cards among the topic's members; an emptied topic as an open circle, a topic's dot grown with its share of
-  cards below the threshold; and window B with the margins of the view's cards.
+  cards below the threshold; and window B with the margins of the view's cards;
+* P: T1's membership at C1's positions, the membership P1 answers in, grey, with the centroid and the axes and no
+  connections; a request in the panel's box (Page.find) runs P1 and navigates as the viewer does: into the target's
+  deck and topic, the card selected where P1 selects one; "no match" moves nothing. The answer shows by ids (the
+  topics by label), every route's score, the decision line and the time; each of the three nearest is a click away
+  (Page.go_to). The request and its time stay in the store (`prompt`) until the next.
 
 The legends of S, T and D are the map's (layout.map_figure), not the panels'.
 
@@ -57,13 +62,14 @@ The callback (register_callback) keeps the view in the `view` store: a click on 
 a selected deck's or topic's panel enters it, Back goes up a level with the dot it came from selected (in the decks
 view it unselects); a panel's row expands it and collapses any other, its close box collapses it; a generation's row
 expands that generation; a results row's click opens its description or closes the open one (both through the hidden
-input `row-click`, a JSON of the generation or the row's key and a sequence number). No keys, groups, editing,
-progress, quiz or image window.
+input `row-click`, a JSON of the generation or the row's key and a sequence number, or of P1's target); Go or Enter in
+the P panel's box sends the request. No keys, groups, editing, progress, quiz or image window.
 """
 
 import hashlib
 import json
 import math
+import time
 from pathlib import Path
 from typing import Iterable, Mapping, Optional, Sequence
 
@@ -79,11 +85,12 @@ from ..models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel,
 from ..models.difficulty_model import DifficultyReport, fit_difficulty, judge_tags
 from ..models.evaluation import random_directions
 from ..models.layout import as_dense, fibonacci_sphere
+from ..models.prompt_model import CARD, CENTROID, DEFAULT_ROUTES, TEXT, PromptModel, variant_label
 from .layout import (
     CARDS_VIEW, CROSS_SYMBOL, DECKS_VIEW, GENERATIONS, GREY, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL,
     NO_NEIGHBOUR_SYMBOL, PANEL_LETTERS, PREDICTED, TOPICS_NOTE, TOPICS_VIEW, box_class, card_class, card_panel, class_style,
     MARGINS_NOTE, deck_panel, generation_rows, level_section, map_figure, margin_color, margins_window, metrics_panel,
-    metrics_window, model_readout, overview_panel, page_layout, share_color, topic_panel, window_class,
+    metrics_window, model_readout, overview_panel, page_layout, PROMPT_HINT, prompt_answer, share_color, topic_panel, window_class,
 )
 from .results import LEVEL_FILES, Results, course_note, read_glossary
 
@@ -96,9 +103,12 @@ TOPIC_HASH_BYTES = 3  # a topic label's hash: six hex digits
 RANDOM_SEED = 42  # the random positions of the scripted topics: one draw per view, the same for every panel
 MARGIN_PERCENTILE = 95  # the top of the teal scale: the course's 95th percentile of the margins
 SIMILAR_MEMBERS = 5  # a moved-out card sits at the mean direction of this many most similar members of its topic
-MODEL_PANELS = ("C", "T")  # the panels whose map shows T1's membership at C1's positions
-HOME = {"view": DECKS_VIEW, "deck": None, "topic": None, "selected": None, "panel": None, "level": None, "measure": None}
+# The panels whose map shows T1's membership at C1's positions: P's too, the membership P1's answer lands in
+MODEL_PANELS = ("C", "T", "P")
+HOME = {"view": DECKS_VIEW, "deck": None, "topic": None, "selected": None, "panel": None, "level": None, "measure": None,
+        "prompt": None}
 ENTER_TRIGGERS = ("open", "dot-panel")
+PROMPT_TRIGGERS = ("prompt-go", "prompt-text")  # Go, and Enter in the request box (its n_submit)
 ROW_INPUT = "row-click"  # the hidden input a generation's or a results row's click sets (assets/panel_rows.js)
 DECK_TABLE_LEVELS = ("T1", "D1", "D2")  # the generations with a table of the entered deck's rows
 Key = tuple[str, str]  # (deck id, topic id)
@@ -139,6 +149,10 @@ DESCRIPTIONS = {
     "D1": "The difficulty model the app runs: logistic regression on the question's statistics, labelled by the deck "
           "shares, predicts the level of the unrated quizzes; it reads neither C1 nor T1, so the map shows the scripted "
           "topics.",
+    "P1": "The navigation prompt: a request in the learner's words is scored against T1's topics by three routes on the "
+          "app's vectors (the nearest card, the topic's centroid, its headings), each at its floor from the cards' own "
+          "questions; the first topic is entered where the card route clears its floor there, its nearest card "
+          "selected with it, else no match. No language model. The map shows T1's membership at C1's positions, where the answer lands.",
     "D2": "Zero-shot tags: an NLI model (the large ModernBERT) reads each quiz with its resolution against "
           "the hand criterion's three demands (the criterion template), nothing fitted, on D1's frame: the expected level "
           "is cut by the deck shares. Within noise of D1's order on the hand labels and below it, so a judge of the "
@@ -209,7 +223,10 @@ class Page:
         self._scripted_links: dict[Key, list[tuple[str, str]]] = {}
         margins = list(self.topic_model.margin_of.values())
         self.margin_scale = float(np.percentile(margins, MARGIN_PERCENTILE)) if margins else 1.0
-        self.results = Results(results_dir, course_note(table.deck_ids), self.name_ids())
+        # P1 on the app's index and T1, as the serving process fits it
+        self.prompt = PromptModel(self.model.index, self.topic_model, table.cards)
+        self.results = Results(results_dir, course_note(table.deck_ids), self.name_ids(),
+                               chosen={"P1": variant_label(self.model.index.vectoriser)})
         self.glossary = read_glossary()
 
     def name_ids(self) -> dict[str, str]:
@@ -756,7 +773,8 @@ class Page:
     def _section(self, level: str, state: dict):
         """A generation's section: its description, the live measures, its tables of its newest run with the one
         open row's description (the glossary), or why there is none (no file: how to make it; no rows of it)."""
-        live = {"S": self._live_similarity, "C": self._live_course, "T": self._live_topics, "D": self._live_difficulty}[level[0]](level, state)
+        live = {"S": self._live_similarity, "C": self._live_course, "T": self._live_topics, "D": self._live_difficulty,
+                "P": self._live_prompt}[level[0]](level, state)
         deck_id = state.get("deck") if level in DECK_TABLE_LEVELS and state["view"] != DECKS_VIEW else None
         tables = self.results.tables(level, deck_id)
         hint = self.results.hint(LEVEL_FILES[level]) if tables is None else self.results.no_rows(level)
@@ -836,7 +854,61 @@ class Page:
             return [html.P(NO_TAGS, className="empty-state")]
         return [self.metrics(state, report)]
 
+    def _live_prompt(self, level: str, state: dict) -> list:
+        """P1's live part: the answer to the last request (its decision line with the time, the three nearest topics
+        by label with every route's score and the topic's nearest card, each a click away), or how to ask; then the
+        floors over the self set."""
+        floors = self.prompt.floors
+        asked = state.get("prompt") if isinstance(state.get("prompt"), dict) else {}
+        live = []
+        if asked.get("text"):
+            answer = self.prompt.find(asked["text"])
+            entries = []
+            for target in answer.targets:
+                deck_id = self.model.deck_ids.get(target.key[0], target.key[0])
+                card = target.card
+                label = f"deck {deck_id} › {self.label_in_deck(deck_id, target.key[1])}" + (f" · card {card}" if card else "")
+                scores = " · ".join(f"{route} {target.scores[route]:.2f}" for route in (CARD, CENTROID, TEXT)) + f" · mean {target.mean:.2f}"
+                entries.append((f"{deck_id}:{target.key[1]}" + (f":{card}" if card else ""), label, scores))
+            live += prompt_answer(asked["text"], f"{answer.message} · {float(asked.get('ms') or 0):.1f} ms", entries)
+        else:
+            live.append(html.P(PROMPT_HINT, className="empty-state"))
+        rows = [
+            ("vectoriser", embeddings.describe(self.prompt.index.vectoriser), "The app's index: a request's vector comes from its vectoriser."),
+            ("routes", "+".join(DEFAULT_ROUTES), "The variant the app runs: the card route, until the choice rule names another."),
+            ("card route floor", f"{floors.card:.3f}", "The 10th percentile of a question's first neighbour's cosine among the other cards."),
+            ("centroid route floor", f"{floors.centroid:.3f}", "The 10th percentile of a question's cosine to its own topic's leave-one-out centroid."),
+            ("text route floor", f"{floors.text:.3f}", "The 10th percentile of a question's cosine to its own topic's headings."),
+            ("self set", f"{len(self.prompt.self_ids):,} questions", "Every card's question alone, the card held out: the floors' sample."),
+        ]
+        return live + model_readout(f"All {len(self.prompt.keys):,} topics", [("P1 (floors from the self set)", rows)])
+
     # --- the moves ---------------------------------------------------------------------------------------------
+
+    def go_to(self, state: dict, deck_id: Optional[str], topic_id: Optional[str], card: Optional[str] = None) -> dict:
+        """The view entered into a target as the viewer navigates: the topic's cards, the card selected where one is
+        given (step unselects a card the view does not hold); an unknown topic moves nothing."""
+        if (deck_id, topic_id) not in self.model.topics:
+            return state
+        return {**state, "view": CARDS_VIEW, "deck": deck_id, "topic": topic_id, "selected": card}
+
+    def find(self, state: dict, text: Optional[str]) -> dict:
+        """A request from the P panel's box: P1's answer, the request and its time kept in the store (the panel reads
+        them), the P panel expanded, and the view navigated into the target where P1 navigates; "no match" moves
+        nothing. An empty request changes nothing."""
+        text = (text or "").strip()
+        if not text:
+            return state
+        started = time.perf_counter()
+        answer = self.prompt.find(text)
+        seconds = time.perf_counter() - started
+        if state.get("panel") != "P":
+            state = {**state, "panel": "P", "level": None}
+        state = {**state, "prompt": {"text": text, "ms": round(1000 * seconds, 1)}, "measure": None}
+        if answer.navigate:
+            deck_id = self.model.deck_ids.get(answer.topic[0], answer.topic[0])
+            state = self.go_to(state, deck_id, answer.topic[1], answer.card)
+        return state
 
     def enter(self, state: dict) -> dict:
         """Open: a selected deck's topics view, a selected topic's cards view; nothing else."""
@@ -855,7 +927,7 @@ class Page:
             topic = self.topic(state["deck"], state["topic"])
             return {**state, "view": TOPICS_VIEW, "topic": None, "selected": self.topic_dot(topic) if topic else None}
         if state["view"] == TOPICS_VIEW:
-            return {**HOME, "panel": state.get("panel"), "level": state.get("level"), "selected": state["deck"]}
+            return {**HOME, "panel": state.get("panel"), "level": state.get("level"), "selected": state["deck"], "prompt": state.get("prompt")}
         return {**state, "selected": None}
 
     def can_enter(self, state: dict) -> bool:
@@ -882,13 +954,23 @@ class Page:
         """The generation whose row was clicked, in the hidden input's value; None for a results row's click."""
         return cls._clicked(value, "level")
 
-    def step(self, state: Optional[dict], trigger: Optional[str], click_data: Optional[dict] = None, measure=None) -> dict:
+    @classmethod
+    def target_of(cls, value) -> Optional[list[str]]:
+        """P1's target whose entry was clicked, in the hidden input's value: [deck id, topic id] and the card where
+        the entry shows one; None for anything else."""
+        found = cls._clicked(value, "target")
+        parts = found.split(":") if found else []
+        return parts if len(parts) in (2, 3) else None
+
+    def step(self, state: Optional[dict], trigger: Optional[str], click_data: Optional[dict] = None, measure=None,
+             request: Optional[str] = None) -> dict:
         """The view after a trigger: a click on the map selects a dot of the view, Open or a click on the dot's
         panel enters, Back goes up, a panel's row expands it with its newest generation (and collapses any other,
         and closes an open description), its close box collapses it; through the hidden input (`measure`), a
         generation's row expands that generation of the expanded panel (and closes an open description), a results
         row's click opens its description (and closes the open one; the same row's or the close box's click closes
-        it). A selected dot the view no longer holds is unselected."""
+        it), a click on one of P1's targets goes to it; Go or Enter in the P panel's box runs the `request` (find).
+        A selected dot the view no longer holds is unselected."""
         state = {**HOME, **(state if isinstance(state, dict) else {})}
         if state["view"] not in (DECKS_VIEW, TOPICS_VIEW, CARDS_VIEW) or state["panel"] not in (None, *PANEL_LETTERS):
             state = dict(HOME)
@@ -901,6 +983,8 @@ class Page:
                 state["selected"] = dot
         elif trigger in ENTER_TRIGGERS:
             state = self.enter(state)
+        elif trigger in PROMPT_TRIGGERS:
+            state = self.find(state, request)
         elif trigger == "back":
             state = self.back(state)
         elif isinstance(trigger, str) and trigger.startswith("panel-") and trigger[6:] in PANEL_LETTERS:
@@ -914,7 +998,10 @@ class Page:
             state["measure"] = None
         elif trigger == ROW_INPUT:
             level = self.generation_of(measure)
-            if level is not None:
+            target = self.target_of(measure)
+            if target is not None:
+                state = self.go_to(state, target[0], target[1], target[2] if len(target) > 2 else None)
+            elif level is not None:
                 if level in GENERATIONS.get(state["panel"], ()) and level != self.level_of(state):
                     state["level"] = level
                     state["measure"] = None
@@ -928,9 +1015,9 @@ class Page:
 
 def register_callback(app: Dash, page: Page):
     """The page's one callback; returns the function (for tests). Its outputs: the map, window A, the view, the
-    line under the top bar, Open's and Back's disabled state, the four panels' contents and their classes, then
-    window B's content and class. Its inputs end with the hidden input of a generation's or a results row's
-    click and the view's state."""
+    line under the top bar, Open's and Back's disabled state, the five panels' contents and their classes, then
+    window B's content and class. Its inputs end with Go and Enter of the P panel's box and the hidden input of a
+    generation's, a results row's or a target's click; its states are the box's text and the view."""
 
     @app.callback(
         Output("map", "figure"),
@@ -949,13 +1036,16 @@ def register_callback(app: Dash, page: Page):
         Input("dot-panel", "n_clicks"),
         *[Input(f"panel-{letter}", "n_clicks") for letter in PANEL_LETTERS],
         *[Input(f"close-{letter}", "n_clicks") for letter in PANEL_LETTERS],
+        Input("prompt-go", "n_clicks"),
+        Input("prompt-text", "n_submit"),
         Input(ROW_INPUT, "value"),
+        State("prompt-text", "value"),
         State("view", "data"),
     )
     def update(click_data, open_clicks, back_clicks, panel_clicks, *rest):
         from dash import ctx
 
-        state = page.step(rest[-1], ctx.triggered_id, click_data, measure=rest[-2])
+        state = page.step(rest[-1], ctx.triggered_id, click_data, measure=rest[-3], request=rest[-2])
         contents, classes = page.panels(state)
         window, window_class_name = page.graph_window(state)
         return (

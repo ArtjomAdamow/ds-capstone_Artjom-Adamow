@@ -40,24 +40,34 @@ What it measures (docs/draft/helper/models/, each model's file):
     the neighbour rule (the nearest other card of the deck) and of a logistic regression per deck, leave-one-out,
     next to chance by the topic sizes; by stack and per deck; T1's margin table (the cards kept at a threshold and
     the margin slider's marks, the share scale of the viewer's focus, and
-    their agreement), the coherence per topic, the moved cards and the emptied topics.
+    their agreement), the coherence per topic, the moved cards and the emptied topics;
+  * P1, the navigation prompt (models/prompt.md, "5. Evaluation in standalone mode"): the five route sets on S1's
+    TF-IDF and on the app's vectoriser, and the card route on character n-grams, every one on T1's membership of the
+    app's vectoriser: over the self set (every card's question with the card held out) the topic@1 and @3 and the
+    share navigated, the floors; over the judged requests of decks 17 and 24 the share served right,
+    wrong and missed, the ranking's topic@1, @3 and card@1, and the paired difference of the share right to the
+    vectoriser's card route (the character n-grams' to S1's) with its bootstrap interval; the time of a request.
 
 Every run appends one row per model and variant to the results folder (`--results`, by default results/ next to
-this file): results.csv (B0, S1, C1), difficulty.csv (D1, D2) and topics.csv (T1). A results file whose columns grew is
-written again with its rows kept. `--part similarity`, `--part difficulty` or `--part topics` runs one part only.
+this file): results.csv (B0, S1, C1), difficulty.csv (D1, D2), topics.csv (T1) and prompt.csv (P1). A results file
+whose columns grew is written again with its rows kept. `--part similarity`, `--part difficulty`, `--part topics` or
+`--part prompt` runs one part only.
 
 The hand side is judged in the flashcards workspace, since its forms hold card text: the hand marks of the
 similarity part in hand_marks.csv (card, candidate, relevant, judged, judge, note) with their judging form
 hand_check.md (about 20 cards of decks 17 and 24 with the top-5 neighbours of every variant combined, each to be
 marked relevant or not), and the hand labels of D1 in hand_labels.csv (card, level, judged, judge, note) with their
 form hand_labels.md (every unrated quiz and, blind, the rated quizzes of two decks, each to be labelled easy, medium
-or hard by the rule of models/difficulty.md, "The hand-labelled sample"). Each file is read before its form is
-written again and written after it, so a changed form, a removed variant or a changed sample loses no judgement;
-`--judge` names who marked. With the marks, every variant's row carries its hand-judged precision@1, @3 and @5 over
+or hard by the rule of models/difficulty.md, "The hand-labelled sample"), and P1's requests in prompt_requests.csv
+(request, kind, deck_id, topic_id, card, also, judged, judge, note; written by hand, models/prompt.md, "The request
+rule") with their review form prompt_requests.md (every variant's nearest three under each request, pooled, a further
+acceptable target marked into `also`). Each file is read before its form is written again and written after it, so a
+changed form, a removed variant or a changed sample loses no judgement; the request file is written only when the
+form changed a request; `--judge` names who marked. With the marks, every variant's row carries its hand-judged precision@1, @3 and @5 over
 the judged cards and the paired difference of its precision@5 to the chosen variant, bootstrapped over the cards.
-The marks and the labels travel to the capstone without their notes, the forms do not: where a results folder holds
-a file without its form, the hand columns are computed from the file alone and nothing is written back; where it
-holds neither, that side's columns stay empty, the form is not written and one line says so. The form lists a quiz's
+The marks, the labels and the requests travel to the capstone without their notes, the forms do not: where a results
+folder holds a file without its form, the hand columns are computed from the file alone and nothing is written back;
+where it holds neither, that side's columns stay empty, the form is not written and one line says so. The form lists a quiz's
 options with their feedback from the course table (the record's options), the answer for a quiz without them.
 
 Every row of a run carries the run's start time to the minute (`run`), next to its date, so the standalone page
@@ -92,7 +102,11 @@ from app.models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseMode
 from app.models.difficulty_model import (  # noqa: E402
     DEFAULT_FEATURES, FEATURE_SETS, LEVEL_OF, LEVELS, DifficultyReport, fit_difficulty, judge_tags, measure, split,
 )
+from app.models.prompt_model import (  # noqa: E402
+    CARD, FLOOR_PERCENTILE, NO_MATCH, ROUTES, Answer, PromptModel, family_of, gate_of,
+)
 from app.models.topic_model import FOCUS_MARGIN, TopicModel  # noqa: E402
+from sklearn.feature_extraction.text import TfidfVectorizer  # noqa: E402
 
 RESULTS_DIR = MODULE_DIR / "results"
 # The course table: the capstone's data/ next to the package, or the flashcards workspace's at the repository root
@@ -145,6 +159,19 @@ CANDIDATE = re.compile(r"^- \[([xX ])\] (\S+) \(")
 NONE_RELEVANT = re.compile(r"^- \[[xX]\] none\b")  # judged: no candidate of this card is relevant
 HEADING = re.compile(r"^## (\S+) \(")
 NOT_JUDGED = "not judged yet"  # the tag of a candidate without a row in the marks file under a judged card
+PROMPT_COLUMNS = [
+    "date", "run", "model", "variant", "params", "self_topic_at1", "self_topic_at3", "self_navigated",
+    "min_card", "min_centroid", "min_text", "hand_right", "hand_wrong", "hand_missed",
+    "hand_topic_at1", "hand_topic_at3", "hand_card_at1", "hand_diff", "hand_diff_low", "hand_diff_high", "judged_requests",
+    "ms_per_request", "seconds", "notes",
+]
+REQUEST_COLUMNS = ["request", "kind", "deck_id", "topic_id", "card", "also", "judged", "judge", "note"]
+OFF_COURSE = "off-course"  # the kind of a request no deck teaches: its right answer is "no match"
+PROMPT_TRANSFER_DECKS = ("18",)  # the transfer deck's requests: out of the hand columns, read once after the choice
+CHAR_NGRAMS = "char n-grams"  # the card route's index on character n-grams, the code names' and typos' row
+PROMPT_TIMED = 55  # without requests, ms_per_request is timed over this many of the self set's questions
+PROMPT_HEADING = re.compile(r"^## \d+\. (.*)$")
+PROMPT_CANDIDATE = re.compile(r"^- \[([xX ])\] (\d{2}:\d{2}|\d+) ")
 
 
 @dataclass(frozen=True)
@@ -158,12 +185,16 @@ class ResultFiles:
     hand_marks: Path  # its marks
     hand_labels_form: Path  # the judging form of D1
     hand_labels: Path  # its labels
+    prompt: Path  # P1
+    prompt_form: Path  # the review form of P1's requests
+    prompt_requests: Path  # the requests
 
 
 def result_files(folder: Path = RESULTS_DIR) -> ResultFiles:
     folder = Path(folder)
     return ResultFiles(folder / "results.csv", folder / "difficulty.csv", folder / "topics.csv", folder / "hand_check.md",
-                       folder / "hand_marks.csv", folder / "hand_labels.md", folder / "hand_labels.csv")
+                       folder / "hand_marks.csv", folder / "hand_labels.md", folder / "hand_labels.csv", folder / "prompt.csv",
+                       folder / "prompt_requests.md", folder / "prompt_requests.csv")
 
 
 def default_table_dir() -> Path:
@@ -629,6 +660,318 @@ def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: st
                               kept_share=fmt(share), margin=fmt(threshold)))
         print(f"   | {mark} % | {threshold:.3f} | {round(share * len(all_ids))} | {agreement:.3f} |")
     return rows
+
+
+# --- P1 -------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Request:
+    """A request of the request file as the evaluation reads it: its text and kind, the acceptable topics (T1's
+    keys: the intended card's topic under the membership in force, else the named topic, and the `also` targets'),
+    the acceptable cards (the intended one and the `also` cards), whether it counts (judged) and whether it is the
+    transfer deck's."""
+
+    text: str
+    kind: str
+    topics: frozenset
+    cards: frozenset
+    card: str  # the intended card, "" for a topic-only or an off-course request
+    judged: bool
+    transfer: bool
+
+    @property
+    def off_course(self) -> bool:
+        return self.kind == OFF_COURSE
+
+
+def read_requests(path: Path) -> tuple[list[str], list[dict]]:
+    """The request file: its columns (REQUEST_COLUMNS, without the note where the train left it out) and its rows in
+    file order; REQUEST_COLUMNS and no rows without the file."""
+    if not path.exists():
+        return list(REQUEST_COLUMNS), []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        return list(reader.fieldnames or REQUEST_COLUMNS), [{key: value or "" for key, value in row.items()} for row in reader]
+
+
+def write_requests(columns: list[str], rows: list[dict], path: Path) -> None:
+    """The request file written again: its own columns, its rows in their order."""
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({column: row.get(column, "") for column in columns})
+
+
+def request_of(row: dict, by_id: Mapping, deck_name: Mapping[str, str], topic_of: Mapping[str, str]) -> Request:
+    """A row of the request file read against the course and T1's membership (prompt.md, "Hard decisions", 2): a
+    card names its topic under the membership in force, a topic-only target its deck and topic id; `also` holds card
+    ids and `deck:topic` keys. A request without a target that is not off-course is not judged."""
+    topics, cards = set(), set()
+
+    def add_card(card_id: str) -> None:
+        if card_id in by_id and card_id in topic_of:
+            cards.add(card_id)
+            topics.add((by_id[card_id].deck, topic_of[card_id]))
+
+    def add_topic(deck_id: str, topic_id: str) -> None:
+        if deck_id in deck_name and topic_id:
+            topics.add((deck_name[deck_id], topic_id))
+
+    card = row.get("card", "").strip()
+    if card:
+        add_card(card)
+    else:
+        add_topic(row.get("deck_id", "").strip(), row.get("topic_id", "").strip())
+    for item in row.get("also", "").split():
+        if ":" in item:
+            add_topic(*item.split(":", 1))
+        else:
+            add_card(item)
+    kind = row.get("kind", "").strip()
+    return Request(row.get("request", ""), kind, frozenset(topics), frozenset(cards), card if card in cards else "",
+                   kind == OFF_COURSE or bool(topics), row.get("deck_id", "").strip() in PROMPT_TRANSFER_DECKS)
+
+
+def request_outcome(request: Request, answer: Answer) -> tuple[bool, bool, bool]:
+    """(right, wrong, missed): a navigation into an acceptable topic, or "no match" on an off-course request, is
+    right; a navigation anywhere else, or on an off-course request, is wrong; "no match" on a request the course
+    teaches is missed."""
+    if request.off_course:
+        return not answer.navigate, answer.navigate, False
+    hit = answer.topic in request.topics
+    return answer.navigate and hit, answer.navigate and not hit, not answer.navigate
+
+
+def char_ngram_vectoriser() -> TfidfVectorizer:
+    """TF-IDF on character 3- to 5-grams within words (S1's scratch variant with the best first neighbour, hand p@1
+    0.95): the card route's index for code names and typos, without torch."""
+    return TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=2, sublinear_tf=True)
+
+
+def share_of(values) -> float:
+    """The share of true values; NaN without values."""
+    values = list(values)
+    return sum(bool(value) for value in values) / len(values) if values else math.nan
+
+
+def prompt_membership(cards, seeds, vectoriser=None) -> tuple[similar.SimilarityIndex, TopicModel]:
+    """The app's index (its vectoriser, as the launchers fit it) and T1 on it: the membership in force, the truth of
+    the requests and of the self set for every variant of P1."""
+    index = similar.SimilarityIndex.fit(cards, vectoriser, min_score=None)
+    return index, TopicModel(index, seeds)
+
+
+def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, request_rows: list[dict],
+                    app_index: similar.SimilarityIndex, t1: TopicModel) -> tuple[list[dict], dict[str, list[Answer]]]:
+    """P1's variants (prompt.md, "5. Evaluation in standalone mode"): the five route sets on S1's TF-IDF and on the
+    app's vectoriser where it is another, and the card route on character n-grams, every one on T1's membership of
+    the app's vectoriser (the membership in force, the requests' truth). Every row carries the self-set columns and
+    its floors; with judged requests the hand columns over those of decks 17 and 24 (the transfer deck's apart) and
+    the paired difference of `hand_right` to its vectoriser's card route (the character n-grams' to S1's). Returns
+    the rows and every variant's answers to every request (the form's)."""
+    by_id = {card.id: card for card in cards}
+    deck_name = {deck_id: name for name, deck_id in deck_ids.items()}
+    requests = [request_of(row, by_id, deck_name, t1.topic_of) for row in request_rows]
+    counted = [number for number, request in enumerate(requests) if request.judged and not request.transfer]
+    in_course = [number for number in counted if not requests[number].off_course]
+    with_card = [number for number in in_course if requests[number].card]
+    app_family = family_of(app_index.vectoriser)
+    families = [("TF-IDF", app_index if app_family == "TF-IDF" else similar.SimilarityIndex.fit(cards), tuple(ROUTES))]
+    if app_family != "TF-IDF":
+        families.append((app_family, app_index, tuple(ROUTES)))
+    families.append((CHAR_NGRAMS, similar.SimilarityIndex.fit(cards, char_ngram_vectoriser()), ("card",)))
+    rows: list[dict] = []
+    answers: dict[str, list[Answer]] = {}
+    right_of: dict[str, list[float]] = {}
+    for family, index, names in families:
+        started = time.perf_counter()
+        model = PromptModel(index, t1, cards)
+        seconds = time.perf_counter() - started
+        floors = model.floors
+        for name in names:
+            routes = ROUTES[name]
+            label = f"{family}: {name}"
+            cases = model.self_set(routes)
+            times, given = [], []
+            for text in [request.text for request in requests] or model.self_questions[:PROMPT_TIMED]:
+                started = time.perf_counter()
+                given.append(model.find(text, routes))
+                times.append(time.perf_counter() - started)
+            given = given if requests else []
+            answers[label] = given
+            outcomes = {number: request_outcome(requests[number], given[number]) for number in counted}
+            right_of[label] = [float(outcomes[number][0]) for number in counted]
+            row = {
+                "date": today, "model": "P1", "variant": label,
+                "params": f"routes={'+'.join(routes)}, gate={gate_of(routes)}, vectoriser={embeddings.describe(index.vectoriser)}"
+                          + (" (character 3- to 5-grams within words, min_df=2, sublinear)" if family == CHAR_NGRAMS else "")
+                          + f", floors at the {FLOOR_PERCENTILE}th percentile of the self set",
+                "self_topic_at1": fmt(share_of(case.nearest[0] == case.key for case in cases)),
+                "self_topic_at3": fmt(share_of(case.key in case.nearest for case in cases)),
+                "self_navigated": fmt(share_of(case.decision != NO_MATCH for case in cases)),
+                "min_card": fmt(floors.card), "min_centroid": fmt(floors.centroid),
+                "min_text": fmt(floors.text), "ms_per_request": f"{1000 * float(np.median(times)):.1f}" if times else "",
+                "seconds": f"{seconds:.2f}", "notes": f"T1's membership on {app_family}; {note}",
+            }
+            if counted:
+                row.update(
+                    hand_right=fmt(share_of(outcomes[number][0] for number in counted)),
+                    hand_wrong=fmt(share_of(outcomes[number][1] for number in counted)),
+                    hand_missed=fmt(share_of(outcomes[number][2] for number in counted)),
+                    hand_topic_at1=fmt(share_of(given[number].ranking[0].key in requests[number].topics for number in in_course)),
+                    hand_topic_at3=fmt(share_of(any(target.key in requests[number].topics for target in given[number].targets)
+                                                for number in in_course)),
+                    hand_card_at1=fmt(share_of(given[number].ranking[0].card in requests[number].cards for number in with_card)),
+                    judged_requests=len(counted),
+                )
+            rows.append(row)
+    print(f"P1 on T1's membership of {app_family}: {len(requests)} requests, {len(counted)} judged of decks 17 and 24 "
+          f"({len(counted) - len(in_course)} off-course), {sum(request.transfer for request in requests)} of the transfer deck left out")
+    for row in rows:
+        label = row["variant"]
+        family = label.split(": ")[0]
+        reference = f"{'TF-IDF' if family == CHAR_NGRAMS else family}: card"
+        if counted:
+            mean, low, high = evaluation.paired_bootstrap(
+                [mine - theirs for mine, theirs in zip(right_of[label], right_of[reference])]
+            )
+            row.update(hand_diff=fmt(mean), hand_diff_low=fmt(low), hand_diff_high=fmt(high))
+        print(f"   {label:24s} self topic@1 {row['self_topic_at1']}, @3 {row['self_topic_at3']}, navigated {row['self_navigated']} | "
+              f"floors card {row['min_card']}, centroid {row['min_centroid']}, text {row['min_text']}"
+              + (f" | hand right {row['hand_right']}, wrong {row['hand_wrong']}, missed {row['hand_missed']}, topic@1 "
+                 f"{row['hand_topic_at1']}, @3 {row['hand_topic_at3']}, card@1 {row['hand_card_at1']}; against {reference} "
+                 f"{row['hand_diff']} [{row['hand_diff_low']}, {row['hand_diff_high']}]" if counted else "")
+              + f" | {row['ms_per_request']} ms per request, fit {row['seconds']}s")
+    if counted:
+        kinds = list(dict.fromkeys(requests[number].kind for number in counted))
+        print("   hand_right by kind: | Variant | "
+              + " | ".join(f"{kind} ({sum(requests[number].kind == kind for number in counted)})" for kind in kinds) + " |")
+        for row in rows:
+            outcome = dict(zip(counted, right_of[row["variant"]]))
+            print(f"   | {row['variant']} | " + " | ".join(
+                f"{share_of(outcome[number] for number in counted if requests[number].kind == kind):.2f}" for kind in kinds) + " |")
+    return rows, answers
+
+
+def read_prompt_form(path: Path) -> dict[str, dict]:
+    """The review form: request text -> {"candidates": the listed ids (card ids and `deck:topic` keys) in the form's
+    order, "marked": those marked `[x]`}."""
+    if not path.exists():
+        return {}
+    form: dict[str, dict] = {}
+    text = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        heading = PROMPT_HEADING.match(line)
+        if heading:
+            text = heading.group(1).strip()
+            form[text] = {"candidates": [], "marked": set()}
+            continue
+        candidate = PROMPT_CANDIDATE.match(line) if text is not None else None
+        if candidate:
+            form[text]["candidates"].append(candidate.group(2))
+            if candidate.group(1) != " ":
+                form[text]["marked"].add(candidate.group(2))
+    return form
+
+
+def topic_key(key, deck_ids: Mapping[str, str]) -> str:
+    """A topic of T1's keys (deck name, topic id) as the request file writes it: `deck:topic`, "17:03"."""
+    return f"{deck_ids.get(key[0], key[0])}:{key[1]}"
+
+
+def intended_of(row: dict, by_id: Mapping, deck_ids: Mapping[str, str], topic_of: Mapping[str, str]) -> tuple[set[str], set[str]]:
+    """A request's intended ids (its card, or its `deck:topic`) and the topics its cards imply (the intended card's
+    and the `also` cards' topics under the membership in force), which the form ticks and the merge never writes."""
+    card = row.get("card", "").strip()
+    deck_id, topic_id = row.get("deck_id", "").strip(), row.get("topic_id", "").strip()
+    intended = {card} if card else ({f"{deck_id}:{topic_id}"} if deck_id and topic_id else set())
+    implied = {
+        topic_key((by_id[card_id].deck, topic_of[card_id]), deck_ids)
+        for card_id in [card] + row.get("also", "").split() if card_id in by_id and card_id in topic_of
+    }
+    return intended, implied - intended
+
+
+def merge_requests(rows: list[dict], form: dict[str, dict], today: str, judge: str, by_id: Mapping,
+                   deck_ids: Mapping[str, str], topic_of: Mapping[str, str]) -> int:
+    """The form's marks into the requests' `also`, in place: a listed candidate marked `x` is added, an `also`
+    target listed and unmarked is taken out; the intended target and the topics its cards imply are never written,
+    an off-course request's marks are not read, a request whose text is not unique is left alone. A changed request
+    gets today's date and the judge. Returns how many requests changed."""
+    changed = 0
+    texts = [row.get("request", "").strip() for row in rows]
+    for row, text in zip(rows, texts):
+        entry = form.get(text)
+        if entry is None or row.get("kind", "").strip() == OFF_COURSE or texts.count(text) > 1:
+            continue
+        intended, implied = intended_of(row, by_id, deck_ids, topic_of)
+        listed = [item for item in entry["candidates"] if item not in intended and item not in implied]
+        also = row.get("also", "").split()
+        merged = [item for item in also if item not in listed or item in entry["marked"]]
+        merged += [item for item in listed if item in entry["marked"] and item not in merged]
+        if merged != also:
+            row.update(also=" ".join(merged), judged=today, judge=judge)
+            changed += 1
+    return changed
+
+
+def write_prompt_form(rows: list[dict], answers: dict[str, list[Answer]], t1: TopicModel, by_id: Mapping,
+                      deck_ids: Mapping[str, str], today: str, note: str, path: Path) -> int:
+    """The review form (prompt.md, "The request rule"): under every request, the topics and cards every variant
+    lists among its nearest three, pooled, with the variants' scores (a topic's mean, a card's cosine), a topic with
+    nothing in common with the request left out; the intended target, the topics its cards imply and the `also`
+    targets ticked. Returns the number of requests listed."""
+    name_of = {seed.key: seed.name for seed in t1.seeds}
+    deck_of_id = {deck_id: name for name, deck_id in deck_ids.items()}
+    lines = [
+        "# Prompt requests: the nearest three of every variant, pooled",
+        "",
+        f"Written by evaluate.py on {today} ({note}). Under every request, the topics and the cards the variants list "
+        "among their nearest three, pooled, with every variant's score (a topic's mean of the normalised routes, a "
+        "card's cosine). The intended target is ticked and tagged `intended`, the topics its cards imply `implied`, "
+        "the request's `also` targets `also`. Put `x` in the `[ ]` of a further acceptable target, a topic or a card: "
+        "it goes into the request's `also` in prompt_requests.csv; untick an `also` target to take it out. A wrong "
+        "intended target or kind is corrected in prompt_requests.csv by hand, with a note; the marks under an "
+        "off-course request are not read.",
+        "",
+    ]
+    for number, row in enumerate(rows, 1):
+        intended, implied = intended_of(row, by_id, deck_ids, t1.topic_of)
+        also = set(row.get("also", "").split())
+        target = (f"card {row['card']}" if row.get("card") else
+                  f"topic {row.get('deck_id')}:{row.get('topic_id')}" if row.get("deck_id") else "none")
+        lines += [f"## {number}. {row.get('request', '')}", "", f"{row.get('kind', '')}; intended: {target}; also: "
+                  f"{row.get('also') or 'none'}", ""]
+        pooled: dict[str, dict[str, float]] = {}
+        for label, given in answers.items():
+            for scored in given[number - 1].targets:
+                if not any(scored.scores.values()):
+                    continue  # nothing in common with the request: a place in file order, not a candidate
+                pooled.setdefault(topic_key(scored.key, deck_ids), {})[label] = scored.mean
+                if scored.card is not None:
+                    pooled.setdefault(scored.card, {})[label] = scored.scores[CARD]
+        for item in sorted(intended | implied | also):
+            pooled.setdefault(item, {})
+        ordered = sorted(pooled, key=lambda item: (-len(pooled[item]), -max(pooled[item].values(), default=-9.0), item))
+        for item in ordered:
+            tags = [tag for tag, group in (("intended", intended), ("implied", implied), ("also", also)) if item in group]
+            if ":" in item:
+                deck_id, topic_id = item.split(":", 1)
+                what = f"topic: {name_of.get((deck_of_id.get(deck_id, deck_id), topic_id), 'not in the course')}"
+            elif item in by_id:
+                where = topic_key((by_id[item].deck, t1.topic_of[item]), deck_ids) if item in t1.topic_of else "?"
+                what = f"card ({where}): {short(by_id[item].question)}"
+            else:
+                what = "card: not in the course"
+            scores = ", ".join(f"{label} {value:.2f}" for label, value in pooled[item].items())
+            lines.append(f"- {'[x]' if tags else '[ ]'} {item} {what}" + (f"  —  {', '.join(tags)}" if tags else "")
+                         + (f"  —  {scores}" if scores else ""))
+        lines.append("")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return len(rows)
 
 
 # --- the hand check and its marks -------------------------------------------------------
@@ -1175,6 +1518,30 @@ def run(table_dir: Path, results_dir: Path, part: str = "all", judge: str = "", 
         else:
             print(f"hand labels: no {files.hand_labels.name} in {results_dir}: the hand columns stay empty and "
                   f"{files.hand_labels_form.name} is not written")
+    # P1: the navigation prompt, into its own file, the requests read before their form is written again and the
+    # form's marks merged into them first
+    if part in ("all", "prompt"):
+        prompt_form = files.prompt_form.exists()
+        columns, request_rows = read_requests(files.prompt_requests)
+        changed = 0
+        app_index, t1 = prompt_membership(cards, seeds, vectoriser)
+        if prompt_form and request_rows:
+            changed = merge_requests(request_rows, read_prompt_form(files.prompt_form), today, judge, by_id, deck_ids, t1.topic_of)
+            if changed:
+                write_requests(columns, request_rows, files.prompt_requests)
+        prompt_rows, answers = evaluate_prompt(cards, deck_ids, today, note, request_rows, app_index, t1)
+        write_rows(stamped(prompt_rows, run_key), files.prompt, PROMPT_COLUMNS)
+        print(f"{len(prompt_rows)} rows appended to {files.prompt}")
+        if prompt_form and request_rows:
+            listed = write_prompt_form(request_rows, answers, t1, by_id, deck_ids, today, note, files.prompt_form)
+            print(f"prompt requests: {listed} in {files.prompt_form}"
+                  + (f"; {changed} changed by the form, kept in {files.prompt_requests}" if changed else ""))
+        elif request_rows:
+            print(f"prompt requests: {len(request_rows)} read from {files.prompt_requests}; no {files.prompt_form.name} "
+                  f"in {results_dir}: nothing written back")
+        else:
+            print(f"prompt requests: no {files.prompt_requests.name} in {results_dir}: the self-set columns alone, the "
+                  f"hand columns stay empty and {files.prompt_form.name} is not written")
     if part not in ("all", "similarity"):
         return
 
@@ -1197,8 +1564,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--table", default=None, help=f"the course table's folder (default: {default_table_dir()})")
     parser.add_argument("--results", default=None, help=f"the folder of the results files (default: {RESULTS_DIR})")
-    parser.add_argument("--part", choices=("all", "similarity", "difficulty", "topics"), default="all",
-                        help="the similarity models (B0, S1, C1), the difficulty model D1, the topic model T1, or all (default)")
+    parser.add_argument("--part", choices=("all", "similarity", "difficulty", "topics", "prompt"), default="all",
+                        help="the similarity models (B0, S1, C1), the difficulty model D1, the topic model T1, the navigation "
+                             "prompt P1, or all (default)")
     parser.add_argument("--judge", default="", help="who marked hand_check.md and hand_labels.md: written into hand_marks.csv "
                         "and hand_labels.csv with every new or changed mark")
     parser.add_argument("--cache", default=None, help=f"the folder of the cache of S2's embeddings and D2's tags (default: {default_cache_dir()})")

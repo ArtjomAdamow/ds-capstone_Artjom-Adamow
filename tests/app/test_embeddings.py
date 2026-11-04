@@ -185,6 +185,16 @@ class HybridTest(unittest.TestCase):
                 self.assertGreaterEqual(score, index.min_score)
         self.assertEqual(embeddings.describe(index.vectoriser), "hybrid: TF-IDF + mpnet (16 dimensions)")
 
+    def test_a_request_on_the_hybrid_or_the_encoder_is_a_unit_vector_and_a_cards_text_finds_itself(self):
+        for vectoriser in (embeddings.HybridVectoriser(similar.tfidf_vectoriser(min_df=1), self.encoder), self.encoder):
+            index = similar.SimilarityIndex.fit(CARDS, vectoriser)
+            vector = index.query("git merge a branch")
+            self.assertEqual(vector.shape, (index.vectors.shape[1],))
+            self.assertAlmostEqual(float(np.linalg.norm(vector)), 1.0, places=5)
+            for row, card in enumerate(CARDS):
+                cosines = index.vectors @ index.query(similar.card_text(card))
+                self.assertAlmostEqual(float(cosines[row]), 1.0, places=5)
+
 
 class AppVectoriserTest(unittest.TestCase):
     def test_tfidf_by_name_and_an_unknown_name_refused(self):

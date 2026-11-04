@@ -1,6 +1,8 @@
 """The standalone page (app.standalone) on the test course as a course table, with nothing of the viewer:
-the three views through the callback (select, Open, a click on the panel, Back), the four model panels (one
-expanded at a time, the close box) with a row per generation (the newest expanded, one at a time), the map per
+the three views through the callback (select, Open, a click on the panel, Back), the five model panels (one
+expanded at a time, the close box) with a row per generation (the newest expanded, one at a time), the P panel (its
+request box, a request navigating the view by ids, the decision line, the three nearest a click away, its table of
+the newest run, the map with P: T1's membership at C1's positions), the glossary per results file, the map per
 generation (random positions and the scripted topics with every panel collapsed, S1's and S2's neighbour shares and
 lines, C1's positions with the connections, the centroid and the axes with C, T1's markers with T, the difficulty
 colours of D1 or D2, the predicted quizzes as crosses in the predicted colour), the legends of S, T and D inside the
@@ -38,10 +40,10 @@ from app.standalone.app import (
 from app.standalone.layout import (
     AXIS_ALPHA, AXIS_FONT, AXIS_RANGE, AXIS_TICKS, BETWEEN, CROSS_SYMBOL, EMPTIED, EMPTIED_SYMBOL, GENERATIONS, GREY, GROWN,
     LEVEL_COLORS, MARGINS_NOTE, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, NEIGHBOUR_PAIRS,
-    NO_NEIGHBOUR, NO_NEIGHBOUR_SYMBOL, PREDICTED_SYMBOL, SELECTED_LINE, SELECTED_PAIRS, SHARE_HIGH, SHARE_LOW, TOPICS_NOTE,
-    WINDOW_NOTE, box_class, faded, margin_color, page_layout, share_color, window_class,
+    NO_NEIGHBOUR, NO_NEIGHBOUR_SYMBOL, PREDICTED_SYMBOL, PROMPT_HINT, PROMPT_PLACEHOLDER, SELECTED_LINE, SELECTED_PAIRS, SHARE_HIGH,
+    SHARE_LOW, TOPICS_NOTE, WINDOW_NOTE, box_class, faded, margin_color, page_layout, share_color, window_class,
 )
-from app.standalone.results import NO_FOLDER, Results, course_note, read_glossary
+from app.standalone.results import NO_FOLDER, Results, course_note, glossary_entry, read_glossary
 
 OUT = {"figure": 0, "panel": 1, "view": 2, "where": 3, "open_disabled": 4, "back_disabled": 5}
 for _index, _letter in enumerate(PANEL_LETTERS):
@@ -49,7 +51,7 @@ for _index, _letter in enumerate(PANEL_LETTERS):
     OUT[f"class_{_letter}"] = 6 + len(PANEL_LETTERS) + _index
 OUT["window_b"] = 6 + 2 * len(PANEL_LETTERS)  # window B's content, then its class
 OUT["class_b"] = OUT["window_b"] + 1
-INPUTS = 5 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the four rows, the four close boxes, the row input
+INPUTS = 7 + 2 * len(PANEL_LETTERS)  # the map, Open, Back, window A, the panels' rows and close boxes, Go, Enter, the row input
 
 
 def measure_value(key) -> str:
@@ -128,9 +130,9 @@ class PageDriver(unittest.TestCase):
         self.update = register_callback(RecordingApp(), self.page)
         self.state = None
 
-    def call(self, trigger, click=None, measure=0):
+    def call(self, trigger, click=None, measure=0, request=None):
         with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
-            result = self.update(click, *([0] * (INPUTS - 2)), measure, self.state)
+            result = self.update(click, *([0] * (INPUTS - 2)), measure, request, self.state)
         self.state = result[OUT["view"]]
         return result
 
@@ -544,7 +546,7 @@ class StandaloneTest(PageDriver):
         self.generation("S1")
         self.close("S")
         self.assertEqual((self.state["panel"], self.state["level"]), (None, None))
-        self.assertEqual(GENERATIONS, {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2")})
+        self.assertEqual(GENERATIONS, {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2"), "P": ("P1",)})
         self.assertIsNone(Page.generation_of(measure_value("S1:0:x")))
         self.assertIsNone(Page.measure_of(level_value("S1")))
 
@@ -632,6 +634,7 @@ class StandaloneTest(PageDriver):
         material = [text for card in self.table.cards for text in (card.question, card.answer, card.explain) if text]
         material += [text for deck in self.table.decks for text in (deck.description, deck.name)]
         material += [name for name, _rest in model_support.TOPIC_NAMES.values()]
+        material += [heading for headings, _sources in model_support.TOPIC_TEXTS.values() for heading in headings]
         outputs = []
         for letter, level in [(None, None)] + [(letter, level) for letter in PANEL_LETTERS for level in GENERATIONS[letter]]:
             self.state = None
@@ -893,7 +896,7 @@ class ResultsTest(unittest.TestCase):
         import evaluate  # next to the package, as the tests run
 
         bookkeeping = {"date", "run", "model", "variant", "scope", "params", "features", "label_rule", "folds", "repeats", "seed", "seconds", "notes"}
-        for columns in (evaluate.COLUMNS, evaluate.TOPICS_COLUMNS, evaluate.DIFFICULTY_COLUMNS):
+        for columns in (evaluate.COLUMNS, evaluate.TOPICS_COLUMNS, evaluate.DIFFICULTY_COLUMNS, evaluate.PROMPT_COLUMNS):
             for column in columns:
                 self.assertEqual(column in glossary, column not in bookkeeping, column)
         self.assertEqual(glossary["lift_k2"], glossary["lift_k3"])  # one row for the columns of one measure
@@ -909,7 +912,7 @@ class ResultsTest(unittest.TestCase):
         def call(trigger, measure=0):
             nonlocal state
             with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
-                result = update(None, *([0] * (INPUTS - 2)), measure, state)
+                result = update(None, *([0] * (INPUTS - 2)), measure, None, state)
             state = result[OUT["view"]]
             return result
 
@@ -1066,6 +1069,165 @@ class MeasuredMetricsTest(unittest.TestCase):
         self.assertEqual(id_rows(agreed.dot_panel({**state, "selected": "201002"}))["difficulty"], "hard (predicted by D1)")
 
 
+def target_value(target) -> str:
+    """What assets/panel_rows.js writes into the hidden input for one of P1's targets."""
+    measure_value.seq = getattr(measure_value, "seq", 0) + 1
+    return json.dumps({"seq": measure_value.seq, "target": target})
+
+
+def targets_of(content) -> list[str]:
+    """The `data-target` of P1's entries in a panel's content, in order."""
+    found = []
+
+    def walk(component):
+        key = getattr(component, "data-target", None)
+        if key is not None:
+            found.append(key)
+        children = getattr(component, "children", None)
+        for child in children if isinstance(children, list) else ([children] if children is not None else []):
+            if hasattr(child, "children"):
+                walk(child)
+
+    for component in content if isinstance(content, list) else [content]:
+        walk(component)
+    return found
+
+
+PROMPT_ROWS = (
+    "date,run,model,variant,params,self_topic_at1,hand_right,hand_diff,hand_diff_low,hand_diff_high,judged_requests,ms_per_request,notes\n"
+    "2026-11-01,2026-11-01T09:00,P1,TF-IDF: card,routes=card,0.5,0.6,0.000,0.000,0.000,4,1.0,decks 01 to 03\n"
+    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: card,routes=card,0.7,0.75,0.000,0.000,0.000,4,1.0,decks 01 to 03\n"
+    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: all,routes=card+centroid+text,0.8,0.5,-0.250,-0.750,0.000,4,2.0,decks 01 to 03\n"
+)
+
+
+class PromptPanelTest(PageDriver):
+    """The P panel: the request box, a request running P1 and navigating the page's view by ids, the decision line,
+    the three nearest a click away, no name in the panel, the newest run's table with the app's variant marked, and
+    the map with P: T1's membership at C1's positions."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        folder = Path(cls._tmp.name)
+        cls.table = load_table(write_test_table(folder))
+        (folder / "results").mkdir()
+        (folder / "results" / "prompt.csv").write_text(PROMPT_ROWS, encoding="utf-8")
+        cls.page = Page(cls.table, results_dir=folder / "results")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def ask(self, text, trigger="prompt-go"):
+        return self.call(trigger, request=text)
+
+    def test_the_p_panel_holds_the_request_box_under_its_row_and_its_section(self):
+        layout = page_layout(HOME)
+        box = layout["box-P"]
+        self.assertEqual([getattr(child, "className", None) for child in box.children], ["panel-head", "prompt-box", "panel-content"])
+        self.assertEqual(layout["prompt-text"].placeholder, PROMPT_PLACEHOLDER)
+        self.assertEqual(layout["prompt-go"].children, "Go")
+        self.assertEqual(layout["box-S"].children[1].id, "content-S")  # the other panels have no box
+        result = self.expand("P")
+        content = result[OUT["content_P"]]
+        self.assertEqual(level_rows(content), {"P1": True})
+        shown = dumped(content)
+        self.assertIn(PROMPT_HINT, shown)  # nothing asked yet
+        self.assertIn("card route floor", shown)
+        self.assertIn(f"{self.page.prompt.floors.card:.3f}", shown)
+        self.assertNotIn("card bar", shown)  # one threshold for the card route
+        style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
+        self.assertIn(".model-panel.collapsed .prompt-box { display: none; }", style)
+
+    def test_a_request_navigates_the_view_into_the_topic_and_selects_the_card_by_ids(self):
+        self.expand("P")
+        result = self.ask("null hypothesis")
+        self.assertEqual((self.state["view"], self.state["deck"], self.state["topic"], self.state["selected"]), ("cards", "03", "02", "103003"))
+        self.assertEqual(self.state["prompt"]["text"], "null hypothesis")
+        self.assertTrue(result[OUT["where"]].startswith("deck 03 › topic 02-"))
+        content = result[OUT["content_P"]]
+        shown = dumped(content)
+        self.assertRegex(shown, r"card selected \\u00b7 \d+\.\d ms")  # the dump escapes the middle dot
+        targets = targets_of(content)
+        self.assertEqual(len(targets), 3)
+        self.assertEqual(targets[0], "03:02:103003")  # the decision's own first, its card shown
+        label = self.page.label_in_deck("03", "02")
+        self.assertIn(json.dumps(f"deck 03 › {label} · card 103003")[1:-1], shown)
+        self.assertRegex(shown, r"card \d\.\d\d \\u00b7 centroid -?\d\.\d\d \\u00b7 text -?\d\.\d\d \\u00b7 mean -?\d\.\d\d")
+        members = self.page.topic_model.members[("Gamma", "02")]  # the entered topic's cards under T1, the map's
+        self.assertEqual(set(self.trace(result, "Cards").customdata), set(members))
+
+    def test_enter_is_go_and_an_empty_request_changes_nothing(self):
+        self.expand("P")
+        before = dict(self.ask("   ")[OUT["view"]])
+        self.assertIsNone(before["prompt"])
+        self.ask("git commit history", trigger="prompt-text")
+        self.assertEqual((self.state["view"], self.state["deck"]), ("cards", "02"))
+
+    def test_no_match_moves_nothing_and_lists_the_three_nearest(self):
+        self.expand("P")
+        result = self.ask("how to bake bread")
+        self.assertEqual((self.state["view"], self.state["deck"], self.state["selected"]), ("decks", None, None))
+        content = result[OUT["content_P"]]
+        self.assertIn("no match, the three nearest below the floor", dumped(content))
+        self.assertEqual(len(targets_of(content)), 3)
+
+    def test_a_click_on_a_target_goes_to_it(self):
+        self.expand("P")
+        self.ask("how to bake bread")
+        self.call(ROW_INPUT, measure=target_value("01:02"))
+        self.assertEqual((self.state["view"], self.state["deck"], self.state["topic"], self.state["selected"]), ("cards", "01", "02", None))
+        self.call(ROW_INPUT, measure=target_value("03:02:103003"))
+        self.assertEqual((self.state["topic"], self.state["selected"]), ("02", "103003"))
+        self.call(ROW_INPUT, measure=target_value("09:09"))  # no such topic: nothing moves
+        self.assertEqual((self.state["deck"], self.state["topic"]), ("03", "02"))
+        self.assertEqual(Page.target_of(target_value("01")), None)
+        self.assertEqual(self.state["prompt"]["text"], "how to bake bread")  # the answer stays until the next request
+
+    def test_no_name_of_a_card_or_a_topic_shows_in_the_panel(self):
+        material = [text for card in self.table.cards for text in (card.question, card.answer, card.explain) if text]
+        material += [text for deck in self.table.decks for text in (deck.description, deck.name)]
+        material += [name for name, _rest in model_support.TOPIC_NAMES.values()]
+        material += [heading for headings, _sources in model_support.TOPIC_TEXTS.values() for heading in headings]
+        self.expand("P")
+        shown = dumped([self.ask(text)[OUT["content_P"]] for text in ("null hypothesis", "git merge", "how to bake bread", "python")])
+        for text in material:
+            self.assertNotIn(json.dumps(text)[1:-1], shown)
+
+    def test_the_table_is_the_newest_runs_with_the_apps_variant_marked(self):
+        (table,) = self.page.results.tables("P1")
+        self.assertEqual(table.heads, ["TF-IDF: card", "TF-IDF: all"])
+        self.assertEqual(table.chosen, [True, False])  # the card route on the app's vectoriser, TF-IDF here
+        rows = dict(table.rows)
+        self.assertEqual(rows["hand_right"], ["0.75", "0.5"])  # the newest run's
+        self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "-0.250 [-0.750, 0.000]"])
+        self.assertEqual(table.file, "prompt.csv")
+        self.expand("P")
+        self.assertIn("P1:0:hand_right", measure_keys(self.call(None)[OUT["content_P"]]))
+        result = self.call(ROW_INPUT, measure=measure_value("P1:0:hand_diff"))
+        self.assertIn(glossary_entry(read_glossary(), "prompt.csv", "hand_diff")[1], dumped(result[OUT["content_P"]]))
+
+    def test_the_map_with_p_is_t1s_membership_at_c1s_positions(self):
+        self.expand("C")
+        placed = self.enter_topic("01", "01")
+        self.expand("P")
+        prompted = self.call(None)
+        self.assertEqual(self.points(prompted, "Cards"), self.points(placed, "Cards"))
+        self.assertTrue(self.axes_visible(prompted))
+        self.assertIsNone(self.trace(prompted, "Connections"))
+        self.assertEqual(set(self.colors(prompted).values()), {GREY})
+
+    def test_the_glossary_keeps_a_columns_row_per_file(self):
+        glossary = read_glossary()
+        rows = {name: glossary_entry(glossary, name, "hand_diff")[1] for name in ("results.csv", "difficulty.csv", "prompt.csv")}
+        self.assertEqual(len(set(rows.values())), 3)
+        self.assertIn("card route", rows["prompt.csv"])
+        self.assertEqual(glossary["hand_diff"], glossary["results.csv:hand_diff"])  # by name alone: the first file's
+        self.assertEqual(glossary_entry(glossary, "prompt.csv", "precision_at_5"), glossary["precision_at_5"])
+        self.assertEqual(self.page.results.tables("S1"), None)  # no results.csv here
+
+
 class AppTest(unittest.TestCase):
     def test_the_app_has_one_callback_and_the_pages_assets(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -1077,7 +1239,7 @@ class AppTest(unittest.TestCase):
         rows = Path(app.config.assets_folder, "panel_rows.js").read_text(encoding="utf-8")
         self.assertIn(f'"{ROW_INPUT}"', rows)  # the hidden input the rows' clicks set
         self.assertIn("set_props", rows)
-        for selector in (".level-row", ".measure-row", ".measure-close"):
+        for selector in (".level-row", ".measure-row", ".measure-close", ".prompt-target"):
             self.assertIn(selector, rows)
         self.assertFalse(Path(app.config.assets_folder, "measure_rows.js").exists())
 

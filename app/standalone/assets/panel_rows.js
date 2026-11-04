@@ -1,6 +1,7 @@
 /* The model panels' clickable rows: a generation's row (layout.generation_rows, class level-row) sends its
    generation (data-level), a results table's row (layout.results_table, class measure-row) its key (data-measure),
-   the close box of the open description (measure-close) a null measure; all go to the page's callback through the
+   the close box of the open description (measure-close) a null measure, one of P1's targets (layout.prompt_answer,
+   class prompt-target) the deck, the topic and the card it shows (data-target); all go to the page's callback through the
    hidden input #row-click, which the server reads (app.Page.step: the expanded generation and the one open row live
    in the view store; a second click on the open row closes it too). The value is a JSON of the generation or the key
    and a sequence number, so every click is a new value. The transport is the viewer's:
@@ -46,6 +47,11 @@
     const row = target.closest(".measure-row");
     if (row && row.dataset && row.dataset.measure) {
       send({ measure: row.dataset.measure });
+      return;
+    }
+    const goal = target.closest(".prompt-target");
+    if (goal && goal.dataset && goal.dataset.target) {
+      send({ target: goal.dataset.target });
     }
   });
 })();

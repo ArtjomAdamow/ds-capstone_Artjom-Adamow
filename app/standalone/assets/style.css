@@ -87,6 +87,20 @@ a.top-button { display: inline-block; text-decoration: none; }  /* the Sputnik l
 .results-block { margin-top: 14px; }
 .results-scroll { overflow-x: auto; }
 
+/* The P panel: the request box under its row, shown while P is expanded; P1's answer, its targets a click each */
+.prompt-box { display: flex; gap: 10px; padding: 12px 16px 0; border-top: 1px solid var(--line); }
+.model-panel.collapsed .prompt-box { display: none; }
+.prompt-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 10px 12px; font: 0.9rem 'Space Grotesk', sans-serif; }
+.prompt-input:focus { outline: none; border-color: var(--gold); }
+.prompt-go { padding: 10px 18px; }
+.prompt-answer { margin-top: 10px; }
+.prompt-request { color: var(--ink); font-size: 0.88rem; }
+.prompt-decision { margin: 4px 0 8px; color: var(--gold); font: 0.72rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.prompt-target { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 6px 10px; border: 1px solid var(--line); color: var(--muted); font: 0.72rem/1.4 'DM Mono', monospace; cursor: pointer; }
+.prompt-target + .prompt-target { margin-top: 6px; }
+.prompt-target:hover { background: var(--hover); color: var(--ink); }
+.prompt-label { color: var(--ink); }
+
 /* D's scores in the panel; T's histogram in window B */
 .tool-panel { padding: 14px 0 6px; }
 .margin-histogram { width: 100%; height: 200px; margin-top: 8px; }
@@ -122,6 +136,9 @@ a.top-button { display: inline-block; text-decoration: none; }  /* the Sputnik l
 .model-panels .results-table th { max-width: calc(150px * var(--panel-font)); }
 .model-panels .measure-text { font-size: calc(0.82rem * var(--panel-font)); }
 .model-panels .measure-close { width: calc(28px * var(--panel-font)); height: calc(28px * var(--panel-font)); font-size: calc(1rem * var(--panel-font)); }
+.model-panels .prompt-input, .model-panels .prompt-request { font-size: calc(0.88rem * var(--panel-font)); }
+.model-panels .prompt-go { font-size: calc(0.9rem * var(--panel-font)); }
+.model-panels .prompt-decision, .model-panels .prompt-target { font-size: calc(0.72rem * var(--panel-font)); }
 
 /* Portrait: the windows beside the map, window A and window B together at the map's height: window A at its content's
    height (its panel without the minimum), at most 60 % of it, window B the rest; each scrolls what does not fit. With

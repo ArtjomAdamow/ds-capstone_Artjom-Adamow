@@ -10,6 +10,8 @@
   judged the same way (judge_tags).
 * `zero_shot`: D2, the zero-shot difficulty tags of the quizzes by an NLI model (transformers, imported when the
   model is loaded), cached like the embeddings (ZeroShotTagger, tags_of).
+* `prompt_model`: P1, the navigation prompt: a request scored against T1's topics by the card, centroid and text
+  routes at their floors from the self set, answered with a topic, a card or "no match" (PromptModel, Answer).
 * `evaluation`: the offline measures (the hand precision and its paired bootstrap, the random draw and the random
   floor, the fixed-k overlap of the layouts) and the judges of T1, for evaluate.py next to the package.
 

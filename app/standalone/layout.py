@@ -13,8 +13,9 @@ viewer's in its theme (assets/style.css holds the tokens):
   centroid, the axes and T1's markers (a card's margin on a teal scale, a cross below the threshold, the diamonds of
   the moved cards, a topic's dot grown with its share of cards between two topics); with D1 or D2 the cards coloured
   as the viewer colours them after Helper: a rated quiz by its level, a quiz the generation predicted in the predicted
-  colour as a cross (its level on the hover), a flashcard grey; with every panel collapsed grey dots at random
-  positions, nothing else. S, T and D keep their legends inside the map: plotly's legend at the top left, drawn from
+  colour as a cross (its level on the hover), a flashcard grey; with P T1's membership at C1's positions, the
+  membership P1 answers in, grey, the centroid and the axes and no connections; with every panel collapsed grey dots
+  at random positions, nothing else. S, T and D keep their legends inside the map: plotly's legend at the top left, drawn from
   one marker per class the view holds (legend_traces), and S's and T's colour scale as a colour bar at the bottom
   left (scale_trace);
 * window A (`dot-panel`), under the map (beside it in portrait): the selected dot's ids and counts, a click on a
@@ -25,7 +26,7 @@ viewer's in its theme (assets/style.css holds the tokens):
   shown with D or T expanded only: D's confusion matrix and the shares of the levels of the view's part of the course
   (metrics_window), T's margins of the view's cards (margins_window). The two windows are one column (`windows`); in
   portrait they take the map's height together, window A its content's and window B the rest (style.css);
-* the model panels (`box-S` to `box-D`), a column right of all three (under them in portrait): one per model letter, a
+* the model panels (`box-S` to `box-P`), a column right of all three (under them in portrait): one per model letter, a
   row with its letter and name (`panel-S`, a click expands it and collapses any other) and a close box (`close-S`);
   expanded, a row per generation in a fixed order, the oldest on top (S1 above S2, D1 above D2; C1 and T1 alone:
   GENERATIONS), the newest expanded by default; a click on another generation's row expands it in place and collapses
@@ -35,7 +36,11 @@ viewer's in its theme (assets/style.css holds the tokens):
   is, its range, from app/docs/columns.md), one row at a time: a click on another row moves it, a click on the same
   row or the description's close box closes it. Both clicks go through the hidden input `row-click`
   (assets/panel_rows.js sets it); the expanded generation and the one open row live in the `view` store. The panels'
-  text is at double size (style.css, `--panel-font`).
+  text is at double size (style.css, `--panel-font`). The P panel holds the request box under its row, in the layout
+  from the start so the callback can read it (`prompt-text`, Enter submits, and `prompt-go`), shown while P is
+  expanded; P1's answer is its section's live part (prompt_answer): the decision line with the time, and the three
+  nearest topics by label with every route's score and the topic's nearest card, each a click
+  that navigates to it (`data-target`, through `row-click` as the rows' clicks).
 
 Every graph's axes, the map's too, have their titles and tick labels at AXIS_ALPHA of their colour (fade_axes).
 
@@ -56,7 +61,7 @@ from ..figures import (
     CUT_COLOR, FONT, GOLD, GRID, INK, MUTED, PREDICTED_COLOR, SEQUENTIAL, confusion_figure, metrics_subtitle, score_header,
     score_rows, shares_figure, sphere_surface, surface_arc,
 )
-from .results import Table
+from .results import Table, glossary_entry
 
 CARDS_VIEW = "cards"
 TOPICS_VIEW = "topics"
@@ -118,15 +123,19 @@ MAP_BOX = {"bgcolor": "rgba(7, 24, 39, 0.65)", "bordercolor": "rgba(247, 242, 23
 MAP_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 11}
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
 STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
-PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty"}
+PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty", "P": "Prompt"}
 PANEL_LETTERS = tuple(PANEL_NAMES)
 # The model generations of each panel, in their rows' fixed order, the oldest on top; the newest is expanded when its
 # panel opens
-GENERATIONS = {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2")}
+GENERATIONS = {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2"), "P": ("P1",)}
 GENERATION_NAMES = {
     "S1": "S1 · similarity, TF-IDF", "S2": "S2 · similarity, sentence encoder", "C1": "C1 · course model",
     "T1": "T1 · topics", "D1": "D1 · difficulty, text statistics", "D2": "D2 · difficulty, zero-shot tags",
+    "P1": "P1 · navigation prompt",
 }
+PROMPT_PLACEHOLDER = "A question, a concept or a code name"
+PROMPT_HINT = "Type a request above and press Go or Enter: P1 answers with the three nearest topics, and the page goes where it points."
+TARGET_HINT = "Click to go to this target."
 NO_LINKS = {
     DECKS_VIEW: "No connections between the decks.",
     TOPICS_VIEW: "No tree of the topics: the model clusters a deck of at least two topics with cards.",
@@ -673,7 +682,7 @@ def results_table(table: Table, prefix: str, expanded: Optional[str], glossary: 
             className="measure-row open" if key == expanded else "measure-row", title=ROW_HINT, **{"data-measure": key},
         ))
         if key == expanded:
-            rows.append(description_row(glossary.get(columns[0]), len(table.heads) + 1))
+            rows.append(description_row(glossary_entry(glossary, table.file, columns[0]), len(table.heads) + 1))
     return html.Div(
         [
             html.Div(table.title, className="card-label metrics-heading"),
@@ -713,9 +722,32 @@ def generation_rows(letter: str, expanded: str, section) -> list:
     return rows
 
 
+def prompt_box() -> html.Div:
+    """The P panel's request box: the text input (Enter submits) and Go, in the layout from the start."""
+    return html.Div(
+        [
+            dcc.Input(id="prompt-text", type="text", value="", n_submit=0, placeholder=PROMPT_PLACEHOLDER, className="prompt-input",
+                      autoComplete="off"),
+            html.Button("Go", id="prompt-go", n_clicks=0, className="top-button prompt-go"),
+        ],
+        className="prompt-box",
+    )
+
+
+def prompt_answer(request: str, decision: str, entries) -> list:
+    """P1's answer in the P panel, by ids: the request, the decision line, then the three nearest topics, each a row
+    with its label (and its nearest card) and every route's score, a click going to it
+    (`data-target`: the deck id, the topic id and the card where one is shown)."""
+    rows = [html.Div(f"“{request}”", className="prompt-request"), html.Div(decision, className="prompt-decision")]
+    for target, label, scores in entries:
+        rows.append(html.Div([html.Span(label, className="prompt-label"), html.Span(scores, className="prompt-scores")],
+                             className="prompt-target", title=TARGET_HINT, **{"data-target": target}))
+    return [html.Div(rows, className="prompt-answer")]
+
+
 def model_panel_boxes() -> list[html.Div]:
-    """The four panels, collapsed: the row with the letter and the name (a click expands), the close box, and the
-    content the callback fills (`content-S`); the callback sets each box's class."""
+    """The five panels, collapsed: the row with the letter and the name (a click expands), the close box, and the
+    content the callback fills (`content-S`), P's request box between them; the callback sets each box's class."""
     boxes = []
     for letter, name in PANEL_NAMES.items():
         head = html.Div(
@@ -725,7 +757,8 @@ def model_panel_boxes() -> list[html.Div]:
             ],
             className="panel-head",
         )
-        boxes.append(html.Div([head, html.Div(id=f"content-{letter}", className="panel-content")], id=f"box-{letter}", className=box_class(False)))
+        parts = [head] + ([prompt_box()] if letter == "P" else []) + [html.Div(id=f"content-{letter}", className="panel-content")]
+        boxes.append(html.Div(parts, id=f"box-{letter}", className=box_class(False)))
     return boxes
 
 

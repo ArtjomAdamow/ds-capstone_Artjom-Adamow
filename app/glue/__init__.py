@@ -13,6 +13,8 @@
 * `related`: the card section under the card panel: the selected card's neighbours with where they lie, the next
   card first by the learner's progress (the viewer's `card_section` hook).
 * `focus`: the margin slider of the cards view: T1's margins on the share scale (the viewer's `focus` hook).
+* `prompt`: the Ask dialog of the top bar: P1's answer to a request as the viewer's targets, the nearest three topics
+  of the checked decks with the card where one is selected (the viewer's `prompt` hook).
 
 What the glue needed of the viewer beyond its hooks (the navigation rules, the groups apart, the topic reload) is
 the viewer's own: `compose`'s refill_groups and after_save, the groups'

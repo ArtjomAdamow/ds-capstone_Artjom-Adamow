@@ -54,13 +54,17 @@ Key = tuple[str, str]  # (deck name, topic id)
 @dataclass(frozen=True)
 class TopicSeed:
     """A scripted topic of the course file, the model's input: its deck (by name), its id within the deck, its
-    name, whether it is the rest topic, and its scripted cards in deck order."""
+    name, whether it is the rest topic, its scripted cards in deck order, and the course file's headings (the
+    lecture's H2 and H3 titles, P1's text route) and sources (the lecture notebook and the exercise files, a
+    source's files joined by "; " as the file lists them)."""
 
     deck: str
     topic_id: str
     name: str
     rest: bool
     card_ids: tuple[str, ...]
+    headings: tuple[str, ...] = ()
+    sources: tuple[str, ...] = ()
 
     @property
     def key(self) -> Key:

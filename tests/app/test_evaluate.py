@@ -3,8 +3,10 @@ fixtures and nothing of the viewer: a results file whose columns grew; the hand 
 judging form, the merge of its marks) and the hand columns of D1's rows and the `hand` row; the hand marks of the
 similarity part (the marks file, the judging form, the merge, a rewrite with a variant removed); the measures (the
 random draw, the hand precision per card, the paired bootstrap, the fixed-k overlap and the lift on a hand-made
-layout); the rows of the similarity part; D2's rows per model and template with the deck rows; and a run on the
-test course's table, with and without the hand files, in a process where the viewer cannot be imported."""
+layout); the rows of the similarity part; D2's rows per model and template with the deck rows; P1's part (every
+variant's rows, the request file read against T1's membership and protected, the review form and its marks, the file
+alone, the paired difference to the card route); and a run on the test course's table, with and without the hand
+files, in a process where the viewer cannot be imported."""
 
 import model_support  # noqa: F401  (the helper's package on the path, and the folder next to it with evaluate.py)
 
@@ -24,6 +26,7 @@ import numpy as np
 import evaluate
 from app.models import evaluation, similar
 from app.models.difficulty_model import LEVELS
+from app.models.prompt_model import ENTERED, NO_MATCH, ROUTES, SELECTED, Answer, TopicScore
 
 TODAY = "2026-11-01"
 TESTS_DIR = Path(__file__).resolve().parent
@@ -667,6 +670,182 @@ class TagsTest(unittest.TestCase):
                 self.assertEqual(evaluate.default_cache_dir(), root / "temp")  # no data/: the module's temp/
                 (root / "data").mkdir()
                 self.assertEqual(evaluate.default_cache_dir(), root / "data" / "cache")
+
+
+REQUESTS = (
+    "request,kind,deck_id,topic_id,card,also,judged,judge,note\n"
+    "null hypothesis,concept,03,02,103003,,2026-11-01,Y,the definition\n"
+    "the history of a repository,paraphrase,02,01,,,2026-11-01,Y,\"Commits' heading, no one card\"\n"
+    "how to bake bread,off-course,,,,,2026-11-01,Y,no deck teaches it\n"
+    "python dictionary keys,concept,01,02,301003,401005,2026-11-01,Y,\n"
+    "a request without a target,concept,,,,,,,\n"
+    "a transfer request,concept,18,01,,,2026-11-01,Y,read once after the choice\n"
+)
+
+
+class PromptPartTest(unittest.TestCase):
+    """P1's part: the rows of every variant, the request file read against T1's membership, the review form and
+    its marks, the file alone in the capstone, no hand side without the file."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self._tmp.name)
+        self.table = model_support.write_test_table(self.folder / "course")
+        self.results = self.folder / "results"
+        self.files = evaluate.result_files(self.results)
+        self._without = without_encoder()
+        self._without.start()
+
+    def tearDown(self):
+        self._without.stop()
+        self._tmp.cleanup()
+
+    def run_prompt(self, judge: str = "") -> str:
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            evaluate.run(self.table, self.results, "prompt", judge, TODAY)
+        return output.getvalue()
+
+    def test_the_rows_of_every_variant_and_without_the_request_file_the_self_set_alone(self):
+        output = self.run_prompt()
+        with self.files.prompt.open(newline="", encoding="utf-8") as handle:
+            self.assertEqual(next(csv.reader(handle)), evaluate.PROMPT_COLUMNS)
+        rows = read_csv(self.files.prompt)
+        self.assertEqual([row["variant"] for row in rows],
+                         [f"TF-IDF: {name}" for name in ROUTES] + [f"{evaluate.CHAR_NGRAMS}: card"])  # S1's, no encoder here
+        self.assertTrue(all(row["model"] == "P1" and row["run"] for row in rows))
+        for row in rows:
+            for column in ("self_topic_at1", "self_topic_at3", "self_navigated", "min_card", "min_centroid",
+                           "min_text", "ms_per_request", "seconds"):
+                self.assertNotEqual(row[column], "", column)
+            self.assertLessEqual(float(row["self_topic_at1"]), float(row["self_topic_at3"]))
+            hand = [column for column in evaluate.PROMPT_COLUMNS if column.startswith("hand") or column == "judged_requests"]
+            self.assertTrue(all(row[column] == "" for column in hand))
+        self.assertEqual(len({(row["min_card"], row["min_centroid"]) for row in rows[:5]}), 1)  # one model per vectoriser
+        self.assertNotIn("card_bar", evaluate.PROMPT_COLUMNS)  # no second threshold for the card
+        self.assertIn("routes=card+text, gate=card", rows[3]["params"])
+        self.assertIn("prompt_requests.md is not written", output)
+        self.assertFalse(self.files.prompt_form.exists())  # no form without the file
+        self.assertFalse(self.files.prompt_requests.exists())
+
+    def test_the_request_file_is_protected_and_the_form_written(self):
+        self.results.mkdir()
+        self.files.prompt_requests.write_text(REQUESTS, encoding="utf-8")
+        self.files.prompt_form.write_text("", encoding="utf-8")  # the hand side is there: an empty form
+        self.run_prompt("Z")
+        self.assertEqual(self.files.prompt_requests.read_text(encoding="utf-8"), REQUESTS)  # nothing marked: not written
+        form = self.files.prompt_form.read_text(encoding="utf-8")
+        for number, text in enumerate(["null hypothesis", "the history of a repository", "how to bake bread"], 1):
+            self.assertIn(f"\n## {number}. {text}\n", form)
+        self.assertIn("- [x] 103003 card (03:02): What is the null hypothesis?  —  intended  —  TF-IDF: card ", form)
+        self.assertIn("- [x] 03:02 topic: Tests  —  implied", form)
+        self.assertIn("- [x] 401005 card (01:02): ", form)
+        rows = read_csv(self.files.prompt)
+        self.assertTrue(all(row["judged_requests"] == "4" for row in rows))  # neither the untargeted nor the transfer request
+
+        # A further acceptable target marked in the form goes into `also`, with the day and the judge
+        entry = form.split("\n## 2. the history of a repository\n")[1].split("\n## ")[0]
+        candidate = next(match.group(2) for match in map(evaluate.PROMPT_CANDIDATE.match, entry.splitlines())
+                         if match and match.group(1) == " ")
+        self.files.prompt_form.write_text(form.replace(f"- [ ] {candidate} ", f"- [x] {candidate} ", 1), encoding="utf-8")
+        output = self.run_prompt("Z")
+        self.assertIn("1 changed by the form", output)
+        stored = read_csv(self.files.prompt_requests)
+        self.assertEqual(len(stored), 6)
+        self.assertEqual((stored[1]["also"], stored[1]["judged"], stored[1]["judge"]), (candidate, TODAY, "Z"))
+        self.assertEqual(stored[1]["note"], "Commits' heading, no one card")  # the rest of the row kept
+        self.assertEqual(stored[3]["also"], "401005")
+        self.assertIn(f"- [x] {candidate} ", self.files.prompt_form.read_text(encoding="utf-8"))
+
+    def test_with_the_file_alone_the_hand_columns_are_computed_and_nothing_is_written_back(self):
+        """The capstone: the requests travel without their notes, the form stays behind."""
+        self.results.mkdir()
+        rows = list(csv.DictReader(io.StringIO(REQUESTS)))
+        columns = [column for column in evaluate.REQUEST_COLUMNS if column != "note"]
+        evaluate.write_requests(columns, rows, self.files.prompt_requests)  # as the train copies it, without the notes
+        without_notes = self.files.prompt_requests.read_text(encoding="utf-8")
+        self.assertNotIn("no deck teaches it", without_notes)
+        output = self.run_prompt()
+        self.assertEqual(self.files.prompt_requests.read_text(encoding="utf-8"), without_notes)
+        self.assertFalse(self.files.prompt_form.exists())
+        self.assertIn("nothing written back", output)
+        rows = read_csv(self.files.prompt)
+        self.assertTrue(all(row["judged_requests"] == "4" and row["hand_right"] != "" for row in rows))
+
+    def test_the_paired_difference_is_against_the_vectorisers_card_route(self):
+        self.results.mkdir()
+        self.files.prompt_requests.write_text(REQUESTS, encoding="utf-8")
+        output = self.run_prompt()
+        rows = {row["variant"]: row for row in read_csv(self.files.prompt)}
+        reference = rows["TF-IDF: card"]
+        self.assertEqual((reference["hand_diff"], reference["hand_diff_low"], reference["hand_diff_high"]), ("0.000",) * 3)
+        for label, row in rows.items():  # paired over the same requests: the difference of the shares right
+            self.assertAlmostEqual(float(row["hand_diff"]), float(row["hand_right"]) - float(reference["hand_right"]), places=2)
+            self.assertLessEqual(float(row["hand_diff_low"]), float(row["hand_diff"]))
+            self.assertGreaterEqual(float(row["hand_diff_high"]), float(row["hand_diff"]))
+            shares = [float(row[column]) for column in ("hand_right", "hand_wrong", "hand_missed")]
+            self.assertAlmostEqual(sum(shares), 1.0, places=2)
+        char_line = next(line for line in output.splitlines() if line.strip().startswith(f"{evaluate.CHAR_NGRAMS}: card"))
+        self.assertIn("against TF-IDF: card", char_line)  # the character n-grams against S1's card route
+        self.assertIn("hand_right by kind", output)
+
+
+class RequestTest(unittest.TestCase):
+    """A request read against the course and T1's membership, its outcome, and the form's marks merged."""
+
+    BY_ID = {card.id: card for card in model_support.CARDS}
+    DECK_NAME = {deck_id: name for name, deck_id in model_support.DECK_IDS.items()}
+    TOPIC_OF = {**{card_id: key[1] for key, ids in model_support.SCRIPTED.items() for card_id in ids}, "101004": "02"}
+
+    def request(self, **row):
+        return evaluate.request_of({"request": "r", "kind": "concept", **row}, self.BY_ID, self.DECK_NAME, self.TOPIC_OF)
+
+    def test_the_card_names_its_topic_under_the_membership_in_force(self):
+        request = self.request(deck_id="01", topic_id="01", card="101004", also="02:02 103001")
+        self.assertEqual(request.topics, {("Alpha", "02"), ("Beta", "02"), ("Gamma", "01")})  # not the row's 01:01
+        self.assertEqual((request.card, request.cards), ("101004", {"101004", "103001"}))
+        self.assertTrue(request.judged)
+        topic_only = self.request(deck_id="02", topic_id="01")
+        self.assertEqual((topic_only.topics, topic_only.card), ({("Beta", "01")}, ""))
+        self.assertFalse(self.request().judged)  # no target, not off-course
+        self.assertFalse(self.request(card="999999").judged)  # a card not in the course
+        off = self.request(kind=evaluate.OFF_COURSE)
+        self.assertTrue(off.judged and off.off_course and not off.topics)
+        self.assertTrue(self.request(deck_id="18", topic_id="01").transfer)
+
+    def test_the_outcome_of_an_answer(self):
+        def answer(decision, key=("Alpha", "02")):
+            return Answer("r", ("card",), decision, (TopicScore(key, 0.0, {}, None),))
+
+        request = self.request(card="101004")
+        self.assertEqual(evaluate.request_outcome(request, answer(ENTERED)), (True, False, False))
+        self.assertEqual(evaluate.request_outcome(request, answer(SELECTED, ("Alpha", "01"))), (False, True, False))
+        self.assertEqual(evaluate.request_outcome(request, answer(NO_MATCH)), (False, False, True))
+        off = self.request(kind=evaluate.OFF_COURSE)
+        self.assertEqual(evaluate.request_outcome(off, answer(NO_MATCH)), (True, False, False))
+        self.assertEqual(evaluate.request_outcome(off, answer(ENTERED)), (False, True, False))
+
+    def test_the_forms_marks_go_into_also_and_the_intended_and_implied_never(self):
+        rows = [
+            {"request": "a", "kind": "concept", "deck_id": "01", "topic_id": "02", "card": "301003", "also": "401005 02:01",
+             "judged": "d", "judge": "X"},
+            {"request": "b", "kind": evaluate.OFF_COURSE, "also": "", "judged": "d", "judge": "X"},
+            {"request": "c", "kind": "concept", "deck_id": "03", "topic_id": "01", "card": "", "also": "", "judged": "d", "judge": "X"},
+        ]
+        form_text = "\n".join([
+            "## 1. a", "", "- [x] 301003 card", "- [ ] 01:02 topic", "- [x] 101001 card", "- [ ] 02:01 topic", "- [x] 401005 card",
+            "## 2. b", "", "- [x] 01:01 topic",
+            "## 3. c", "", "- [x] 03:01 topic", "- [ ] 103002 card",
+        ])
+        path = Path(tempfile.mkdtemp()) / "prompt_requests.md"
+        path.write_text(form_text, encoding="utf-8")
+        form = evaluate.read_prompt_form(path)
+        self.assertEqual(form["a"]["candidates"], ["301003", "01:02", "101001", "02:01", "401005"])
+        self.assertEqual(form["a"]["marked"], {"301003", "101001", "401005"})
+        changed = evaluate.merge_requests(rows, form, TODAY, "Z", self.BY_ID, model_support.DECK_IDS, self.TOPIC_OF)
+        self.assertEqual(changed, 1)
+        self.assertEqual((rows[0]["also"], rows[0]["judged"], rows[0]["judge"]), ("401005 101001", TODAY, "Z"))  # 02:01 unticked
+        self.assertEqual(rows[1]["also"], "")  # an off-course request's marks are not read
+        self.assertEqual((rows[2]["also"], rows[2]["judged"]), ("", "d"))  # the intended topic is never written
 
 
 PROBE = """

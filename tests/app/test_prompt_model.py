@@ -1,0 +1,235 @@
+"""The navigation prompt P1 (app.models.prompt_model) on the test course of model_support, on an index that keeps
+every term (min_df 1: on 13 cards the baseline's min_df 2 drops "slice" and "merge", each in one card): the floors
+as percentiles over the self set, the three routes' scores per topic, the decision (the few-shot route gates, the
+mean ranks, the nearest card selected inside the entered topic and only there), "no match" with the three nearest, the self set with
+the card held out and its Source: line cut, and the same code on S2's hybrid (a stand-in encoder, no torch)."""
+
+import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
+
+import dataclasses
+import types
+import unittest
+
+import numpy as np
+
+from app.models import embeddings, similar
+from app.models.prompt_model import (
+    CARD, CENTROID, DEFAULT_ROUTES, ENTERED, NEAREST, NO_MATCH, ROUTES, SELECTED, TEXT, PromptModel, checked, gate_of,
+    request_text,
+)
+from app.models.topic_model import TopicModel, unit
+
+CARDS = model_support.CARDS
+LISTS, DICTIONARIES, EMPTY = ("Alpha", "01"), ("Alpha", "02"), ("Alpha", "03")
+COMMITS, BRANCHES = ("Beta", "01"), ("Beta", "02")
+INTERVALS, TESTS = ("Gamma", "01"), ("Gamma", "02")
+
+
+def index_of(cards=CARDS, vectoriser=None) -> similar.SimilarityIndex:
+    return similar.SimilarityIndex.fit(cards, vectoriser or similar.tfidf_vectoriser(min_df=1))
+
+
+def model_of(index, seeds=None, cards=CARDS) -> PromptModel:
+    return PromptModel(index, TopicModel(index, model_support.SEEDS if seeds is None else seeds), cards)
+
+
+def with_headings(key, headings) -> list:
+    """The test course's seeds with one topic's headings replaced."""
+    return [dataclasses.replace(seed, headings=headings) if seed.key == key else seed for seed in model_support.SEEDS]
+
+
+class FloorsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.index = index_of()
+        cls.model = model_of(cls.index)
+
+    def test_the_floors_are_percentiles_of_the_self_set(self):
+        model, index = self.model, self.index
+        questions = index.queries([card.question for card in CARDS])
+        cosines = np.asarray((questions @ index.vectors.T).todense())
+        np.fill_diagonal(cosines, -np.inf)  # the card held out
+        first = cosines.max(axis=1)
+        self.assertAlmostEqual(model.floors.card, float(np.percentile(first, 10)))
+        members = model.topic_model.members
+        topic_of = {card_id: key for key, ids in members.items() for card_id in ids}
+        own_centroid, own_text = [], []
+        for number, card in enumerate(CARDS):
+            key = topic_of[card.id]
+            others = [index.row(card_id) for card_id in members[key] if card_id != card.id]
+            loo = unit(np.asarray(index.vectors[others].sum(axis=0)).ravel()) if others else np.zeros(index.vectors.shape[1])
+            question = np.asarray(questions[number].todense()).ravel()
+            own_centroid.append(float(question @ loo))
+            seed = next(seed for seed in model_support.SEEDS if seed.key == key)
+            own_text.append(float(question @ index.query(" | ".join(seed.headings))))
+        self.assertAlmostEqual(model.floors.centroid, float(np.percentile(own_centroid, 10)))
+        self.assertAlmostEqual(model.floors.text, float(np.percentile(own_text, 10)))
+        self.assertEqual(model.floors.of(CARD), model.floors.card)
+        self.assertEqual(len(dataclasses.fields(type(model.floors))), 3)  # no card bar
+
+    def test_the_routes_score_every_topic_by_its_best_member_its_full_centroid_and_its_headings(self):
+        model, index = self.model, self.index
+        request = "git merge a branch"
+        vector = index.query(request)
+        cosines = index.vectors @ vector
+        by_key = {target.key: target for target in model.score(request)}
+        self.assertEqual(set(by_key), {seed.key for seed in model_support.SEEDS})
+        for key, members in model.topic_model.members.items():
+            scores = by_key[key].scores
+            self.assertEqual(set(scores), {CARD, CENTROID, TEXT})
+            if members:
+                rows = [index.row(card_id) for card_id in members]
+                self.assertAlmostEqual(scores[CARD], float(cosines[rows].max()))
+                self.assertEqual(by_key[key].card, members[int(np.argmax(cosines[rows]))])
+                self.assertAlmostEqual(scores[CENTROID], float(unit(np.asarray(index.vectors[rows].sum(axis=0)).ravel()) @ vector))
+            else:  # the emptied topic: no example, no card
+                self.assertEqual((scores[CARD], scores[CENTROID], by_key[key].card), (0.0, 0.0, None))
+            seed = next(seed for seed in model_support.SEEDS if seed.key == key)
+            self.assertAlmostEqual(scores[TEXT], float(index.query(" | ".join(seed.headings)) @ vector))
+        self.assertGreater(by_key[BRANCHES].scores[CARD], by_key[COMMITS].scores[CARD])
+
+    def test_the_variants_and_their_gates(self):
+        self.assertEqual(DEFAULT_ROUTES, (CARD,))
+        self.assertEqual(list(ROUTES), ["card", "centroid", "text", "card+text", "all"])
+        self.assertEqual([gate_of(routes) for routes in ROUTES.values()], [CARD, CENTROID, TEXT, CARD, CARD])
+        self.assertEqual(checked(["card", "text"]), (CARD, TEXT))
+        for wrong in ((), ("card", "headings")):
+            with self.assertRaises(ValueError):
+                checked(wrong)
+        with self.assertRaises(ValueError):
+            self.model.find("git", ("nearest",))
+
+
+class DecisionTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.index = index_of()
+        cls.model = model_of(cls.index)
+
+    def test_how_do_i_slice_a_list_enters_lists_and_selects_the_slicing_quiz(self):
+        answer = self.model.find("how do I slice a list")
+        self.assertEqual((answer.decision, answer.topic, answer.card), (SELECTED, LISTS, "201002"))
+        self.assertTrue(answer.navigate)
+        self.assertEqual(answer.message, "card selected")
+        self.assertEqual(answer.targets[0].key, LISTS)
+        self.assertEqual(len(answer.targets), NEAREST)
+
+    def test_git_merge_enters_betas_rest_topic(self):
+        answer = self.model.find("git merge")
+        self.assertEqual(answer.topic, BRANCHES)
+        self.assertTrue(next(seed for seed in model_support.SEEDS if seed.key == BRANCHES).rest)
+        self.assertEqual(answer.card, "102003")
+
+    def test_null_hypothesis_enters_gammas_tests(self):
+        answer = self.model.find("null hypothesis")
+        self.assertEqual(answer.topic, TESTS)
+        self.assertIn(answer.card, ("103002", "103003"))
+
+    def test_how_to_bake_bread_is_no_match_with_the_three_nearest_listed(self):
+        for routes in ROUTES.values():
+            answer = self.model.find("how to bake bread", routes)
+            self.assertEqual((answer.decision, answer.topic, answer.card), (NO_MATCH, None, None), routes)
+            self.assertFalse(answer.navigate)
+            self.assertEqual(answer.message, "no match, the three nearest below the floor")
+            self.assertEqual([target.key for target in answer.targets], [LISTS, DICTIONARIES, EMPTY])  # ties in file order
+        self.assertEqual(self.model.find("").decision, NO_MATCH)
+
+    def test_a_request_in_a_topics_own_words_enters_it_with_its_nearest_card(self):
+        answer = self.model.find("the history of a repository")  # Commits' heading, no one card's question
+        self.assertEqual((answer.decision, answer.topic), (SELECTED, COMMITS))
+        self.assertIn(answer.card, self.model.topic_model.members[COMMITS])
+        self.assertEqual(answer.card, answer.targets[0].card)  # the topic's nearest card goes with the topic: no card bar
+        self.assertTrue(answer.navigate)
+        self.assertGreater(answer.targets[0].scores[CARD], self.model.floors.card)
+
+    def test_a_topic_first_by_the_mean_but_below_the_few_shot_floor_is_no_match(self):
+        model = model_of(self.index, with_headings(INTERVALS, ("git branch merge",)))  # Beta's words on Gamma's topic
+        answer = model.find("git branch merge", ROUTES["card+text"])
+        first = answer.targets[0]
+        self.assertEqual(first.key, INTERVALS)  # the text route pulls it first
+        self.assertEqual(first.scores[CARD], 0.0)
+        self.assertEqual(answer.decision, NO_MATCH)
+        self.assertEqual(answer.targets[1].key, BRANCHES)
+        self.assertEqual(model.find("git branch merge", ROUTES["card"]).topic, BRANCHES)  # the card route alone
+
+    def test_a_card_of_another_topic_as_the_top_card_is_not_selected(self):
+        model = model_of(self.index, with_headings(DICTIONARIES, ("list",)))
+        answer = model.find("list", ROUTES["card+text"])
+        self.assertEqual((answer.decision, answer.topic, answer.card), (ENTERED, DICTIONARIES, None))
+        self.assertEqual(answer.message, "topic entered")
+        cosines = self.index.vectors @ self.index.query("list")
+        top = self.index.ids[int(np.argmax(cosines))]
+        self.assertEqual(top, "201002")  # in Lists
+        self.assertEqual(model.find("list", ROUTES["card"]).card, "201002")
+
+    def test_the_text_route_alone_never_clears_its_zero_floor_with_nothing_in_common(self):
+        self.assertEqual(self.model.floors.text, 0.0)
+        self.assertEqual(self.model.find("how to bake bread", ROUTES["text"]).decision, NO_MATCH)
+        self.assertEqual(self.model.find("null hypothesis", ROUTES["text"]).topic, TESTS)
+
+    def test_variants_without_the_card_route_enter_and_never_select(self):
+        for name in ("centroid", "text"):
+            answer = self.model.find("null hypothesis", ROUTES[name])
+            self.assertEqual((answer.decision, answer.topic, answer.card), (ENTERED, TESTS, None), name)
+            self.assertEqual(answer.message, "topic entered")
+
+    def test_the_mean_ranks_and_the_answer_is_the_same_on_every_call(self):
+        answer = self.model.find("git merge", ROUTES["all"])
+        means = [target.mean for target in answer.ranking]
+        self.assertEqual(means, sorted(means, reverse=True))
+        self.assertEqual(len(answer.ranking), len(model_support.SEEDS))
+        self.assertEqual(answer, self.model.find("git merge", ROUTES["all"]))
+        self.assertEqual(answer.routes, ROUTES["all"])
+
+
+class SelfSetTest(unittest.TestCase):
+    def test_every_cards_question_holds_its_card_out(self):
+        model = model_of(index_of())
+        cases = model.self_set()
+        self.assertEqual([case.card_id for case in cases], model_support.ALL_CARDS)
+        members = model.topic_model.members
+        for case in cases:
+            self.assertIn(case.card_id, members[case.key])  # the truth: T1's topic
+            self.assertNotEqual(case.card, case.card_id)
+            self.assertEqual(len(case.nearest), NEAREST)
+            self.assertIn(case.decision, (SELECTED, ENTERED, NO_MATCH))
+            self.assertEqual(case.card is not None, case.decision == SELECTED)
+        self.assertEqual(model.self_questions, [card.question for card in CARDS])
+        self.assertEqual(len(model.self_set(ROUTES["all"])), len(CARDS))
+
+    def test_the_source_line_is_cut_from_the_question(self):
+        self.assertEqual(request_text("What does git log show?\nSource: 02_git/1_Commits.ipynb"), "What does git log show?")
+        self.assertEqual(request_text("What is a p value?"), "What is a p value?")
+        cards = [
+            dataclasses.replace(card, question=card.question + " Source: 02_git/1_Commits.ipynb") if card.id == "102004" else card
+            for card in CARDS
+        ]
+        model = model_of(index_of(cards), cards=cards)
+        self.assertEqual(model.self_questions[model.self_ids.index("102004")], "What does git log show?")
+
+    def test_a_topic_whose_only_member_is_held_out_has_no_example_left(self):
+        index = index_of()
+        fitted = TopicModel(index, model_support.SEEDS)
+        members = {**fitted.members, INTERVALS: ["103001"], TESTS: ["103002", "103003", "103004"]}
+        model = PromptModel(index, types.SimpleNamespace(seeds=fitted.seeds, members=members), CARDS)
+        case = next(case for case in model.self_set() if case.card_id == "103001")
+        self.assertEqual(case.key, INTERVALS)
+        self.assertNotEqual(case.nearest[0], INTERVALS)  # nothing of its topic left to match
+        self.assertTrue(all(np.isfinite([model.floors.card, model.floors.centroid, model.floors.text])))
+
+
+class EncoderTest(unittest.TestCase):
+    def test_the_same_code_runs_on_the_hybrid_with_one_encode_per_request(self):
+        encoder = embeddings.SentenceEncoder(embeddings.MINILM, loader=model_support.fake_loader)
+        hybrid = embeddings.HybridVectoriser(similar.tfidf_vectoriser(min_df=1), encoder)
+        model = model_of(index_of(vectoriser=hybrid))
+        self.assertTrue(-1.0 <= model.floors.card <= 1.0)
+        calls = encoder.load().calls
+        answer = model.find("git merge")
+        self.assertEqual(encoder.load().calls, calls + 1)
+        self.assertEqual(len(answer.ranking), len(model_support.SEEDS))
+        self.assertEqual(len(model.self_set(ROUTES["all"])), len(CARDS))
+
+
+if __name__ == "__main__":
+    unittest.main()

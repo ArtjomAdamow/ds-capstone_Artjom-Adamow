@@ -10,7 +10,9 @@ same in every view. A vectoriser is anything with fit_transform(texts) that retu
 sparse, and transform(texts) for other texts (a request): the TF-IDF baseline, a scikit-learn Pipeline (TF-IDF plus
 TruncatedSVD), S2's sentence encoder or its hybrid with TF-IDF (models.embeddings) plug in at the same place. The
 minimum score is the fixed MIN_SCORE (TF-IDF's), or with min_score=None the index's own: the 10th percentile of the
-fifth neighbour's cosine (own_minimum), the rule the evaluation applies to every variant.
+fifth neighbour's cosine (own_minimum), the rule the evaluation applies to every variant. A request (P1) enters the
+same space through the fitted vectoriser's transform (SimilarityIndex.query, one transform per request; queries for
+many at once), so its cosine to every card is a dot product with the unit rows.
 """
 
 from dataclasses import dataclass
@@ -175,3 +177,16 @@ class SimilarityIndex:
 
     def rows_of_deck(self, deck: str) -> list[int]:
         return [row for row, name in enumerate(self.decks) if name == deck]
+
+    def queries(self, texts: Sequence[str]) -> sparse.csr_matrix:
+        """Other texts in the index's space: the fitted vectoriser's transform in one call, every row scaled to length
+        1 (a text the vectoriser finds nothing in, as words outside TF-IDF's vocabulary, stays a row of zeros)."""
+        texts = list(texts)
+        if not texts or not self.ids:
+            return sparse.csr_matrix((len(texts), self.vectors.shape[1]))
+        return unit_rows(self.vectoriser.transform(texts))
+
+    def query(self, text: str) -> np.ndarray:
+        """A request's unit vector in the index's space, dense (zero when the vectoriser finds nothing in it): its
+        cosine to every card is `vectors @ query(text)`, one transform (one encode) per request."""
+        return np.asarray(self.queries([text]).todense(), dtype=float)[0]

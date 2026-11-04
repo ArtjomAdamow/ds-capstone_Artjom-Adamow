@@ -75,6 +75,17 @@ TOPIC_NAMES = {
     ("02", "01"): ("Commits", False), ("02", "02"): ("Branches", True),
     ("03", "01"): ("Intervals", False), ("03", "02"): ("Tests", False),
 }
+# (deck id, topic id) -> the headings and the sources of the course file (a source's files joined by "; "); "Empty"
+# has neither, as a topic without the two lists in the file, and "Branches" two sources
+TOPIC_TEXTS = {
+    ("01", "01"): (("Lists", "List comprehensions and slicing"), ("01_python/1_Lists.ipynb; 01_python/2_List_Practice.ipynb",)),
+    ("01", "02"): (("Dictionaries", "Keys and values"), ("01_python/3_Dictionaries.ipynb",)),
+    ("01", "03"): ((), ()),
+    ("02", "01"): (("Commits", "The history of a repository"), ("02_git/1_Commits.ipynb",)),
+    ("02", "02"): (("Branches", "Merging"), ("02_git/2_Branches.ipynb", "02_git/3_Merging.ipynb")),
+    ("03", "01"): (("Confidence intervals",), ("03_stats/1_Intervals.ipynb",)),
+    ("03", "02"): (("Hypothesis tests", "The p value"), ("03_stats/2_Tests.ipynb; 03_stats/2_Tests_Solutions.ipynb",)),
+}
 # (deck id, topic id) -> the scripted cards in deck order
 SCRIPTED = {
     ("01", "01"): ["101001", "201002", "101004"], ("01", "02"): ["301003", "401005"], ("01", "03"): [],
@@ -87,7 +98,10 @@ NAME_OF = {deck_id: name for name, deck_id in DECK_IDS.items()}
 def seeds_of(scripted: dict) -> list[TopicSeed]:
     """The scripted topics as the model's input, in deck name order and file order (as the glue reads them)."""
     return [
-        TopicSeed(NAME_OF[deck_id], topic_id, *TOPIC_NAMES[(deck_id, topic_id)], tuple(scripted[(deck_id, topic_id)]))
+        TopicSeed(
+            NAME_OF[deck_id], topic_id, *TOPIC_NAMES[(deck_id, topic_id)], tuple(scripted[(deck_id, topic_id)]),
+            *TOPIC_TEXTS[(deck_id, topic_id)],
+        )
         for deck_id, topic_id in sorted(TOPIC_NAMES, key=lambda key: (NAME_OF[key[0]], key[1]))
     ]
 
@@ -123,7 +137,7 @@ def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
     """The test course as a course table in `folder`, as export_course.py writes it from the course file (the
     standalone page's and the evaluation's input); or another course with its scripted topics (the moving course:
     `moving_cards()` with MOVING_SCRIPTED)."""
-    from app.course_table import encode_list, flag, write_table
+    from app.course_table import encode_list, flag, join_texts, write_table
 
     records = CARDS if cards is None else cards
     topic_of = TOPIC_OF if scripted is None else {card_id: key for key, ids in scripted.items() for card_id in ids}
@@ -139,7 +153,11 @@ def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
         })
     decks = [{"deck_id": deck_id, "name": name, "description": DESCRIPTIONS[deck_id]} for name, deck_id in DECK_IDS.items()]
     topics = [
-        {"deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": flag(rest)}
+        {
+            "deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": flag(rest),
+            "headings": join_texts(TOPIC_TEXTS[(deck_id, topic_id)][0]),
+            "sources": join_texts(TOPIC_TEXTS[(deck_id, topic_id)][1]),
+        }
         for (deck_id, topic_id), (name, rest) in TOPIC_NAMES.items()
     ]
     write_table(folder, cards, decks, topics)

@@ -3,11 +3,12 @@ current course, each level's newest run, its tables with one row per measure and
 floor, every deck or topic name of the course table replaced by the deck's id or the topic's label, and the glossary
 of the measure columns (app/docs/columns.md).
 
-* `Results(folder, note, names)`: reads results.csv, topics.csv and difficulty.csv of `folder` once; a missing file
-  gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
+* `Results(folder, note, names, chosen)`: reads results.csv, topics.csv, difficulty.csv and prompt.csv of `folder`
+  once; a missing file gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
   "decks 01 to 24", as evaluate.scope_note writes it), so the rows of an older course stay out. A run is the `run`
-  column, the date for the rows written before it, and a level (S1, S2, C1, T1, D1, D2: the model generations) shows
-  the newest run that holds its rows, so a later run of another part or without the encoder hides none.
+  column, the date for the rows written before it, and a level (S1, S2, C1, T1, D1, D2, P1: the model generations)
+  shows the newest run that holds its rows, so a later run of another part or without the encoder hides none. P1's
+  table marks the variant the app runs (`chosen`, the level's variant label): its file names no variant "chosen".
 * A row's `scope` is the course ("all", or empty on older rows) or a deck ("deck 01"): the difficulty tables take
   the course's rows, and with a deck entered a second table shows the deck's rows of the same run (D1's variants'
   within-deck order on the hand labels; D2's next to D1's chosen row), as T1's deck rows do.
@@ -15,8 +16,10 @@ of the measure columns (app/docs/columns.md).
   with its sd reads "mean ± sd", a difference with its interval "diff [low, high]", a share with its count
   "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
   (the run and the bookkeeping the heads share), the measure columns shown and the columns behind each row, for the
-  row's description.
-* `read_glossary`: the rows of app/docs/columns.md by column name, what a row of a table means when it is clicked.
+  row's description, and the file it comes from.
+* `read_glossary`: the rows of app/docs/columns.md by column name, what a row of a table means when it is clicked;
+  each under its file's key too ("results.csv:hand_diff"), since a column of the same name can mean another measure
+  in another file (`glossary_entry`).
 """
 
 import csv
@@ -25,15 +28,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Optional, Sequence, Union
 
-RESULTS, TOPICS, DIFFICULTY = "results.csv", "topics.csv", "difficulty.csv"
-FILES = (RESULTS, TOPICS, DIFFICULTY)
+RESULTS, TOPICS, DIFFICULTY, PROMPT = "results.csv", "topics.csv", "difficulty.csv", "prompt.csv"
+FILES = (RESULTS, TOPICS, DIFFICULTY, PROMPT)
 GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "docs" / "columns.md"
 BOOKKEEPING = ("params", "features", "folds", "repeats", "seed")  # the subtitle, where every head shares the value
 CHOSEN = "chosen"
 HINT = "No {name} in {folder} yet. The offline evaluation writes it, next to app/: uv run evaluate.py"
 NO_ROWS = "No {level} rows of this course in {name} yet. The offline evaluation writes them, next to app/: uv run evaluate.py"
 # The model generations per file, and the model column that marks a run as the level's
-LEVEL_FILES = {"S1": RESULTS, "S2": RESULTS, "C1": RESULTS, "T1": TOPICS, "D1": DIFFICULTY, "D2": DIFFICULTY}
+LEVEL_FILES = {"S1": RESULTS, "S2": RESULTS, "C1": RESULTS, "T1": TOPICS, "D1": DIFFICULTY, "D2": DIFFICULTY, "P1": PROMPT}
 NO_FOLDER = "No results folder. The offline evaluation writes one, next to app/: uv run evaluate.py"
 Measure = Union[str, tuple[str, ...]]  # a column, or the columns of one measure (a value with its sd or interval)
 S1_MEASURES: tuple[Measure, ...] = (
@@ -61,6 +64,11 @@ D1_MEASURES: tuple[Measure, ...] = (
     "predicted_hard", "hand_judged", "hand_macro_f1", "hand_kappa", "hand_accuracy", "hand_spearman",
     ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
 )
+P1_MEASURES: tuple[Measure, ...] = (
+    "hand_right", "hand_wrong", "hand_missed", ("hand_diff", "hand_diff_low", "hand_diff_high"), "hand_topic_at1", "hand_topic_at3",
+    "hand_card_at1", "judged_requests", "self_topic_at1", "self_topic_at3", "self_navigated", "min_card", "min_centroid",
+    "min_text", "ms_per_request",
+)
 MARGIN_SCOPE = "margin >= "
 FOCUS_SCOPE = "focus "  # the margin slider's marks: the share of the course's cards in focus
 STACK_SCOPE = "stack "
@@ -84,6 +92,7 @@ class Table:
     subtitle: str
     measures: list[str] = field(default_factory=list)  # the file's columns behind the rows, in row order
     row_columns: list[list[str]] = field(default_factory=list)  # per row, its columns (the glossary's key is the first)
+    file: str = ""  # the results file, whose glossary rows describe the table's
 
 
 def read_rows(path: Path) -> list[dict]:
@@ -174,10 +183,12 @@ def subtitle_of(rows: Sequence[Mapping[str, str]]) -> str:
 class Results:
     """The results files of a folder, read once, with the tables per model letter."""
 
-    def __init__(self, folder: Optional[Path], note: str, names: Optional[Mapping[str, str]] = None) -> None:
+    def __init__(self, folder: Optional[Path], note: str, names: Optional[Mapping[str, str]] = None,
+                 chosen: Optional[Mapping[str, str]] = None) -> None:
         self.folder = Path(folder) if folder is not None else None
         self.note = note
         self.names = dict(names or {})
+        self.chosen = dict(chosen or {})  # a level -> the variant the app runs, where its file's names do not say
         self._pattern = (
             re.compile("|".join(re.escape(name) for name in sorted(self.names, key=len, reverse=True))) if self.names else None
         )
@@ -204,8 +215,8 @@ class Results:
     def tables(self, level: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
         """The tables of a level, from its newest run: S1 (next to B0), S2 (next to S1's chosen variant), C1 (its
         three layouts), T1 (the course or the entered deck, the stacks, the margins, the slider's marks), D1 (next to the baselines and
-        the hand row) or D2 (next to D1's chosen row), the two with the entered deck's rows as a second table; None
-        without the file, empty without the level's rows."""
+        the hand row) or D2 (next to D1's chosen row), the two with the entered deck's rows as a second table, P1 (its
+        variants); None without the file, empty without the level's rows."""
         rows = self.rows.get(LEVEL_FILES[level])
         if rows is None:
             return None
@@ -213,16 +224,22 @@ class Results:
         if not run:
             return []
         if level == "S1":
-            return [self._similarity(run)]
-        if level == "S2":
-            return [self._embeddings(run)]
-        if level == "C1":
-            return [self._course(run)]
-        if level == "T1":
-            return self._topics(run, deck_id)
-        if level == "D1":
-            return [self._difficulty(run)] + self._deck_difficulty(run, level, deck_id)
-        return [self._tags(run)] + self._deck_difficulty(run, level, deck_id)
+            tables = [self._similarity(run)]
+        elif level == "S2":
+            tables = [self._embeddings(run)]
+        elif level == "C1":
+            tables = [self._course(run)]
+        elif level == "T1":
+            tables = self._topics(run, deck_id)
+        elif level == "D1":
+            tables = [self._difficulty(run)] + self._deck_difficulty(run, level, deck_id)
+        elif level == "P1":
+            tables = [self._prompt(run)]
+        else:
+            tables = [self._tags(run)] + self._deck_difficulty(run, level, deck_id)
+        for table in tables:
+            table.file = LEVEL_FILES[level]
+        return tables
 
     def no_rows(self, level: str) -> str:
         """Why a level has no table though its file is there."""
@@ -297,6 +314,14 @@ class Results:
         chosen = [True] * len(reference) + [False] * len(variants)
         return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES, self.by_ids)
 
+    def _prompt(self, run: list[dict]) -> Table:
+        """P1's variants of the run (the route sets on each vectoriser, the character n-grams' card route), the
+        variant the app runs marked, the hand columns first."""
+        rows = [row for row in run if row.get("model") == "P1"]
+        heads = [row.get("variant") or "" for row in rows]
+        chosen = [head == self.chosen.get("P1") for head in heads]
+        return transpose("P1's variants: the judged requests and the self set", rows, heads, chosen, P1_MEASURES, self.by_ids)
+
     def _deck_difficulty(self, run: list[dict], level: str, deck_id: Optional[str]) -> list[Table]:
         """The entered deck's rows of the run (scope "deck <id>"): D1's variants' within-deck
         order on the hand labels, or D2's variants next to D1's chosen row; none without a deck or its rows."""
@@ -337,17 +362,28 @@ def difficulty_head(row: Mapping[str, str]) -> str:
 
 
 def read_glossary(path: Path = GLOSSARY_PATH) -> dict[str, tuple[str, str, str]]:
-    """The rows of columns.md by column name: (the names cell, what it measures, the range); the heading and the
-    separator rows of its tables are skipped."""
+    """The rows of columns.md by column name: (the names cell, what it measures, the range), each under its name (the
+    first file's row where two files share one) and under its file's key ("file:name", the file its "## file" heading
+    names); the heading and the separator rows of its tables are skipped."""
     entries: dict[str, tuple[str, str, str]] = {}
     if not Path(path).is_file():
         return entries
+    file = ""
     for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            file = line[3:].strip()
+            continue
         if not line.startswith("|"):
             continue
         cells = [part.strip() for part in line.strip().strip("|").split("|")]
         if len(cells) != 3 or cells[0] in ("", "Column") or set(cells[0]) <= set("-: "):
             continue
         for name in cells[0].split(","):
-            entries[name.strip()] = (cells[0], cells[1], cells[2])
+            entries.setdefault(name.strip(), (cells[0], cells[1], cells[2]))
+            entries[f"{file}:{name.strip()}"] = (cells[0], cells[1], cells[2])
     return entries
+
+
+def glossary_entry(glossary: Mapping[str, tuple[str, str, str]], file: str, column: str) -> Optional[tuple[str, str, str]]:
+    """A column's row of the glossary: its file's, else the column's by name alone."""
+    return glossary.get(f"{file}:{column}") or glossary.get(column)
