@@ -699,7 +699,7 @@ requires-dist = [
     { name = "seaborn" },
     { name = "sentence-transformers", marker = "extra == 'embeddings'", specifier = ">=6.2" },
     { name = "sentence-transformers", marker = "extra == 'embeddings-gpu'", specifier = ">=6.2" },
-    { name = "sputnik", marker = "extra == 'viewer'", git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.3.0" },
+    { name = "sputnik", marker = "extra == 'viewer'", git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.5.0" },
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'embeddings'", specifier = ">=2.15", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "ds-capstone", extra = "embeddings" } },
     { name = "torch", marker = "(sys_platform == 'linux' and extra == 'embeddings-gpu') or (sys_platform == 'win32' and extra == 'embeddings-gpu')", specifier = ">=2.15", index = "https://download.pytorch.org/whl/cu132", conflict = { package = "ds-capstone", extra = "embeddings-gpu" } },
     { name = "torch", marker = "sys_platform != 'linux' and extra == 'embeddings'", specifier = ">=2.15" },
@@ -2843,8 +2843,8 @@ wheels = [
 
 [[package]]
 name = "sputnik"
-version = "0.3.0"
-source = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.3.0#836530d42ceed04f639deee77c7b108683a95f20" }
+version = "0.5.0"
+source = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.5.0#d5ce99f132da8da25dfce393477aba90fabc1350" }
 dependencies = [
     { name = "dash" },
     { name = "dash-daq" },
