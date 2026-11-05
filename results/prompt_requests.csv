@@ -1,0 +1,86 @@
+request,kind,deck_id,topic_id,card,also,judged,judge
+sent_tokenize,code,17,01,417002,317032,2026-11-04,Claude
+how do I split a text into sentences with nltk,question,17,01,417002,317032,2026-11-04,Claude
+how do I turn text into numbers,paraphrase,17,01,,17:03 424009,2026-11-04,Claude
+why not just number every word,paraphrase,17,01,417003,417005,2026-11-04,Claude
+local representation of a word,concept,17,01,417003,417005,2026-11-04,Claude
+tokenization,concept,17,02,417001,317032 417002 324017 424006,2026-11-04,Claude
+stemming vs lemmatization,concept,17,02,417013,417014,2026-11-04,Claude
+PorterStemmer,code,17,02,417012,,2026-11-04,Claude
+should I lowercase everything before vectorizing,question,17,02,417011,417010,2026-11-04,Claude
+keep pairs of words together as one feature,paraphrase,17,02,417009,,2026-11-04,Claude
+what does idf do,question,17,03,417007,417008 317043 424010,2026-11-04,Claude
+CountVectorizer,code,17,03,417006,317034 417031 424009,2026-11-04,Claude
+measure how alike two documents are,paraphrase,17,03,417017,424013 324019 311042 418027 411016,2026-11-04,Claude
+bag of words,concept,17,03,417004,424009 417006 317034,2026-11-04,Claude
+which model should I try first for text classification,question,17,03,417019,,2026-11-04,Claude
+word2vec,concept,17,04,417022,417024 417021 317039 317038 317040 417023,2026-11-04,Claude
+king minus man plus woman,paraphrase,17,04,417024,,2026-11-04,Claude
+fit_transform on new data,code,17,04,417031,413007,2026-11-04,Claude
+why not train my own embeddings,question,17,04,317039,417022,2026-11-04,Claude
+static embeddings like BERT,confusion,17,04,417023,317040 417022,2026-11-04,Claude
+Hugging Face,concept,17,05,417029,317035,2026-11-04,Claude
+self-attention,concept,17,05,417027,424002,2026-11-04,Claude
+what does the decoder have that the encoder doesn't,question,17,05,417028,317042,2026-11-04,Claude
+where can I download a pretrained NLP model,paraphrase,17,05,417029,317035,2026-11-04,Claude
+the encoder's extra attention layer,confusion,17,05,417028,317042,2026-11-04,Claude
+zero-shot learning,concept,17,06,417030,317037,2026-11-04,Claude
+stopwords,concept,17,06,417015,317033 417016,2026-11-04,Claude
+classify text without any training data,paraphrase,17,06,417030,317037,2026-11-04,Claude
+few-shot classification of spam,confusion,17,06,317037,417030,2026-11-04,Claude
+bart-large-mnli,code,17,06,317037,,2026-11-04,Claude
+cosine similarity,concept,24,01,424013,324019 417017 411016 418027 311042,2026-11-04,Claude
+byte-pair encoding,concept,24,01,424006,324017,2026-11-04,Claude
+sparse vs dense vectors,concept,24,01,424012,,2026-11-04,Claude
+how do I get one vector for a whole sentence out of the token vectors,paraphrase,24,01,424011,,2026-11-04,Claude
+why does my search return a top hit even for nonsense input,question,24,01,424015,,2026-11-04,Claude
+context window,concept,24,02,424008,,2026-11-04,Claude
+chain = prompt | llm,code,24,02,324018,,2026-11-04,Claude
+price of a request to the model,paraphrase,24,02,424007,324026,2026-11-04,Claude
+how should I structure a prompt,question,24,02,324021,418016,2026-11-04,Claude
+examples inside the prompt are parametric knowledge,confusion,24,02,324025,,2026-11-04,Claude
+temperature,concept,24,03,424005,,2026-11-04,Claude
+RLHF,concept,24,03,424004,324024,2026-11-04,Claude
+sentence-transformers,code,24,03,324023,,2026-11-04,Claude
+why does the model make things up,paraphrase,24,03,324027,418017 318034,2026-11-04,Claude
+how does a base model become a chat assistant,question,24,03,424004,324024,2026-11-04,Claude
+how do I bake bread,off-course,,,,,2026-11-04,Claude
+what is a Kalman filter,off-course,,,,,2026-11-04,Claude
+how to train a dog,off-course,,,,,2026-11-04,Claude
+python snake habitat,off-course,,,,,2026-11-04,Claude
+which car model has the best resale value,off-course,,,,,2026-11-04,Claude
+the capital of Australia,off-course,,,,,2026-11-04,Claude
+Schrödinger equation,off-course,,,,,2026-11-04,Claude
+what is the offside rule in football,off-course,,,,,2026-11-04,Claude
+piano chords for beginners,off-course,,,,,2026-11-04,Claude
+what do mitochondria do,off-course,,,,,2026-11-04,Claude
+fine-tuning,concept,18,01,418020,318035 416018 316041,2026-11-04,Claude
+should I fine-tune or use RAG to teach the model my documents,question,18,01,318042,418019 418021,2026-11-04,Claude
+why does the model get simple arithmetic wrong,paraphrase,18,01,418018,,2026-11-04,Claude
+vector database,concept,18,01,,18:02 418024 418025,2026-11-04,Claude
+hallucination means the model refuses to answer,confusion,18,01,418017,318034 324027,2026-11-04,Claude
+retrieval-augmented generation,concept,18,02,418022,318037,2026-11-04,Claude
+the building blocks of a RAG system,paraphrase,18,02,418023,,2026-11-04,Claude
+how many documents does the retriever hand back for a question,question,18,02,418026,,2026-11-04,Claude
+what should the model say when the answer is not in the retrieved documents,question,18,02,418029,,2026-11-04,Claude
+semantic search means matching the exact keywords,confusion,18,02,418027,418028,2026-11-04,Claude
+AI agent,concept,18,03,418001,318031 418002,2026-11-04,Claude
+my chatbot is an agent,confusion,18,03,418002,318031 418001,2026-11-04,Claude
+why can't the language model just do everything itself,paraphrase,18,03,418006,418005,2026-11-04,Claude
+what to do when the agent picks the wrong tool,question,18,03,418013,,2026-11-04,Claude
+AutoGPT,code,18,03,418015,,2026-11-04,Claude
+model context protocol,concept,18,04,418007,318041 418008,2026-11-04,Claude
+RecursiveCharacterTextSplitter,code,18,04,318033,,2026-11-04,Claude
+FAISS,code,18,04,318036,,2026-11-04,Claude
+do I have to normalize the embeddings for cosine in FAISS,question,18,04,318040,,2026-11-04,Claude
+"how to lay out a prompt with the task, some background, the text itself and the answer format",paraphrase,18,04,418016,324021,2026-11-04,Claude
+ReAct,concept,18,05,418004,318039,2026-11-04,Claude
+actuators,concept,18,05,318032,418003,2026-11-04,Claude
+what can the LLM not do on its own inside an agent,question,18,05,418005,418006,2026-11-04,Claude
+"the agent's eyes, mind and hands",paraphrase,18,05,418003,,2026-11-04,Claude
+ReAct means the agent reacts to events,confusion,18,05,418004,318039,2026-11-04,Claude
+short-term memory,concept,18,06,418010,,2026-11-04,Claude
+BM25,concept,18,06,418028,,2026-11-04,Claude
+the bot forgets what I told it a minute ago,paraphrase,18,06,418009,418010 418012,2026-11-04,Claude
+when should I not build an agent,question,18,06,418014,,2026-11-04,Claude
+semantic memory is what the agent remembers from our chat,confusion,18,06,418011,,2026-11-04,Claude
