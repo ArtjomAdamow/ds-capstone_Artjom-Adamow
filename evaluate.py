@@ -769,8 +769,10 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
     app's vectoriser where it is another, and the card route on character n-grams, every one on T1's membership of
     the app's vectoriser (the membership in force, the requests' truth). Every row carries the self-set columns and
     its floors; with judged requests the hand columns over those of decks 17 and 24 (the transfer deck's apart) and
-    the paired difference of `hand_right` to its vectoriser's card route (the character n-grams' to S1's). Returns
-    the rows and every variant's answers to every request (the form's)."""
+    the paired difference of `hand_right` to its vectoriser's card route (the character n-grams' to S1's); the
+    transfer deck's judged requests get their share right, wrong and missed and their card@1 per variant printed
+    after the hand columns, never written. Returns the rows and every variant's answers to every request (the
+    form's)."""
     by_id = {card.id: card for card in cards}
     deck_name = {deck_id: name for name, deck_id in deck_ids.items()}
     requests = [request_of(row, by_id, deck_name, t1.topic_of) for row in request_rows]
@@ -828,7 +830,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
                 )
             rows.append(row)
     print(f"P1 on T1's membership of {app_family}: {len(requests)} requests, {len(counted)} judged of decks 17 and 24 "
-          f"({len(counted) - len(in_course)} off-course), {sum(request.transfer for request in requests)} of the transfer deck left out")
+          f"({len(counted) - len(in_course)} off-course), {sum(request.transfer for request in requests)} of the transfer deck printed apart")
     for row in rows:
         label = row["variant"]
         family = label.split(": ")[0]
@@ -852,6 +854,18 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
             outcome = dict(zip(counted, right_of[row["variant"]]))
             print(f"   | {row['variant']} | " + " | ".join(
                 f"{share_of(outcome[number] for number in counted if requests[number].kind == kind):.2f}" for kind in kinds) + " |")
+    transfer = [number for number, request in enumerate(requests) if request.judged and request.transfer]
+    if transfer:
+        transfer_with_card = [number for number in transfer if requests[number].card]
+        print(f"   the transfer deck, {len(transfer)} judged request{'s' if len(transfer) != 1 else ''} of deck "
+              f"{', '.join(PROMPT_TRANSFER_DECKS)}, read once after the choice and never written: | Variant | right | wrong | "
+              f"missed | card@1 ({len(transfer_with_card)}) |")
+        for row in rows:
+            given = answers[row["variant"]]
+            outcomes = [request_outcome(requests[number], given[number]) for number in transfer]
+            card_at1 = share_of(given[number].ranking[0].card in requests[number].cards for number in transfer_with_card)
+            print(f"   | {row['variant']} | " + " | ".join(f"{share_of(outcome[place] for outcome in outcomes):.2f}" for place in range(3))
+                  + f" | {f'{card_at1:.2f}' if transfer_with_card else '-'} |")
     return rows, answers
 
 

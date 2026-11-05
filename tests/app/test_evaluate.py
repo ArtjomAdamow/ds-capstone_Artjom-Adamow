@@ -788,6 +788,26 @@ class PromptPartTest(unittest.TestCase):
         self.assertIn("against TF-IDF: card", char_line)  # the character n-grams against S1's card route
         self.assertIn("hand_right by kind", output)
 
+    def test_the_transfer_decks_numbers_are_printed_apart_and_never_written(self):
+        self.results.mkdir()
+        self.files.prompt_requests.write_text(REQUESTS, encoding="utf-8")
+        with mock.patch.object(evaluate, "PROMPT_TRANSFER_DECKS", ("03",)):  # the null hypothesis request, with its card
+            output = self.run_prompt()
+        rows = read_csv(self.files.prompt)
+        self.assertTrue(all(row["judged_requests"] == "3" for row in rows))  # the transfer request out of the hand columns
+        self.assertFalse(any(column.startswith("transfer") for column in evaluate.PROMPT_COLUMNS))  # printed, never written
+        self.assertIn("1 of the transfer deck printed apart", output)
+        lines = [line.strip() for line in output.splitlines()]
+        start = next(number for number, line in enumerate(lines) if line.startswith("the transfer deck, 1 judged request of deck 03"))
+        self.assertIn("| Variant | right | wrong | missed | card@1 (1) |", lines[start])
+        table = lines[start + 1:start + 1 + len(rows)]
+        self.assertEqual([line.strip("|").split("|")[0].strip() for line in table], [row["variant"] for row in rows])
+        for line in table:
+            cells = [cell.strip() for cell in line.strip("|").split("|")][1:]
+            right, wrong, missed = (float(cell) for cell in cells[:3])
+            self.assertAlmostEqual(right + wrong + missed, 1.0, places=2)
+            self.assertIn(cells[3], ("0.00", "1.00"))  # one request with a card: its card first or not
+
 
 class RequestTest(unittest.TestCase):
     """A request read against the course and T1's membership, its outcome, and the form's marks merged."""
