@@ -13,8 +13,8 @@ without asking and prints the command that installs the viewer. `--mode full|sta
                 (cards.csv, decks.csv, topics.csv); nothing is stored; `--port` names its port
     full        sputnik's map with the models behind the Helper button (app.glue), on the course file
                 data/topics.json with the card images in data/images/; the state goes into data/state/: the
-                viewer's state file user_state.json, the derived course file helper_topics.json and the model
-                state model_state.json. The standalone page runs next to it as a process of its own on port 8051
+                viewer's state file user_state.json, the derived course file helper_topics.json, the model
+                state model_state.json and the episodes' log episodes.csv. The standalone page runs next to it as a process of its own on port 8051
                 (this file again with `--mode standalone --port 8051`, app.launch.start_standalone): the viewer's
                 top bar has the Models button, a link that opens the page in a new tab (where sputnik's top bar
                 takes links, since 0.4.0), and the page a Sputnik link back to the viewer; Ctrl+C stops both
@@ -53,8 +53,8 @@ DATA_DIR = ROOT / "data"
 COURSE_FILE = DATA_DIR / "topics.json"  # the course file, version 3: the full app's input
 TABLE_DIR = DATA_DIR / "course"  # the course table: the standalone page's input
 RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the standalone page's panels read them
-STATE_FILE = DATA_DIR / "state" / "user_state.json"  # the viewer's state file; the derived course file and the
-# model state go next to it (app.glue.composition)
+STATE_FILE = DATA_DIR / "state" / "user_state.json"  # the viewer's state file; the derived course file, the
+# model state and the episodes' log go next to it (app.glue.composition)
 CACHE_DIR = DATA_DIR / "cache"  # the embeddings' cache of S2 (app.models.embeddings), a derived file, no state
 RELOADER = True  # the full app restarts on code changes; the reloader's child fits the models and serves
 
