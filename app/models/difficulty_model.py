@@ -1,5 +1,5 @@
 """The difficulty model D1 (no Dash, no state, nothing of the viewer): the course's difficulty (easy, medium, hard) of
-the flattened quizzes that have none, learned from the quizzes that have one (docs/draft/helper/models/difficulty.md).
+the flattened quizzes that have none, learned from the quizzes that have one (docs/draft/models/difficulty.md).
 
     rated quizzes (stack 3) ───┐
                                ├→ features → logistic regression → score 0..2 ─┬→ cross-validation: deck shares → metrics ± sd
@@ -9,7 +9,7 @@ the flattened quizzes that have none, learned from the quizzes that have one (do
 
 * Features come from a card's own text, its answer options and the fitted similarity index only: text statistics
   (the chosen set), and as variants its centrality and neighbour scores, its TF-IDF row (the hand-labelled sample of
-  docs/draft/helper/models/difficulty.md found no gain in them) and the option statistics (`text+options`:
+  docs/draft/models/difficulty.md found no gain in them) and the option statistics (`text+options`:
   code and digits in the options, the spread of their lengths and the closest distractor's cosine
   on the index's vectoriser; never the number of options or of correct ones, which every rated quiz shares, nor a
   feedback length, which tells the rated quizzes from the unrated ones). Never the card order, the ids, the deck
@@ -87,7 +87,7 @@ def _words(text: Optional[str]) -> int:
 
 def text_statistics(card: Card) -> list[float]:
     """The card's text statistics (TEXT_FEATURES): word counts (log), code, digits and scenario words in the question,
-    and its commas. Longer, scenario-like questions are the harder ones (docs/draft/helper/models/difficulty.md)."""
+    and its commas. Longer, scenario-like questions are the harder ones (docs/draft/models/difficulty.md)."""
     question = card.question
     return [
         float(np.log1p(_words(question))),

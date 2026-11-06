@@ -7,8 +7,11 @@ of the measure columns (app/docs/columns.md).
   once; a missing file gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
   "decks 01 to 24", as evaluate.scope_note writes it), so the rows of an older course stay out. A run is the `run`
   column, the date for the rows written before it, and a level (S1, S2, C1, T1, D1, D2, P1: the model generations)
-  shows the newest run that holds its rows, so a later run of another part or without the encoder hides none. P1's
-  table marks the variant the app runs (`chosen`, the level's variant label): its file names no variant "chosen".
+  shows the newest run that holds its rows (`run`), so a later run of another part or without the encoder hides
+  none. `chosen` names the variant the app runs where the file's names do not say: S2's (the hybrid with MiniLM,
+  `APP_VECTORISER`), D2's (the criterion template on the large model, `NLI_MODEL`) and P1's (the level's variant
+  label); their tables mark the app's column next to the reference column, and the section's numbers
+  (standalone.headlines) read the same row.
 * A row's `scope` is the course ("all", or empty on older rows) or a deck ("deck 01"): the difficulty tables take
   the course's rows, and with a deck entered a second table shows the deck's rows of the same run (D1's variants'
   within-deck order on the hand labels; D2's next to D1's chosen row), as T1's deck rows do.
@@ -212,15 +215,21 @@ class Results:
             return NO_FOLDER
         return HINT.format(name=name, folder=self.folder)
 
-    def tables(self, level: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
-        """The tables of a level, from its newest run: S1 (next to B0), S2 (next to S1's chosen variant), C1 (its
-        three layouts), T1 (the course or the entered deck, the stacks, the margins, the slider's marks), D1 (next to the baselines and
-        the hand row) or D2 (next to D1's chosen row), the two with the entered deck's rows as a second table, P1 (its
-        variants); None without the file, empty without the level's rows."""
+    def run(self, level: str) -> Optional[list[dict]]:
+        """The rows of the level's newest run (the run its tables and its headline numbers show); None without the
+        file, empty without the level's rows."""
         rows = self.rows.get(LEVEL_FILES[level])
-        if rows is None:
+        return newest(rows, level) if rows is not None else None
+
+    def tables(self, level: str, deck_id: Optional[str] = None) -> Optional[list[Table]]:
+        """The tables of a level, from its newest run: S1 (next to B0), S2 (next to S1's chosen variant, the app's
+        variant marked), C1 (its three layouts), T1 (the course or the entered deck, the stacks, the margins, the
+        slider's marks), D1 (next to the baselines and the hand row) or D2 (next to D1's chosen row, the app's
+        variant marked), the two with the entered deck's rows as a second table, P1 (its variants, the app's
+        marked); None without the file, empty without the level's rows."""
+        run = self.run(level)
+        if run is None:
             return None
-        run = newest(rows, level)
         if not run:
             return []
         if level == "S1":
@@ -262,12 +271,12 @@ class Results:
 
     def _embeddings(self, run: list[dict]) -> Table:
         """S2's rows of the run (the encoders and the hybrids) next to S1's chosen variant, which every paired
-        difference is against."""
+        difference is against; the app's variant (`chosen`) marked next to the reference."""
         reference = [row for row in run if row.get("model") == "S1" and CHOSEN in (row.get("variant") or "")][:1]
         variants = [row for row in run if row.get("model") == "S2"]
         rows = reference + variants
         heads = [f"S1 {row.get('variant') or ''}" for row in reference] + [row.get("variant") or "" for row in variants]
-        chosen = [True] * len(reference) + [False] * len(variants)
+        chosen = [True] * len(reference) + [row.get("variant") == self.chosen.get("S2") for row in variants]
         return transpose("S2 next to S1's chosen variant", rows, heads, chosen, S1_MEASURES, self.by_ids)
 
     def _course(self, run: list[dict]) -> Table:
@@ -305,14 +314,19 @@ class Results:
 
     def _tags(self, run: list[dict]) -> Table:
         """D2's rows of the run (the templates, each by the deck shares and by the most likely class) next to D1's
-        chosen row, which every paired difference is against."""
+        chosen row, which every paired difference is against; the app's variant (`chosen`, by the deck shares)
+        marked next to the reference."""
         reference = [row for row in run if row.get("model") == "D1" and CHOSEN in (row.get("variant") or "")
                      and row.get("label_rule") == "deck shares" and course_row(row)][:1]
         variants = [row for row in run if row.get("model") == "D2" and course_row(row)]
         rows = reference + variants
         heads = [f"D1 {difficulty_head(row)}" for row in reference] + [difficulty_head(row) for row in variants]
-        chosen = [True] * len(reference) + [False] * len(variants)
+        chosen = [True] * len(reference) + [self.app_tags(row) for row in variants]
         return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES, self.by_ids)
+
+    def app_tags(self, row: Mapping[str, str]) -> bool:
+        """Whether a D2 row is the app's: its variant the app's template and model (`chosen`), by the deck shares."""
+        return row.get("variant") == self.chosen.get("D2") and row.get("label_rule") == "deck shares"
 
     def _prompt(self, run: list[dict]) -> Table:
         """P1's variants of the run (the route sets on each vectoriser, the character n-grams' card route), the
@@ -338,7 +352,7 @@ class Results:
             variants = [row for row in deck_rows if row.get("model") == "D2"]
             rows = reference + variants
             heads = [f"D1 {difficulty_head(row)}" for row in reference] + [difficulty_head(row) for row in variants]
-            chosen = [True] * len(reference) + [False] * len(variants)
+            chosen = [True] * len(reference) + [self.app_tags(row) for row in variants]
             title = f"D2 within deck {deck_id} next to D1's chosen row"
         if not rows:
             return []

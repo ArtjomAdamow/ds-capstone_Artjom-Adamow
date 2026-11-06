@@ -2,68 +2,66 @@
 
 Page fits the course model, D1 and P1 on the course table once, as the viewer's serving process does, S1's TF-IDF
 index next to it where the app runs S2's encoder, and D2's report from the tags the launcher's cache holds; it reads
-the results files of the offline evaluation, and answers what the three views and the five model panels show;
-everything shown is the models', nothing is stored.
+the results files of the offline evaluation, and answers what the three views, the map's layers and the right
+column's regions show; everything shown is the models', nothing is stored.
 
 The views: the decks on the sphere; a deck's topics (an entered deck) at random positions, since the model places
-no topic yet, with the deck's tree of its topics in the dendrogram's window (topic_tree: the clustering of the topic
+no topic yet, with the deck's tree of its topics in the figure slot (topic_tree: the clustering of the topic
 vectors of the membership in force, the full tree, no line on the map); a topic's cards (an entered topic) on the
 surface of its sphere.
 
-The panels (one per model letter, S, C, T, D and P; one expanded at a time, in the `view` store) hold a row per model
-generation (layout.GENERATIONS: S1 and S2, C1, T1, D1 and D2, P1), the newest expanded when the panel opens, one at a
-time (the `level` key of the store, None for the newest). The expanded generation decides what the map shows:
+The map by layers: the check boxes inside the map (the `layers` key of the `view` store, the checked model
+letters, none at load) say which models draw, each on a channel of its own, and the models' own dependencies are
+kept (Page.layer_states: a layer is on, on its fallback, or not functioning, and its check box says which):
 
-* every panel collapsed, S or D expanded: the scripted topics' membership, random positions on the sphere
-  (evaluation.random_directions over the view's sorted ids with a fixed seed, the same for every panel), no
-  connections, centroid or axes;
-* S1 or S2: the generation's own index (S2's the app's; S1's TF-IDF fitted here, or the app's without the encoder):
-  a deck's or a topic's dot coloured by the share of its cards' neighbours in the same deck or topic, a card by the
-  share of its neighbours in the entered topic (an open grey circle without any), and in the cards view the neighbour
-  pairs inside the topic as lines along the surface, the selected card's bright (Page.s_markers,
-  Page.neighbour_pairs); the selected card's neighbours with their scores and where they lie in the panel, their
-  count by place in window A; S2 without the encoder shows nothing;
-* D1 or D2: the cards coloured as the viewer does after Helper (a rated quiz by its level, a quiz the generation
-  predicted in the predicted colour as a cross with its level on the hover, a flashcard grey; Page.d_markers), and
-  window B under the dendrogram's window with the generation's confusion matrix and the shares of the levels of the
-  view's part (Page.graph_window); D2 without cached tags says so;
-* C: T1's membership at C1's positions (the decks', the cards' directions), the connections below the preset, the
-  centroid and the axes;
-* T: the same positions, the centroid and the axes, no connections, and T1's markers: a card's margin on a teal
-  scale, a cross below the threshold, a violet diamond for a card T1 moved in from another scripted topic, an open
-  pink diamond for a card scripted here that T1 moved elsewhere, placed at the normalised mean direction of its most
-  similar cards among the topic's members; an emptied topic as an open circle, a topic's dot grown with its share of
-  cards below the threshold; and window B with the margins of the view's cards;
-* P: T1's membership at C1's positions, the membership P1 answers in, grey, with the centroid and the axes and no
-  connections; a request in the panel's box (Page.find) runs P1 and navigates as the viewer does: into the target's
-  deck and topic, the card selected where P1 selects one; "no match" moves nothing. The answer shows by ids (the
-  topics by label), every route's score, the decision line and the time; each of the three nearest is a click away
-  (Page.go_to). The request and its time stay in the store (`prompt`) until the next.
+* S draws the neighbour pairs inside the entered topic as lines along the surface, the selected card's bright, from
+  the generation open in its tab, else the app's (S2; S1 without the encoder); it needs nothing;
+* C draws the positions (the decks', a topic's cards') and the connections below the preset, and a deck's centroid;
+  it uses S's vectors and T1's topics: with S off it does not function, with T off it shows its fallback, the
+  scripted topics laid out and clustered (CourseModel.layout_of, fitted on first use and kept);
+* T draws the membership (T1 keeps the scripted topic ids), the fill by margin on a teal scale, a cross below the
+  threshold, a violet diamond for a card T1 moved in from another scripted topic, an open pink diamond for a card
+  scripted here that T1 moved elsewhere, placed at the normalised mean direction of its most similar cards among the
+  topic's members, an emptied topic as an open circle, a topic's dot grown with its share of cards below the
+  threshold; with S off it does not function;
+* D draws the ring colours: a rated quiz's by its level, a predicted quiz's amber, its level on the hover (and the
+  other generation's where they disagree, with a ring behind), from the generation open in its tab, else D1; it
+  needs nothing (D1 on its text statistics, D2 on its tags; D2 without cached tags says so);
+* P draws P1's answer as the highlighted target; it uses S's index and T1's membership: with S off it does not
+  function and the request box is disabled, with T off it shows its fallback, P1 over the scripted topics (a
+  PromptModel on their membership, fitted on first use and kept).
 
-The legends of S, T and D are the map's (layout.map_figure), not the panels'.
+The bare channels: without C the positions are random (evaluation.random_directions over the view's sorted ids
+with a fixed seed, the same in every state); without T in force the membership is the scripted topics, the fill
+grey; the topics view stays at random in every state. Nothing checked, the bare course.
 
-A change of membership keeps the view (T1 keeps the scripted topic ids); a selected card the new membership does
-not hold is unselected. The dendrogram's window shows the tree of the view's membership with the preset's line in
-every panel state (a scripted topic's by clustering.merge_links on its cards).
+The right column: the tab bar (the model letters S, C, T, D and P; one open at a time, the `panel` key of the
+store, a second click closes it), the open model's generations as tabs (layout.GENERATIONS; the newest open when
+the tab opens, the `level` key, None for the newest; the "app" mark on the one the app runs, Page.app_levels), the
+section (Page.section: the headline, the generation's two numbers with their contrast, sentence, verdict and
+explanation from the results rows, standalone.headlines; the chosen variant in plain words; with no tab open one
+line on the five models; on top for the live demo T's line of the view next to the course and P's request box with
+its answer: the decision line and the three nearest by label, each a click away), the selected dot's tag strip
+(Page.tag_strip: its title and tags; hidden with nothing selected) and the figure slot (Page.figure_slot: one
+figure by the open tab, or Details, Page.details, in its place: the open generation's description, its live
+measures, the tables of its newest run whose rows open their description on a click, one at a time, the `measure`
+key, and what moved in).
 
-An expanded generation's section: its live measures of the view (S1's and S2's vectoriser, vocabulary, minimum score
-and coverage; C1's own measures, Page.measures: the layouts' neighbour measures, the connections the preset keeps
-and T1's margins; T1's agreement with the scripted topics, the moved cards and the margins of the view; D1's and
-D2's scores) and the tables of its newest run (standalone.results), whose rows open their description on a click, one
-at a time (the `measure` key of the `view` store: the row's key, or None).
-
-The panels, the map's hover and the line under the top bar (Page.where) name the dots and the views by id
-(Page.scope): no learning material, no card's text, no deck's description and no deck's name. A topic's name, the
-one name that is no id, shows nowhere either: the map's hover and the line under the top bar give its label instead
-(Page.topic_label: its topic id, then a hash of its name, made at runtime and stored nowhere), and a results cell
+The breadcrumb (Page.where), the tag strip and the map's hover name the dots and the views by id: no learning
+material, no card's text, no deck's description and no deck's name. A topic's name, the one name that is no id,
+shows nowhere either: the hover gives its label instead (Page.topic_label: its topic id, then a hash of its name,
+made at runtime and stored nowhere), the breadcrumb and the dendrogram's leaves its id alone, and a results cell
 that names a deck or a topic shows the id or the label (results.Results.by_ids).
 
-The callback (register_callback) keeps the view in the `view` store: a click on a dot selects it, Open or a click on
-a selected deck's or topic's panel enters it, Back goes up a level with the dot it came from selected (in the decks
-view it unselects); a panel's row expands it and collapses any other, its close box collapses it; a generation's row
-expands that generation; a results row's click opens its description or closes the open one (both through the hidden
-input `row-click`, a JSON of the generation or the row's key and a sequence number, or of P1's target); Go or Enter in
-the P panel's box sends the request. No keys, groups, editing, progress, quiz or image window.
+The callback (register_callback) keeps the view in the `view` store: a click on a dot selects it, Open or the tag
+strip's Open enters a selected deck or topic, Back goes up a level with the dot it came from selected (in the decks
+view it unselects); a check box's change sets the layers; a tab opens its model or closes it; the Details button
+opens Details in the figure slot's place or closes it; a generation's tab opens that generation; a results row's
+click opens its description or closes the open one (both through the hidden input `row-click`, a JSON of the
+generation or the row's key and a sequence number, or of P1's target); Go or Enter in P's box sends the request
+(Page.find: P1's answer, the request, its time and its target kept in the store's `prompt`, the view navigated
+into the target where P1 navigates; "no match" moves nothing). A tab or generation change closes Details and its
+open row. No keys, groups, editing, confidence, quiz or image window.
 """
 
 import hashlib
@@ -71,6 +69,7 @@ import json
 import math
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable, Mapping, Optional, Sequence
 
 import numpy as np
@@ -79,18 +78,20 @@ from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
 from ..course_table import CourseTable
-from ..figures import dendrogram_figure, number
-from ..models import clustering, embeddings, similar
+from ..figures import ELSEWHERE, HERE, THIS_DECK, confusion_figure, dendrogram_figure, neighbours_figure, number
+from ..models import clustering, embeddings, similar, zero_shot
 from ..models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel, Point, TopicLayout
 from ..models.difficulty_model import DifficultyReport, fit_difficulty, judge_tags
 from ..models.evaluation import random_directions
 from ..models.layout import as_dense, fibonacci_sphere
 from ..models.prompt_model import CARD, CENTROID, DEFAULT_ROUTES, TEXT, PromptModel, variant_label
+from .headlines import chosen_label, headlines, shown
 from .layout import (
-    CARDS_VIEW, CROSS_SYMBOL, DECKS_VIEW, GENERATIONS, GREY, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL,
-    NO_NEIGHBOUR_SYMBOL, PANEL_LETTERS, PREDICTED, TOPICS_NOTE, TOPICS_VIEW, box_class, card_class, card_panel, class_style,
-    MARGINS_NOTE, deck_panel, generation_rows, level_section, map_figure, margin_color, margins_window, metrics_panel,
-    metrics_window, model_readout, overview_panel, page_layout, PROMPT_HINT, prompt_answer, share_color, topic_panel, window_class,
+    CARDS_VIEW, CROSS_SYMBOL, CUT_LABELS, DECKS_VIEW, GENERATIONS, GREY, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR,
+    MOVED_OUT_SYMBOL, NO_CARDS, NO_LINKS, OVERVIEW_HINT, PANEL_LETTERS, PREDICTED, PREDICTED_COLOR, PROMPT_HINT, PROMPT_OFF, SELECT_A_CARD,
+    STACK_NAMES, TOPICS_NOTE, TOPICS_VIEW, card_class, details_class, empty_slot, graph, layer_options, level_section, level_tabs, live_line,
+    map_figure, margin_color, margin_histogram, metrics_panel, model_readout, no_tab_line, page_layout, prompt_answer, prompt_class,
+    section_head, tab_class, tag_class, tag_strip_body, topic_counts_of,
 )
 from .results import LEVEL_FILES, Results, course_note, read_glossary
 
@@ -100,17 +101,20 @@ TITLE = "Guided learning: the models"
 DECK_PART = 5  # the decks view's preset: parts of at most five decks (as the viewer's Helper presets them)
 CARD_PART = 4  # a topic's preset: parts of at most four cards
 TOPIC_HASH_BYTES = 3  # a topic label's hash: six hex digits
-RANDOM_SEED = 42  # the random positions of the scripted topics: one draw per view, the same for every panel
+RANDOM_SEED = 42  # the random positions of the scripted topics: one draw per view, the same in every state
 MARGIN_PERCENTILE = 95  # the top of the teal scale: the course's 95th percentile of the margins
 SIMILAR_MEMBERS = 5  # a moved-out card sits at the mean direction of this many most similar members of its topic
-# The panels whose map shows T1's membership at C1's positions: P's too, the membership P1's answer lands in
-MODEL_PANELS = ("C", "T", "P")
 HOME = {"view": DECKS_VIEW, "deck": None, "topic": None, "selected": None, "panel": None, "level": None, "measure": None,
-        "prompt": None}
-ENTER_TRIGGERS = ("open", "dot-panel")
+        "prompt": None, "details": False, "layers": []}
+ENTER_TRIGGERS = ("open", "tag-open")
 PROMPT_TRIGGERS = ("prompt-go", "prompt-text")  # Go, and Enter in the request box (its n_submit)
-ROW_INPUT = "row-click"  # the hidden input a generation's or a results row's click sets (assets/panel_rows.js)
+ROW_INPUT = "row-click"  # the hidden input a generation's tab, a results row's or a target's click sets (assets/panel_rows.js)
+LAYERS_INPUT = "layers"  # the check boxes inside the map
+DETAILS_TRIGGER = "details-toggle"
 DECK_TABLE_LEVELS = ("T1", "D1", "D2")  # the generations with a table of the entered deck's rows
+# A layer's state (Page.layer_states) and the positions' channel (Page.positions_of)
+ON, FALLBACK, OFF = "on", "fallback", "off"
+MODEL, SCRIPTED, RANDOM = "model", "scripted", "random"
 Key = tuple[str, str]  # (deck id, topic id)
 NO_ENCODER = (
     "The app runs on TF-IDF here: S2's encoder needs sentence-transformers (the embeddings group) and its model, so S2 "
@@ -131,11 +135,7 @@ MEAN_OVERLAP = (
 )
 MEAN_TRUSTWORTHINESS = "The mean over the topics of more than 2k cards, where scikit-learn defines it."
 BETWEEN = "The cards whose topic T1 chose by a margin below {margin} (the best centroid's cosine minus the second best's)."
-MAP_S = (
-    "The map shows its neighbours on the scripted topics at random positions: a dot coloured by the share of its cards' "
-    "neighbours in its own deck or topic (a card: in the entered topic), the neighbour pairs inside the entered topic as "
-    "lines, the selected card's bright."
-)
+MAP_S = "On the map S's layer draws the neighbour pairs inside the entered topic as lines, the selected card's bright."
 DESCRIPTIONS = {
     "S1": "One TF-IDF over the course's card texts, unit rows, the cosine as the similarity: every card's five nearest "
           "cards above its own minimum score; the app's vectors until S2 took them over. " + MAP_S,
@@ -143,22 +143,24 @@ DESCRIPTIONS = {
           "side by side, each at its own minimum), unit rows, the cosine as the similarity: every card's five nearest "
           "cards above the index's own minimum score; the vectors the app and every other model read. " + MAP_S,
     "C1": "The course model: the layout step on the app's vectors places the decks and, per topic, the cards on the surface "
-          "of the topic's sphere; the clustering gives the connections and the cut-off preset. It builds on T1's topics.",
+          "of the topic's sphere; the clustering gives the connections and the cut-off preset. It builds on T1's topics; "
+          "on the map C's layer draws the positions and the connections.",
     "T1": "The topic model: the nearest of the deck's scripted topic centroids by cosine, leave-one-out, on the app's "
-          "vectors; the scripted topics are its input, not the truth. The map shows its membership at C1's positions.",
+          "vectors; the scripted topics are its input, not the truth. On the map T's layer draws its membership.",
     "D1": "The difficulty model the app runs: logistic regression on the question's statistics, labelled by the deck "
-          "shares, predicts the level of the unrated quizzes; it reads neither C1 nor T1, so the map shows the scripted "
-          "topics.",
+          "shares, predicts the level of the unrated quizzes; it reads neither C1 nor T1. On the map D's layer draws the "
+          "levels as rings.",
     "P1": "The navigation prompt: a request in the learner's words is scored against T1's topics by three routes on the "
           "app's vectors (the nearest card, the topic's centroid, its headings), each at its floor from the cards' own "
           "questions; the first topic is entered where the card route clears its floor there, its nearest card "
-          "selected with it, else no match. No language model. The map shows T1's membership at C1's positions, where the answer lands.",
+          "selected with it, else no match. No language model. On the map P's layer marks the target.",
     "D2": "Zero-shot tags: an NLI model (the large ModernBERT) reads each quiz with its resolution against "
           "the hand criterion's three demands (the criterion template), nothing fitted, on D1's frame: the expected level "
           "is cut by the deck shares. Within noise of D1's order on the hand labels and below it, so a judge of the "
-          "evaluation and D1 stays the app's. The page reads the tags from the launcher's cache; the map and window B "
-          "show its levels, a ring where it disagrees with D1.",
+          "evaluation and D1 stays the app's. The page reads the tags from the launcher's cache; D's layer draws its "
+          "levels as rings, a ring behind a quiz where it disagrees with D1.",
 }
+ENCODER_SHORT = {embeddings.MINILM: "MiniLM", embeddings.MPNET: "mpnet"}  # as evaluate.py names S2's rows
 
 
 def merges_of(vectors) -> np.ndarray:
@@ -178,8 +180,27 @@ def _mean(values: list[float]) -> str:
     return f"{number(sum(values) / len(values))} ({len(values)} topic{'' if len(values) == 1 else 's'})"
 
 
+def s2_label(name: str = embeddings.APP_VECTORISER) -> Optional[str]:
+    """S2's variant label in results.csv of the vectoriser the app runs (APP_VECTORISER), as evaluate.py names its
+    rows: "MiniLM", "hybrid: chosen + MiniLM"; None for TF-IDF."""
+    if name == embeddings.TFIDF:
+        return None
+    encoder = name.removeprefix("hybrid-")
+    short = ENCODER_SHORT.get(embeddings.ENCODERS.get(encoder, ""), encoder)
+    return f"hybrid: chosen + {short}" if name.startswith("hybrid-") else short
+
+
+def d2_label(model_name: str = zero_shot.NLI_MODEL) -> str:
+    """D2's variant label in difficulty.csv of the app's D2: the criterion template on the model the app reads
+    (NLI_MODEL), as evaluate.py names its rows ("criterion, large")."""
+    return f"{zero_shot.CRITERION.name}, {zero_shot.size_of(model_name)}"
+
+
 class Page:
-    """The models fitted on the course table, the results files, and what the views and the panels show of them."""
+    """The models fitted on the course table, the results files, and what the views, the layers and the regions
+    show of them."""
+
+    ON, FALLBACK, OFF = ON, FALLBACK, OFF
 
     def __init__(
         self, table: CourseTable, model: Optional[CourseModel] = None, difficulty: Optional[DifficultyReport] = None,
@@ -201,6 +222,8 @@ class Page:
         self.indexes: dict[str, Optional[similar.SimilarityIndex]] = {
             "S1": similar.SimilarityIndex.fit(table.cards, min_score=None) if encoded else index, "S2": index if encoded else None,
         }
+        # The generation the app runs per model, the "app" mark: S1 where the page runs on TF-IDF
+        self.app_levels = {"S": "S2" if encoded else "S1", "C": "C1", "T": "T1", "D": "D1", "P": "P1"}
         self.topic_model = self.model.topic_model
         self.card_by_id = {card.id: card for card in table.cards}
         self.deck_by_id = {deck.deck_id: deck for deck in table.decks}
@@ -211,7 +234,7 @@ class Page:
             self._deck_cards.setdefault(self._deck_of_card[card.id], []).append(card.id)
         self.deck_rank = clustering.preset_rank(self.model.deck_links, DECK_PART)
         self.between = self.model.hidden  # the cards T1 placed by a margin below its threshold
-        # The scripted topics as layouts without positions: the membership of the map without the model
+        # The scripted topics as layouts without positions: the membership of the map without T
         self.scripted: dict[Key, TopicLayout] = {}
         self.scripted_by_deck: dict[str, list[TopicLayout]] = {}
         for seed in self.topic_model.seeds:
@@ -223,10 +246,13 @@ class Page:
         self._scripted_links: dict[Key, list[tuple[str, str]]] = {}
         margins = list(self.topic_model.margin_of.values())
         self.margin_scale = float(np.percentile(margins, MARGIN_PERCENTILE)) if margins else 1.0
-        # P1 on the app's index and T1, as the serving process fits it
+        # P1 on the app's index and T1, as the serving process fits it; its fallback on the scripted topics on first use
         self.prompt = PromptModel(self.model.index, self.topic_model, table.cards)
-        self.results = Results(results_dir, course_note(table.deck_ids), self.name_ids(),
-                               chosen={"P1": variant_label(self.model.index.vectoriser)})
+        self._scripted_prompt: Optional[PromptModel] = None
+        chosen = {"P1": variant_label(self.model.index.vectoriser), "D2": d2_label()}
+        if s2_label() is not None:
+            chosen["S2"] = s2_label()
+        self.results = Results(results_dir, course_note(table.deck_ids), self.name_ids(), chosen=chosen)
         self.glossary = read_glossary()
 
     def name_ids(self) -> dict[str, str]:
@@ -237,29 +263,72 @@ class Page:
                 names.setdefault(seed.name, self.label_of(seed.topic_id, seed.name))
         return names
 
-    # --- the membership and the positions per panel ----------------------------------------------------------
+    # --- the layers --------------------------------------------------------------------------------------------
 
     @staticmethod
-    def uses_model(state: dict) -> bool:
-        """Whether the map shows T1's membership at C1's positions (C or T expanded)."""
-        return state.get("panel") in MODEL_PANELS
+    def layer_states(layers: Optional[Iterable[str]]) -> dict[str, str]:
+        """Every checked layer's state from the checked set alone: on, on its fallback, or not functioning (ON,
+        FALLBACK, OFF): S and D need nothing; T needs S; C and P need S, and show their fallback without T."""
+        checked = set(layers or ())
+        states: dict[str, str] = {}
+        if "S" in checked:
+            states["S"] = ON
+        if "D" in checked:
+            states["D"] = ON
+        if "T" in checked:
+            states["T"] = ON if "S" in checked else OFF
+        for letter in ("C", "P"):
+            if letter in checked:
+                states[letter] = OFF if "S" not in checked else (ON if states.get("T") == ON else FALLBACK)
+        return states
+
+    def in_force(self, state: dict, letter: str) -> Optional[str]:
+        """The layer's state under the view's checked set; None unchecked."""
+        return self.layer_states(state.get("layers")).get(letter)
+
+    def uses_model(self, state: dict) -> bool:
+        """Whether the membership in force is T1's (T's layer on)."""
+        return self.in_force(state, "T") == ON
+
+    def positions_of(self, state: dict) -> str:
+        """The positions' channel: the model's with C on (MODEL), the scripted topics laid out with C on its
+        fallback (SCRIPTED), random otherwise (RANDOM)."""
+        return {ON: MODEL, FALLBACK: SCRIPTED}.get(self.in_force(state, "C"), RANDOM)
 
     @staticmethod
     def level_of(state: dict) -> Optional[str]:
-        """The expanded generation: the state's, or the newest of the expanded panel's; None with every panel
-        collapsed."""
+        """The open generation: the state's, or the newest of the open tab's; None with no tab open."""
         generations = GENERATIONS.get(state.get("panel"), ())
         if not generations:
             return None
         return state.get("level") if state.get("level") in generations else generations[-1]
 
+    def layer_level(self, state: dict, letter: str) -> str:
+        """The generation a layer draws: the one open in its tab, else the app's (S2, D1; S1 without the encoder)."""
+        return self.level_of(state) if state.get("panel") == letter else self.app_levels[letter]
+
     def similarity_of(self, state: dict) -> Optional[similar.SimilarityIndex]:
-        """The expanded S generation's index; None without S expanded or for S2 without the encoder."""
-        return self.indexes.get(self.level_of(state)) if state.get("panel") == "S" else None
+        """S's index: the generation's open in S's tab, else the app's; S2 without the encoder falls back on S1's,
+        the app's index."""
+        return self.indexes.get(self.layer_level(state, "S")) or self.indexes["S1"]
 
     def difficulty_of(self, state: dict) -> Optional[DifficultyReport]:
-        """The expanded D generation's report; None without D expanded or for D2 without cached tags."""
-        return self.reports.get(self.level_of(state)) if state.get("panel") == "D" else None
+        """D's report: the generation's open in D's tab, else D1's; None for D2 without cached tags."""
+        return self.reports.get(self.layer_level(state, "D"))
+
+    def prompt_of(self, state: dict) -> Optional[PromptModel]:
+        """P's model: P1 on T1's membership, or on the scripted topics with P's layer on its fallback (fitted on
+        first use and kept); None with P's layer not functioning (S off)."""
+        in_force = self.in_force(state, "P")
+        if in_force == OFF:
+            return None
+        if in_force == FALLBACK:
+            if self._scripted_prompt is None:
+                members = {seed.key: [card_id for card_id in seed.card_ids if card_id in self._row_of] for seed in self.topic_model.seeds}
+                stand_in = SimpleNamespace(seeds=self.topic_model.seeds, members=members)
+                self._scripted_prompt = PromptModel(self.model.index, stand_in, self.table.cards)
+            return self._scripted_prompt
+        return self.prompt
 
     def other_report(self, report: DifficultyReport) -> Optional[DifficultyReport]:
         """The other D generation's report (D2's next to D1's and the reverse); None without it."""
@@ -276,8 +345,10 @@ class Page:
             if card_id in report.predictions and card_id in other.predictions and other.predictions[card_id] != report.predictions[card_id]
         }
 
+    # --- the membership and the positions ----------------------------------------------------------------------
+
     def topics(self, deck_id: Optional[str], state: Optional[dict] = None) -> list[TopicLayout]:
-        """The deck's topics in file order: the model's, or the scripted ones without the model."""
+        """The deck's topics in file order: the model's, or the scripted ones without T in force."""
         if not deck_id:
             return []
         if state is None or self.uses_model(state):
@@ -289,7 +360,7 @@ class Page:
         return self.model.topics.get((deck_id, topic_id))
 
     def entered(self, state: dict) -> Optional[TopicLayout]:
-        """The entered topic under the state's membership."""
+        """The entered topic under the membership in force."""
         key = (state.get("deck"), state.get("topic"))
         return (self.model.topics if self.uses_model(state) else self.scripted).get(key)
 
@@ -320,14 +391,15 @@ class Page:
     @staticmethod
     def random_points(ids, seed: int = RANDOM_SEED) -> dict[str, Point]:
         """The ids at random on the sphere: the evaluation's draw over the sorted ids, so the same ids get the same
-        points whatever panel is expanded."""
+        points whatever layers are checked."""
         ordered = sorted(ids)
         return {dot: tuple(float(value) for value in point) for dot, point in zip(ordered, random_directions(len(ordered), seed))}
 
     def deck_points(self, state: Optional[dict] = None) -> dict[str, Point]:
-        """The decks of the table the model placed, in deck id order: at the model's positions, or at random."""
+        """The decks of the table the model placed, in deck id order: at the model's positions with C drawing (on
+        or on its fallback: the decks' positions read no topic), or at random."""
         ids = [deck.deck_id for deck in self.table.decks if deck.deck_id in self.model.deck_points]
-        if state is None or self.uses_model(state):
+        if state is None or self.positions_of(state) != RANDOM:
             return {deck_id: self.model.deck_points[deck_id] for deck_id in ids}
         return self.random_points(ids)
 
@@ -335,15 +407,22 @@ class Page:
         """The deck's topics at random on the sphere: the model has no topic positions yet."""
         return self.random_points([self.topic_dot(topic) for topic in self.topics(deck_id, state)])
 
+    def scripted_layout(self, topic: TopicLayout) -> TopicLayout:
+        """C's fallback: the scripted topic laid out and clustered on the app's vectors (CourseModel.layout_of,
+        kept after the first call)."""
+        return self.model.layout_of(topic.deck_id, topic.topic_id, topic.ids, topic.name)
+
     def card_points(self, topic: TopicLayout, state: Optional[dict] = None) -> dict[str, Point]:
-        """The topic's cards: at the model's directions (a card without one, in a topic of a single card, at an even
-        spread; with T the moved-out cards too, at the mean direction of their most similar members), or at random
-        without the model."""
-        if state is not None and not self.uses_model(state):
+        """The topic's cards: at the model's directions with C on (a card without one, in a topic of a single card,
+        at an even spread; with T on the moved-out cards too, at the mean direction of their most similar members),
+        at the scripted topic's layout with C on its fallback, or at random."""
+        positions = MODEL if state is None else self.positions_of(state)
+        if positions == RANDOM:
             return self.random_points(topic.ids)
-        points = {card_id: topic.positions[card_id] for card_id in topic.ids if card_id in topic.positions}
+        laid_out = topic.positions if positions == MODEL else self.scripted_layout(topic).positions
+        points = {card_id: laid_out[card_id] for card_id in topic.ids if card_id in laid_out}
         missing = [card_id for card_id in topic.ids if card_id not in points]
-        outs = self.moved_out(topic) if state is not None and state.get("panel") == "T" else []
+        outs = self.moved_out(topic) if state is not None and self.uses_model(state) else []
         for card_id in outs:
             point = self._mean_direction(card_id, points)
             if point is None:
@@ -355,8 +434,8 @@ class Page:
         return {card_id: points[card_id] for card_id in list(topic.ids) + outs}
 
     def _mean_direction(self, card_id: str, points: dict[str, Point]) -> Optional[Point]:
-        """The normalised mean of the points of the card's SIMILAR_MEMBERS most similar cards among `points` (S1's
-        cosine); None without a placed member or with a zero mean."""
+        """The normalised mean of the points of the card's SIMILAR_MEMBERS most similar cards among `points` (the
+        app's cosine); None without a placed member or with a zero mean."""
         members = list(points)
         if not members or card_id not in self._row_of:
             return None
@@ -410,65 +489,28 @@ class Page:
             labels[card_id] = f"{card_id} · margin {margin:.3f}" if not math.isnan(margin) else card_id
         return colors, symbols, labels
 
-    def t1_rows(self, card_id: str, topic: TopicLayout) -> list[tuple[str, str]]:
-        """A selected card's rows with T: its margin, its runner-up topic by label, and for a moved card the topic
-        it came from or went to."""
+    def t1_tags(self, card_id: str, topic: TopicLayout) -> list[str]:
+        """A selected card's tags with T: where it fits and by what margin with its runner-up ("fits 03 by 0.12 ·
+        runner-up 05"), and for a moved card the topic it came from or went to, by id."""
         margin = self.topic_model.margin_of.get(card_id)
-        rows = [("margin", number(margin) if margin is not None else "–")]
         second = self.topic_model.second_of.get(card_id, "")
-        rows.append(("runner-up topic", self.label_in_deck(topic.deck_id, second) if second else "–"))
+        fits = f"fits {self.topic_model.topic_of.get(card_id, topic.topic_id)}"
+        if margin is not None:
+            fits += f" by {margin:.2f}"
+        if second:
+            fits += f" · runner-up {second}"
+        tags = [fits]
         if card_id in self.moved_out(topic):
-            rows.append(("T1's topic", self.label_in_deck(topic.deck_id, self.topic_model.topic_of.get(card_id, ""))))
+            tags.append(f"T1's topic {self.topic_model.topic_of.get(card_id, '–')}")
         elif card_id in self.moved_in(topic):
-            rows.append(("scripted topic", self.label_in_deck(topic.deck_id, self.topic_model.scripted_of.get(card_id, ""))))
-        return rows
+            tags.append(f"scripted into {self.topic_model.scripted_of.get(card_id, '–')}")
+        return tags
 
-    # --- S's markers and lines --------------------------------------------------------------------------------
-
-    @staticmethod
-    def neighbour_share(index: similar.SimilarityIndex, ids, part) -> tuple[int, int]:
-        """(how many of the cards' neighbours lie in `part`, all their neighbours) under the index."""
-        inside = total = 0
-        for card_id in ids:
-            for other, _score in index.neighbours.get(card_id, []):
-                total += 1
-                inside += other in part
-        return inside, total
-
-    def s_markers(self, state: dict, points: dict[str, Point]) -> Optional[tuple[dict[str, str], dict[str, str], dict[str, str]]]:
-        """With S1 or S2: every drawn dot's colour (its share of neighbours in its own deck or topic, a card's in the
-        entered topic, on the blue ramp; grey without a neighbour), symbol (an open circle without a neighbour) and
-        hover (its id or label and the count); None for S2 without the encoder."""
-        index = self.similarity_of(state)
-        if index is None:
-            return None
-        view = state["view"]
-        if view == DECKS_VIEW:
-            groups = {deck_id: (deck_id, self._deck_cards.get(deck_id, []), None) for deck_id in points}
-            where = "deck"
-        elif view == TOPICS_VIEW:
-            groups = {self.topic_dot(topic): (self.topic_label(topic), list(topic.ids), None) for topic in self.topics(state["deck"], state)}
-            where = "topic"
-        else:
-            topic = self.entered(state)
-            part = set(topic.ids) if topic is not None else set()
-            groups = {card_id: (card_id, [card_id], part) for card_id in points}
-            where = "topic"
-        colors: dict[str, str] = {}
-        symbols: dict[str, str] = {}
-        labels: dict[str, str] = {}
-        for dot in points:
-            name, ids, part = groups.get(dot, (dot, [], None))
-            inside, total = self.neighbour_share(index, ids, set(ids) if part is None else part)
-            if total:
-                colors[dot], symbols[dot] = share_color(inside / total), "circle"
-                labels[dot] = f"{name} · {inside} of {total} neighbours in this {where}"
-            else:
-                colors[dot], symbols[dot], labels[dot] = GREY, NO_NEIGHBOUR_SYMBOL, f"{name} · no neighbour"
-        return colors, symbols, labels
+    # --- S's lines and neighbours ---------------------------------------------------------------------------
 
     def neighbour_pairs(self, points: dict[str, Point], state: dict) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-        """With S1 or S2, the neighbour pairs among the drawn cards, each once: (the others, the selected card's)."""
+        """With S, the neighbour pairs among the drawn cards under S's index, each once: (the others, the selected
+        card's)."""
         index = self.similarity_of(state)
         if index is None:
             return [], []
@@ -485,51 +527,52 @@ class Page:
         return pairs, own
 
     def neighbours_of(self, card_id: str, state: dict) -> list[tuple[str, float, str]]:
-        """The card's neighbours under the expanded S generation, best first: (its id, the score, where it lies:
-        this topic, this deck or another deck by id)."""
+        """The card's neighbours under S's index, best first: (its id, the score, where it lies: this topic, this
+        deck or another deck)."""
         index = self.similarity_of(state)
         topic = self.entered(state)
         here = set(topic.ids) if topic is not None else set()
         rows = []
         for other, score in index.neighbours.get(card_id, []) if index is not None else []:
             if other in here:
-                where = "this topic"
+                where = HERE
             elif self._deck_of_card.get(other) == state.get("deck"):
-                where = "this deck"
+                where = THIS_DECK
             else:
-                where = f"deck {self._deck_of_card.get(other, '–')}"
+                where = ELSEWHERE
             rows.append((other, score, where))
         return rows
 
     def neighbour_counts(self, card_id: str, state: dict) -> str:
-        """Window A's row with S: how many neighbours the card has and where they lie."""
+        """The tag strip's tag with S: how many neighbours the card has by place ("3 here · 1 this deck · 1
+        elsewhere"), or none."""
         places = [where for _other, _score, where in self.neighbours_of(card_id, state)]
         if not places:
-            return "none above the minimum"
-        others = sum(place.startswith("deck ") for place in places)
-        return f"{len(places)}: {places.count('this topic')} in this topic, {places.count('this deck')} in this deck, {others} in other decks"
+            return "no neighbour above the minimum"
+        return f"{places.count(HERE)} here · {places.count(THIS_DECK)} this deck · {places.count(ELSEWHERE)} elsewhere"
 
-    # --- D1's and D2's markers -----------------------------------------------------------------------------
+    # --- D's rings -------------------------------------------------------------------------------------------
 
-    def d_markers(self, points: dict[str, Point], report: DifficultyReport) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
-        """With D1 or D2: every drawn card's colour, symbol, class (layout.card_class: its authored level,
-        "predicted" for a quiz the generation predicted, a cross in the predicted colour, "flashcard" or "unrated
-        quiz" grey) and hover (a predicted quiz's level next to its id, and the other generation's where it
-        differs; the map draws a ring behind those, layout.disagreement_trace)."""
-        colors: dict[str, str] = {}
-        symbols: dict[str, str] = {}
+    def d_rings(self, points: dict[str, Point], report: DifficultyReport) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+        """With D: every drawn card's ring colour (its authored level's, the predicted amber; none for a card not
+        rated), class (layout.card_class) and hover part (a predicted quiz's level, and the other generation's
+        where it differs; the map draws a ring behind those, layout.disagreement_trace)."""
+        rings: dict[str, str] = {}
         classes: dict[str, str] = {}
-        labels: dict[str, str] = {}
+        levels: dict[str, str] = {}
         other = self.other_report(report)
         differing = self.disagreements(points, report)
         for card_id in points:
             predicted = report.predictions.get(card_id)
             classes[card_id] = card_class(self.card_by_id[card_id], predicted is not None)
-            colors[card_id], symbols[card_id] = class_style(classes[card_id])
-            labels[card_id] = f"{card_id} · {report.model}: {predicted}" if classes[card_id] == PREDICTED else card_id
-            if card_id in differing:
-                labels[card_id] += f" ({other.model}: {differing[card_id]})"
-        return colors, symbols, classes, labels
+            if classes[card_id] in LEVEL_COLORS:
+                rings[card_id] = LEVEL_COLORS[classes[card_id]]
+            elif classes[card_id] == PREDICTED:
+                rings[card_id] = PREDICTED_COLOR
+                levels[card_id] = f"{report.model}: {predicted}"
+                if card_id in differing:
+                    levels[card_id] += f" ({other.model}: {differing[card_id]})"
+        return rings, classes, levels
 
     # --- the connections and the trees -------------------------------------------------------------------------
 
@@ -543,7 +586,7 @@ class Page:
         return (merges_of(self.model.deck_vectors), ids) if len(ids) > 1 else None
 
     def links_of(self, topic: TopicLayout, state: dict) -> list[tuple[str, str]]:
-        """The topic's connections in merge order under the state's membership: the model's, or the clustering of
+        """The topic's connections in merge order under the membership in force: the model's, or the clustering of
         the scripted topic's cards, made once."""
         if self.uses_model(state):
             return list(topic.links)
@@ -567,8 +610,8 @@ class Page:
         return merges_of(self._vectors(topic.ids)), list(topic.ids)
 
     def topic_tree(self, deck_id: Optional[str], state: dict):
-        """(the merges, the dot ids of their rows, the labels by dot id) of the deck's topics under the state's
-        membership: the clustering of the topic vectors (CourseModel.topic_vectors, the mean of a topic's cards'
+        """(the merges, the dot ids of their rows, the labels by dot id) of the deck's topics under the membership
+        in force: the clustering of the topic vectors (CourseModel.topic_vectors, the mean of a topic's cards'
         unit rows), the tree the viewer's topic connections replay to; None below two topics with cards."""
         topics = self.topics(deck_id, state)
         names, vectors = self.model.topic_vectors(deck_id, [(topic.topic_id, topic.ids) for topic in topics])
@@ -590,70 +633,211 @@ class Page:
         return list(self.card_points(topic, state)) if topic is not None else []
 
     def where(self, state: dict) -> str:
-        """The line under the top bar, by ids: the number of decks, the entered deck's id, or the deck's id and the
-        topic's label."""
+        """The breadcrumb under the top bar, by ids and without a topic's hash: the number of decks, "Deck 17",
+        or "Deck 17 › Topic 02"."""
         if state["view"] == DECKS_VIEW:
             return f"{len(self.deck_points())} decks"
         if state["view"] == TOPICS_VIEW:
-            return f"deck {state['deck']}"
-        topic = self.topic(state["deck"], state["topic"])
-        return f"deck {state['deck']} › topic {self.topic_label(topic) if topic else ''}"
+            return f"Deck {state['deck']}"
+        return f"Deck {state['deck']} › Topic {state['topic']}"
 
     def scope(self, state: dict) -> str:
-        """The view's part of the course by ids, as the panels name it: all decks, a deck, or a deck's topic."""
+        """The view's part of the course by ids, as the section's headline names it: all decks, a deck, or a
+        deck's topic."""
         if state["view"] == DECKS_VIEW:
             return "all decks"
         if state["view"] == TOPICS_VIEW:
             return f"deck {state['deck']}"
         return f"deck {state['deck']} › topic {state['topic']}"
 
-    def dot_panel(self, state: dict):
-        """Window A: the selected dot's ids and counts under the view's membership, or the dendrogram of the view's
-        membership with the preset's line, its leaves by id."""
+    def target_dot(self, state: dict) -> Optional[str]:
+        """P1's target of the last request as a dot of the view (the card in its topic's cards view, the topic in
+        its deck's topics view, the deck in the decks view); None without one in the view."""
+        asked = state.get("prompt") if isinstance(state.get("prompt"), dict) else {}
+        target = asked.get("target")
+        if not target:
+            return None
+        deck_id, topic_id, card = (list(target) + [None])[:3]
+        if state["view"] == DECKS_VIEW:
+            return deck_id
+        if state.get("deck") != deck_id:
+            return None
+        if state["view"] == TOPICS_VIEW:
+            return f"{deck_id}:{topic_id}"
+        return card if state.get("topic") == topic_id else None
+
+    # --- the tag strip ---------------------------------------------------------------------------------------
+
+    def tag_strip(self, state: dict) -> tuple[list, str]:
+        """The selected dot's title and tags, and the strip's class: a deck's or a topic's counts with Open; a
+        card's stack, its level as a coloured tag (authored, or predicted by D's generation, with the other
+        generation's where they differ), "between two topics" only when true, with S's layer in force its
+        neighbours by place, with T's where it fits by what margin; hidden with nothing selected."""
         view, selected = state["view"], state.get("selected")
         if view == DECKS_VIEW and selected in self.deck_by_id:
             topics = self.topics(selected, state)
-            return deck_panel(selected, len(topics), sum(len(topic.ids) for topic in topics))
+            tags = [(f"{len(topics)} topics", ""), (f"{sum(len(topic.ids) for topic in topics)} cards", "")]
+            return tag_strip_body(f"Deck {selected}", tags), tag_class(True, True)
         if view == TOPICS_VIEW and selected:
             topic = self.topic_of_dot(state["deck"], selected, state)
             if topic is not None:
-                return topic_panel(topic, self.card_by_id, rest=self._rest(topic))
+                tags = [(f"{count} {label}", "") for label, count in topic_counts_of(topic, self.card_by_id)]
+                if self._rest(topic):
+                    tags.insert(0, ("rest topic", ""))
+                if not topic.ids:
+                    tags.append(("no cards: the model moved every card elsewhere", ""))
+                return tag_strip_body(f"Topic {topic.topic_id}", tags), tag_class(True, True)
         topic = self.entered(state)
         if view == CARDS_VIEW and selected in self.card_by_id and topic is not None:
-            extra = []
-            if state.get("panel") == "T":
-                extra = self.t1_rows(selected, topic)
-            elif self.similarity_of(state) is not None:
-                extra = [(f"neighbours ({self.level_of(state)})", self.neighbour_counts(selected, state))]
-            report = self.difficulty_of(state) if state.get("panel") == "D" else self.difficulty
-            other = None
-            if report is not None and selected in self.disagreements([selected], report):
-                other = (self.other_report(report).model, self.disagreements([selected], report)[selected])
-            return card_panel(
-                self.card_by_id[selected], state["deck"], state["topic"], report.predictions.get(selected) if report else None,
-                between=selected in self.between, extra=extra, by=report.model if report else self.level_of(state), other=other,
-            )
+            card = self.card_by_id[selected]
+            tags: list[tuple[str, str]] = [(STACK_NAMES[card.stack], "")]
+            report = self.difficulty_of(state) if self.in_force(state, "D") else self.difficulty
+            if card.difficulty:
+                tags.append((card.difficulty, f"level {card.difficulty}"))
+            elif report is not None and selected in report.predictions:
+                text = f"{report.predictions[selected]} · predicted by {report.model}"
+                if selected in self.disagreements([selected], report):
+                    text += f" · {self.other_report(report).model}: {self.disagreements([selected], report)[selected]}"
+                tags.append((text, "level predicted"))
+            if selected in self.between:
+                tags.append(("between two topics", "t"))
+            if self.in_force(state, "S") == ON:
+                tags.append((self.neighbour_counts(selected, state), "s"))
+            if self.uses_model(state) and selected in self.topic_model.topic_of:
+                tags += [(text, "t") for text in self.t1_tags(selected, topic)]
+            return tag_strip_body(f"Card {selected}", tags), tag_class(True, False)
+        return [], tag_class(False, False)
+
+    # --- the figure slot and Details -------------------------------------------------------------------------
+
+    def dendrogram(self, state: dict) -> list:
+        """The dendrogram of the view's membership with the preset's line labelled on the plot, its leaves by id
+        (a topic by its id, the hover with its label), filling the slot; or why there is none."""
+        view = state["view"]
         labels: dict = {}
+        hovers: dict = {}
         if view == DECKS_VIEW:
             tree = self.deck_tree()
             kept = self.deck_rank
-            title, subtitle = "Constellations of decks", "The model's deck connections, cut into parts of at most five decks."
+            cut = CUT_LABELS[view].format(size=DECK_PART)
         elif view == TOPICS_VIEW:
             topic_tree = self.topic_tree(state["deck"], state)
             tree = topic_tree[:2] if topic_tree is not None else None
-            labels = topic_tree[2] if topic_tree is not None else {}
+            hovers = topic_tree[2] if topic_tree is not None else {}
+            labels = {dot: dot.split(":")[1] for dot in hovers}  # the topic id without the hash
             kept = len(tree[1]) - 1 if tree is not None else None  # no preset: the full tree
-            title, subtitle = self.scope(state), TOPIC_TREE_NOTE
+            cut = CUT_LABELS[view]
         else:
+            topic = self.entered(state)
             tree = self.card_tree(topic)
             kept = len(self.card_links(topic, state))
-            title = self.scope(state)
-            subtitle = "The clustering of the topic's cards, cut into parts of at most four cards."
-        figure = None
-        if tree is not None:
-            merges, ids = tree
-            figure = dendrogram_figure(merges, ids, labels, kept)  # the leaves by id (a topic by its label)
-        return overview_panel(title, figure, view, subtitle)
+            cut = CUT_LABELS[view].format(size=CARD_PART)
+        if tree is None:
+            return [empty_slot(NO_LINKS[view])]
+        merges, ids = tree
+        return [graph(dendrogram_figure(merges, ids, labels, kept, hovers or None, cut), "dendrogram-graph")]
+
+    def figure_slot(self, state: dict) -> list:
+        """The slot's one figure by the open tab: none, C or P the dendrogram; S the selected card's neighbours,
+        the dendrogram until a card is selected; T the histogram of the view's margins; D the generation's
+        confusion matrix of the view's part (D2 without cached tags: why not; a part without metrics: its note)."""
+        panel = state.get("panel")
+        selected = state.get("selected")
+        if panel == "S" and state["view"] == CARDS_VIEW and selected in self.card_by_id:
+            rows = self.neighbours_of(selected, state)
+            if self.indexes.get(self.level_of(state)) is None:
+                return [empty_slot(NO_ENCODER)]
+            return [graph(neighbours_figure(rows), "neighbours-graph")] if rows else [empty_slot("No neighbour above the minimum score.")]
+        if panel == "T":
+            margins = self.margins(self.view_ids(state))
+            return [graph(margin_histogram(margins, self.topic_model.margin), "margin-histogram")] if margins else [empty_slot(NO_CARDS)]
+        if panel == "D":
+            report = self.reports.get(self.level_of(state))
+            if report is None:
+                return [empty_slot(NO_TAGS)]
+            part, _scope = self.metrics_report(state, report)
+            if not part.measured:
+                return [empty_slot(part.note or "No difficulty model.")]
+            return [graph(confusion_figure(part), "difficulty-confusion")]
+        return self.dendrogram(state)
+
+    def slot_shows_dendrogram(self, state: dict) -> bool:
+        """Whether the slot's figure is the dendrogram (with no tab, C or P open, or S without a card selected)."""
+        panel = state.get("panel")
+        return panel in (None, "C", "P") or (panel == "S" and not (state["view"] == CARDS_VIEW and state.get("selected") in self.card_by_id))
+
+    def details(self, state: dict) -> list:
+        """Details' content in the slot's place: the open generation's description, its live measures, its tables of
+        its newest run with the one open row's description (the glossary), or why there is none (no file: how to
+        make it; no rows of it); then what moved in: the dendrogram while the slot shows another figure, the view's
+        hint lines."""
+        level = self.level_of(state)
+        if level is None:
+            return []
+        live = {"S": self._live_similarity, "C": self._live_course, "T": self._live_topics, "D": self._live_difficulty,
+                "P": self._live_prompt}[level[0]](level, state)
+        deck_id = state.get("deck") if level in DECK_TABLE_LEVELS and state["view"] != DECKS_VIEW else None
+        tables = self.results.tables(level, deck_id)
+        hint = self.results.hint(LEVEL_FILES[level]) if tables is None else self.results.no_rows(level)
+        moved: list = []
+        if not self.slot_shows_dendrogram(state):
+            moved += [html.Div("The view's tree", className="card-label metrics-heading")] + self.dendrogram(state)
+        moved.append(html.Div(OVERVIEW_HINT[state["view"]], className="card-hint"))
+        return [level_section(DESCRIPTIONS[level], live, tables, hint, level, state.get("measure"), self.glossary, moved)]
+
+    # --- the section -----------------------------------------------------------------------------------------
+
+    def section(self, state: dict) -> tuple[list, list]:
+        """The section's head and its live part: with no tab open one line on the five models; else the headline,
+        the generation's two numbers (standalone.headlines) with the chosen variant in plain words, or the hint
+        without the results; the live part T's line of the view next to the course, P's answer or its hint."""
+        level = self.level_of(state)
+        if level is None:
+            return no_tab_line(), []
+        numbers = headlines(self.results, level)
+        hint = self.results.hint(LEVEL_FILES[level]) if self.results.run(level) is None else self.results.no_rows(level)
+        head = section_head(level, numbers, chosen_label(self.results, level), hint, self.scope(state))
+        live: list = []
+        if level == "T1":
+            live = live_line(self.topics_line(state))
+        elif level == "P1":
+            live = self.prompt_live(state)
+        return head, live
+
+    def topics_line(self, state: dict) -> str:
+        """T's line of the view next to the course: "this deck: 70 % agree, course 64 %"."""
+        ids = self.view_ids(state)
+        course = shown(self.topic_model.agreement_of(list(self.topic_model.topic_of)), True)
+        if state["view"] == DECKS_VIEW or not ids:
+            return f"course: {course} agree with the script"
+        here = {TOPICS_VIEW: "this deck", CARDS_VIEW: "this topic"}[state["view"]]
+        return f"{here}: {shown(self.topic_model.agreement_of(ids), True)} agree, course {course}"
+
+    def prompt_entries(self, answer) -> list[tuple[str, str, str]]:
+        """P1's answer as entries: (the target's ids, its label by ids, every route's score)."""
+        entries = []
+        for target in answer.targets:
+            deck_id = self.model.deck_ids.get(target.key[0], target.key[0])
+            card = target.card
+            label = f"deck {deck_id} › {self.label_in_deck(deck_id, target.key[1])}" + (f" · card {card}" if card else "")
+            scores = " · ".join(f"{route} {target.scores[route]:.2f}" for route in (CARD, CENTROID, TEXT)) + f" · mean {target.mean:.2f}"
+            entries.append((f"{deck_id}:{target.key[1]}" + (f":{card}" if card else ""), label, scores))
+        return entries
+
+    def prompt_live(self, state: dict, scores: bool = False) -> list:
+        """P's answer to the last request on top: its decision line with the time and the three nearest topics by
+        label, each a click away (in Details with every route's score); or how to ask, or that P does not
+        function."""
+        model = self.prompt_of(state)
+        if model is None:
+            return [html.P(PROMPT_OFF, className="empty-state")]
+        asked = state.get("prompt") if isinstance(state.get("prompt"), dict) else {}
+        if not asked.get("text"):
+            return [html.P(PROMPT_HINT, className="empty-state")]
+        answer = model.find(asked["text"])
+        return prompt_answer(asked["text"], f"{answer.message} · {float(asked.get('ms') or 0):.1f} ms", self.prompt_entries(answer), scores)
+
+    # --- the live measures, in Details -----------------------------------------------------------------------
 
     def metrics_report(self, state: dict, report: Optional[DifficultyReport] = None) -> tuple[DifficultyReport, str]:
         """The report's part of the view (D1's by default; the course, the entered deck, or the entered topic under
@@ -669,28 +853,12 @@ class Page:
         return part.for_topic(topic.name, topic.ids), self.scope(state)
 
     def metrics(self, state: dict, report: Optional[DifficultyReport] = None):
-        """The report's scores of the view in the D panel, D1's by default (the matrix and the shares are window
-        B's)."""
+        """The report's scores of the view in Details, D1's by default (the matrix is the slot's)."""
         return metrics_panel(*self.metrics_report(state, report))
-
-    def graph_window(self, state: dict) -> tuple[list, str]:
-        """Window B's content and class: with D expanded, the expanded generation's confusion matrix and the shares of
-        the levels of the view's part (D2 without cached tags: why not); with T, the margins of the view's cards;
-        otherwise empty and collapsed."""
-        if state.get("panel") == "T":
-            return [margins_window(self.margins(self.view_ids(state)), self.topic_model.margin, self.scope(state))], window_class(True)
-        if state.get("panel") != "D":
-            return [], window_class(False)
-        report = self.difficulty_of(state)
-        if report is None:
-            empty = html.Div([html.Div(f"Difficulty model {self.level_of(state)}", className="card-label"), html.P(NO_TAGS, className="empty-state")],
-                             className="card-panel graph-panel")
-            return [empty], window_class(True)
-        return [metrics_window(*self.metrics_report(state, report))], window_class(True)
 
     def measures(self, state: dict) -> tuple[str, list]:
         """C1's readout: C1's own measures of the view, as (what they cover, [(heading, [(label, value, hint)])]),
-        over the course, the entered deck or the entered topic (the model's layouts, whatever panel is expanded)."""
+        over the course, the entered deck or the entered topic (the model's layouts, whatever is checked)."""
         if state["view"] == DECKS_VIEW:
             topics = list(self.model.topics.values())
             decks = [
@@ -747,8 +915,6 @@ class Page:
     def _rest(self, topic: TopicLayout) -> bool:
         return any(seed.rest for seed in self.topic_model.seeds if seed.topic_id == topic.topic_id and seed.deck == topic.deck)
 
-    # --- the model panels --------------------------------------------------------------------------------------
-
     def margins(self, ids) -> list[float]:
         """T1's margins of these cards, where it has one."""
         return [self.topic_model.margin_of[card_id] for card_id in ids if card_id in self.topic_model.margin_of]
@@ -762,28 +928,10 @@ class Page:
         topic = self.topic(state["deck"], state["topic"])
         return list(topic.ids) if topic is not None else []
 
-    def panels(self, state: dict) -> tuple[list, list[str]]:
-        """The content of each panel (the expanded one's generation rows with the expanded generation's section,
-        the others empty) and each box's class."""
-        expanded = state.get("panel")
-        level = self.level_of(state)
-        contents = [generation_rows(letter, level, self._section(level, state)) if letter == expanded else [] for letter in PANEL_LETTERS]
-        return contents, [box_class(letter == expanded) for letter in PANEL_LETTERS]
-
-    def _section(self, level: str, state: dict):
-        """A generation's section: its description, the live measures, its tables of its newest run with the one
-        open row's description (the glossary), or why there is none (no file: how to make it; no rows of it)."""
-        live = {"S": self._live_similarity, "C": self._live_course, "T": self._live_topics, "D": self._live_difficulty,
-                "P": self._live_prompt}[level[0]](level, state)
-        deck_id = state.get("deck") if level in DECK_TABLE_LEVELS and state["view"] != DECKS_VIEW else None
-        tables = self.results.tables(level, deck_id)
-        hint = self.results.hint(LEVEL_FILES[level]) if tables is None else self.results.no_rows(level)
-        return level_section(DESCRIPTIONS[level], live, tables, hint, level, state.get("measure"), self.glossary)
-
     def _live_similarity(self, level: str, state: dict) -> list:
         """S1's or S2's live measures over the course: its vectoriser, whether the app runs it, its vocabulary, the
-        encoder's dimensions and cache, the hybrid's minima and weights, its minimum score and coverage; with a card
-        selected in the cards view, the card's neighbours (the legend is the map's)."""
+        encoder's dimensions and cache, the hybrid's minima and weights, its minimum score and coverage (the
+        selected card's neighbours are the slot's)."""
         index = self.indexes.get(level)
         if index is None:
             return [html.P(NO_ENCODER, className="empty-state")]
@@ -814,12 +962,7 @@ class Page:
             ("cards with a neighbour", _share(with_neighbour, len(index.ids)), "The cards with at least one neighbour above the minimum score."),
             ("distinct neighbours", f"{len(distinct):,}", "How many different cards appear as some card's neighbour."),
         ]
-        sections = [(f"{level} ({embeddings.describe(vectoriser)}, cosine)", rows)]
-        selected = state.get("selected")
-        if state["view"] == CARDS_VIEW and selected in self.card_by_id:
-            near = [(other, f"{score:.2f} · {where}", "The neighbour's cosine and where it lies.") for other, score, where in self.neighbours_of(selected, state)]
-            sections.append((f"card {selected}'s neighbours", near or [("none", "–", "No neighbour above the minimum score.")]))
-        return model_readout(f"All {len(index.ids):,} cards", sections)
+        return model_readout(f"All {len(index.ids):,} cards", [(f"{level} ({embeddings.describe(vectoriser)}, cosine)", rows)])
 
     def _live_course(self, level: str, state: dict) -> list:
         live = model_readout(*self.measures(state))
@@ -828,6 +971,8 @@ class Page:
         return live
 
     def _live_topics(self, level: str, state: dict) -> list:
+        """T1's live measures of the view: the agreement, the cards between two topics, the moved cards (the
+        selected card's margin is the tag strip's, the histogram the slot's)."""
         ids = self.view_ids(state)
         rows = [
             ("agreement with the script", number(self.topic_model.agreement_of(ids)) if ids else "–", "The share of the view's cards whose model topic is their scripted one."),
@@ -842,11 +987,8 @@ class Page:
         else:
             moved = sum(self.topic_model.topic_of[card_id] != self.topic_model.scripted_of.get(card_id) for card_id in ids)
             rows.append(("moved", _share(moved, len(ids)), "The view's cards whose model topic is not their scripted one."))
-        selected = state.get("selected")
-        if state["view"] == CARDS_VIEW and topic is not None and selected in self.card_by_id and selected in self.topic_model.topic_of:
-            rows += [(f"card {selected}: {label}", value, "The selected card, with T.") for label, value in self.t1_rows(selected, topic)]
         scope = {DECKS_VIEW: f"All {len(ids):,} cards", TOPICS_VIEW: f"This deck: {len(ids)} cards", CARDS_VIEW: f"This topic: {len(ids)} cards"}[state["view"]]
-        return model_readout(scope, [("T1 (nearest centroid)", rows)]) + [html.Div(MARGINS_NOTE, className="card-hint")]
+        return model_readout(scope, [("T1 (nearest centroid)", rows)])
 
     def _live_difficulty(self, level: str, state: dict) -> list:
         report = self.reports.get(level)
@@ -855,24 +997,9 @@ class Page:
         return [self.metrics(state, report)]
 
     def _live_prompt(self, level: str, state: dict) -> list:
-        """P1's live part: the answer to the last request (its decision line with the time, the three nearest topics
-        by label with every route's score and the topic's nearest card, each a click away), or how to ask; then the
-        floors over the self set."""
+        """P1's part of Details: the answer with every route's score, then the floors over the self set."""
         floors = self.prompt.floors
-        asked = state.get("prompt") if isinstance(state.get("prompt"), dict) else {}
-        live = []
-        if asked.get("text"):
-            answer = self.prompt.find(asked["text"])
-            entries = []
-            for target in answer.targets:
-                deck_id = self.model.deck_ids.get(target.key[0], target.key[0])
-                card = target.card
-                label = f"deck {deck_id} › {self.label_in_deck(deck_id, target.key[1])}" + (f" · card {card}" if card else "")
-                scores = " · ".join(f"{route} {target.scores[route]:.2f}" for route in (CARD, CENTROID, TEXT)) + f" · mean {target.mean:.2f}"
-                entries.append((f"{deck_id}:{target.key[1]}" + (f":{card}" if card else ""), label, scores))
-            live += prompt_answer(asked["text"], f"{answer.message} · {float(asked.get('ms') or 0):.1f} ms", entries)
-        else:
-            live.append(html.P(PROMPT_HINT, className="empty-state"))
+        live = self.prompt_live(state, scores=True)
         rows = [
             ("vectoriser", embeddings.describe(self.prompt.index.vectoriser), "The app's index: a request's vector comes from its vectoriser."),
             ("routes", "+".join(DEFAULT_ROUTES), "The variant the app runs: the card route, until the choice rule names another."),
@@ -893,22 +1020,25 @@ class Page:
         return {**state, "view": CARDS_VIEW, "deck": deck_id, "topic": topic_id, "selected": card}
 
     def find(self, state: dict, text: Optional[str]) -> dict:
-        """A request from the P panel's box: P1's answer, the request and its time kept in the store (the panel reads
-        them), the P panel expanded, and the view navigated into the target where P1 navigates; "no match" moves
-        nothing. An empty request changes nothing."""
+        """A request from P's box: P's model's answer (P1, or its fallback on the scripted topics), the request, its
+        time and its target kept in the store (the section and the map read them), P's tab open, and the view
+        navigated into the target where P1 navigates; "no match" moves nothing. An empty request, or P not
+        functioning, changes nothing."""
         text = (text or "").strip()
-        if not text:
+        model = self.prompt_of(state)
+        if not text or model is None:
             return state
         started = time.perf_counter()
-        answer = self.prompt.find(text)
+        answer = model.find(text)
         seconds = time.perf_counter() - started
         if state.get("panel") != "P":
-            state = {**state, "panel": "P", "level": None}
-        state = {**state, "prompt": {"text": text, "ms": round(1000 * seconds, 1)}, "measure": None}
+            state = {**state, "panel": "P", "level": None, "details": False}
+        asked = {"text": text, "ms": round(1000 * seconds, 1), "target": None}
         if answer.navigate:
             deck_id = self.model.deck_ids.get(answer.topic[0], answer.topic[0])
+            asked["target"] = [deck_id, answer.topic[1], answer.card]
             state = self.go_to(state, deck_id, answer.topic[1], answer.card)
-        return state
+        return {**state, "prompt": asked, "measure": None}
 
     def enter(self, state: dict) -> dict:
         """Open: a selected deck's topics view, a selected topic's cards view; nothing else."""
@@ -927,7 +1057,7 @@ class Page:
             topic = self.topic(state["deck"], state["topic"])
             return {**state, "view": TOPICS_VIEW, "topic": None, "selected": self.topic_dot(topic) if topic else None}
         if state["view"] == TOPICS_VIEW:
-            return {**HOME, "panel": state.get("panel"), "level": state.get("level"), "selected": state["deck"], "prompt": state.get("prompt")}
+            return {**state, "view": DECKS_VIEW, "deck": None, "topic": None, "selected": state["deck"]}
         return {**state, "selected": None}
 
     def can_enter(self, state: dict) -> bool:
@@ -935,8 +1065,8 @@ class Page:
 
     @staticmethod
     def _clicked(value, key: str) -> Optional[str]:
-        """The `key` of the hidden input's value (a JSON of `measure` or `level` and `seq`, assets/panel_rows.js);
-        None without it or for anything else."""
+        """The `key` of the hidden input's value (a JSON of `measure`, `level` or `target` and `seq`,
+        assets/panel_rows.js); None without it or for anything else."""
         try:
             parsed = json.loads(value) if isinstance(value, str) else None
         except ValueError:
@@ -951,7 +1081,7 @@ class Page:
 
     @classmethod
     def generation_of(cls, value) -> Optional[str]:
-        """The generation whose row was clicked, in the hidden input's value; None for a results row's click."""
+        """The generation whose tab was clicked, in the hidden input's value; None for a results row's click."""
         return cls._clicked(value, "level")
 
     @classmethod
@@ -963,38 +1093,42 @@ class Page:
         return parts if len(parts) in (2, 3) else None
 
     def step(self, state: Optional[dict], trigger: Optional[str], click_data: Optional[dict] = None, measure=None,
-             request: Optional[str] = None) -> dict:
-        """The view after a trigger: a click on the map selects a dot of the view, Open or a click on the dot's
-        panel enters, Back goes up, a panel's row expands it with its newest generation (and collapses any other,
-        and closes an open description), its close box collapses it; through the hidden input (`measure`), a
-        generation's row expands that generation of the expanded panel (and closes an open description), a results
-        row's click opens its description (and closes the open one; the same row's or the close box's click closes
-        it), a click on one of P1's targets goes to it; Go or Enter in the P panel's box runs the `request` (find).
-        A selected dot the view no longer holds is unselected."""
+             request: Optional[str] = None, layers: Optional[Sequence[str]] = None) -> dict:
+        """The view after a trigger: a click on the map selects a dot of the view, Open or the tag strip's Open
+        enters, Back goes up, a check box's change sets the layers, a tab opens its model with its newest
+        generation (or closes it when open; either closes Details and an open description), the Details button
+        opens or closes Details; through the hidden input (`measure`), a generation's tab opens that generation of
+        the open tab (and closes Details and an open description), a results row's click opens its description (and
+        closes the open one; the same row's or the close box's click closes it), a click on one of P1's targets goes
+        to it; Go or Enter in P's box runs the `request` (find). A selected dot the view no longer holds is
+        unselected."""
         state = {**HOME, **(state if isinstance(state, dict) else {})}
         if state["view"] not in (DECKS_VIEW, TOPICS_VIEW, CARDS_VIEW) or state["panel"] not in (None, *PANEL_LETTERS):
             state = dict(HOME)
         if state["level"] not in GENERATIONS.get(state["panel"], ()):
             state["level"] = None
+        state["layers"] = [letter for letter in PANEL_LETTERS if letter in (state["layers"] or [])]
+        state["details"] = bool(state["details"]) and state["panel"] is not None
         if trigger == "map":
             points = (click_data or {}).get("points") or []
             dot = points[0].get("customdata") if points and isinstance(points[0], dict) else None
             if dot in self.dots(state):
                 state["selected"] = dot
+        elif trigger == LAYERS_INPUT:
+            state["layers"] = [letter for letter in PANEL_LETTERS if letter in (layers or [])]
         elif trigger in ENTER_TRIGGERS:
             state = self.enter(state)
         elif trigger in PROMPT_TRIGGERS:
             state = self.find(state, request)
         elif trigger == "back":
             state = self.back(state)
-        elif isinstance(trigger, str) and trigger.startswith("panel-") and trigger[6:] in PANEL_LETTERS:
-            if state["panel"] != trigger[6:]:
-                state["measure"] = None
-                state["level"] = None
-            state["panel"] = trigger[6:]
-        elif isinstance(trigger, str) and trigger.startswith("close-") and trigger[6:] == state["panel"]:
-            state["panel"] = None
+        elif isinstance(trigger, str) and trigger.startswith("tab-") and trigger[4:] in PANEL_LETTERS:
+            state["panel"] = None if state["panel"] == trigger[4:] else trigger[4:]
             state["level"] = None
+            state["measure"] = None
+            state["details"] = False
+        elif trigger == DETAILS_TRIGGER:
+            state["details"] = not state["details"] and state["panel"] is not None
             state["measure"] = None
         elif trigger == ROW_INPUT:
             level = self.generation_of(measure)
@@ -1005,6 +1139,7 @@ class Page:
                 if level in GENERATIONS.get(state["panel"], ()) and level != self.level_of(state):
                     state["level"] = level
                     state["measure"] = None
+                    state["details"] = False
             else:
                 key = self.measure_of(measure)
                 state["measure"] = None if key is None or key == state["measure"] else key
@@ -1014,51 +1149,70 @@ class Page:
 
 
 def register_callback(app: Dash, page: Page):
-    """The page's one callback; returns the function (for tests). Its outputs: the map, window A, the view, the
-    line under the top bar, Open's and Back's disabled state, the five panels' contents and their classes, then
-    window B's content and class. Its inputs end with Go and Enter of the P panel's box and the hidden input of a
-    generation's, a results row's or a target's click; its states are the box's text and the view."""
+    """The page's one callback; returns the function (for tests). Its outputs: the map, the view, the breadcrumb,
+    Open's and Back's disabled state, the check boxes' options (their labels say the layers' states) and their
+    value (the store's layers), the five tabs' classes, the generation tabs, the section's head and live part, the request box's class and its
+    input's disabled state, the Details button's class, the tag strip's body and class, the figure slot. Its
+    inputs: the map's click, the check boxes, Open, Back, the tag strip's Open, the five tabs, the Details button,
+    Go and Enter of P's box, and the hidden input of a generation's, a results row's or a target's click; its states
+    are the box's text and the view."""
 
     @app.callback(
         Output("map", "figure"),
-        Output("dot-panel", "children"),
         Output("view", "data"),
         Output("where", "children"),
         Output("open", "disabled"),
         Output("back", "disabled"),
-        *[Output(f"content-{letter}", "children") for letter in PANEL_LETTERS],
-        *[Output(f"box-{letter}", "className") for letter in PANEL_LETTERS],
-        Output("graph-window", "children"),
-        Output("graph-window", "className"),
+        Output(LAYERS_INPUT, "options"),
+        Output(LAYERS_INPUT, "value"),
+        *[Output(f"tab-{letter}", "className") for letter in PANEL_LETTERS],
+        Output("levels", "children"),
+        Output("section-head", "children"),
+        Output("section-live", "children"),
+        Output("prompt-box", "className"),
+        Output("prompt-text", "disabled"),
+        Output(DETAILS_TRIGGER, "className"),
+        Output("tag-body", "children"),
+        Output("tag-strip", "className"),
+        Output("figure-slot", "children"),
         Input("map", "clickData"),
+        Input(LAYERS_INPUT, "value"),
         Input("open", "n_clicks"),
         Input("back", "n_clicks"),
-        Input("dot-panel", "n_clicks"),
-        *[Input(f"panel-{letter}", "n_clicks") for letter in PANEL_LETTERS],
-        *[Input(f"close-{letter}", "n_clicks") for letter in PANEL_LETTERS],
+        Input("tag-open", "n_clicks"),
+        *[Input(f"tab-{letter}", "n_clicks") for letter in PANEL_LETTERS],
+        Input(DETAILS_TRIGGER, "n_clicks"),
         Input("prompt-go", "n_clicks"),
         Input("prompt-text", "n_submit"),
         Input(ROW_INPUT, "value"),
         State("prompt-text", "value"),
         State("view", "data"),
     )
-    def update(click_data, open_clicks, back_clicks, panel_clicks, *rest):
+    def update(click_data, layers, *rest):
         from dash import ctx
 
-        state = page.step(rest[-1], ctx.triggered_id, click_data, measure=rest[-3], request=rest[-2])
-        contents, classes = page.panels(state)
-        window, window_class_name = page.graph_window(state)
+        state = page.step(rest[-1], ctx.triggered_id, click_data, measure=rest[-3], request=rest[-2], layers=layers)
+        panel, level = state.get("panel"), page.level_of(state)
+        head, live = page.section(state)
+        tags, tag_class_name = page.tag_strip(state)
         return (
             map_figure(page, state),
-            page.dot_panel(state),
             state,
             page.where(state),
             not page.can_enter(state),
             state["view"] == DECKS_VIEW and not state.get("selected"),
-            *contents,
-            *classes,
-            window,
-            window_class_name,
+            layer_options(page.layer_states(state["layers"])),
+            list(state["layers"]),
+            *[tab_class(letter == panel) for letter in PANEL_LETTERS],
+            level_tabs(panel, level, page.app_levels.get(panel) if panel else None),
+            head,
+            live,
+            prompt_class(panel == "P"),
+            page.prompt_of(state) is None,
+            details_class(state["details"], panel is not None),
+            tags,
+            tag_class_name,
+            page.details(state) if state["details"] else page.figure_slot(state),
         )
 
     return update

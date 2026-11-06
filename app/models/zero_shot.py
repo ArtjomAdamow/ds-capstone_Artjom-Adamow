@@ -1,4 +1,4 @@
-"""D2: zero-shot difficulty tags (docs/draft/helper/models/difficulty.md, "D2"): the demand on a
+"""D2: zero-shot difficulty tags (docs/draft/models/difficulty.md, "D2"): the demand on a
 learner read off the quiz with its resolution by natural language inference, nothing trained.
 
     the question, its options, the correct feedback, the explanation ─→ NLI model, three hypotheses, one softmax

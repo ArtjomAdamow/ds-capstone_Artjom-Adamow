@@ -5,7 +5,7 @@ The slider under the card panel in the cards view, labelled "Margin", runs on a 
 course's cards in focus, from 100 % (every card, the threshold 0.0) down to 1 % (the eleven cards with the highest
 margins on the course); the viewer keeps the value for the session, starting at 100 %, so nothing changes until the
 slider moves. A value's threshold is the margin that keeps that share of the model's cards, the highest margins first
-(models.topic_model.share_threshold; the scale and its reading: docs/draft/helper/models/topic.md, "The margin on a
+(models.topic_model.share_threshold; the scale and its reading: docs/draft/models/topic.md, "The margin on a
 share scale"). A card's score is its margin, for the cards of the decks with the model's topics alone (the Helper's
 model_decks at the time of the draw), so a scripted deck's cards are never filtered; a card without a margin is never
 filtered either. The viewer filters the cards view's shown cards by it before the cut-off line, with the readout of

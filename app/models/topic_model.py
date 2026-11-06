@@ -1,5 +1,5 @@
 """The topic model T1 (no Dash, no state, nothing of the viewer): nearest centroid on the similarity index, seeded by
-the scripted topics of the course file (docs/draft/helper/models/topic.md).
+the scripted topics of the course file (docs/draft/models/topic.md).
 
 The topics of the course file are scripted (scripts/topics.py groups the cards by the headings and sources of the
 lectures), so they are the model's input, not the truth: the model takes them in and decides every card's topic for

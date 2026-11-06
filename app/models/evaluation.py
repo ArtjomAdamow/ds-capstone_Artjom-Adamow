@@ -1,7 +1,7 @@
 """Offline measures of the models (no Dash, no state, nothing of the viewer): how good the neighbours are, judged by
 an independent label (the deck a card belongs to) and by hand marks, the random floor the map shows without a
 model, what a layout keeps of the neighbourhoods against that floor, and the judges of the topic model T1
-(docs/draft/helper/models/topic.md). All of it for evaluate.py.
+(docs/draft/models/topic.md). All of it for evaluate.py.
 
 * same_deck_precision: of a card's top-5 neighbours, how many come from the card's own deck, over all cards.
   Empty slots (fewer than 5 neighbours above the minimum score) count as misses. Random neighbours score about 2 %.

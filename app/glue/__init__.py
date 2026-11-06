@@ -11,7 +11,7 @@
 * `cutoff`: the cut-off presets over the model's pairs (models.clustering.preset_rank).
 * `difficulty_groups`: the difficulty and predicted groups as generated groups of the card state.
 * `related`: the card section under the card panel: the selected card's neighbours with where they lie, the next
-  card first by the learner's progress (the viewer's `card_section` hook).
+  card first by the learner's confidence (the viewer's `card_section` hook).
 * `focus`: the margin slider of the cards view: T1's margins on the share scale (the viewer's `focus` hook).
 * `prompt`: the Ask dialog of the top bar: P1's answer to a request as the viewer's targets, the nearest three topics
   of the checked decks with the card where one is selected (the viewer's `prompt` hook).

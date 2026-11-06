@@ -3,14 +3,16 @@ the viewer, in its theme. It reads the course table (app.course_table), not the 
 parser is not there, and the results files of the offline evaluation; it fits the course model and D1 at the start
 and stores nothing.
 
-* `app`: `Page`, the fitted models and what the three views and the four model panels show of them; `create_app`,
-  the Dash app with its one callback (the views' interaction and the panels: select, Open, Back, expand, close, a
-  results row's description).
-* `layout`: the layout, the map figure with the models' legends, the dendrogram's window (window A), window B with
-  the expanded generation's graphs, and the model panels.
-* `results`: the results files for the panels (the newest run per level, the tables, the glossary).
-* `assets/style.css`: the viewer's tokens, written anew; `assets/map_side.js`: the square map's side;
-  `assets/panel_rows.js`: a generation's or a results row's click into the hidden input the callback reads.
+* `app`: `Page`, the fitted models and what the three views, the map's layers and the right column's regions show
+  of them; `create_app`, the Dash app with its one callback (select, Open, Back, the layers' check boxes, the tabs,
+  Details, a results row's description, P's request).
+* `layout`: the two columns, the map figure drawn by layers with the legend's strip, the tab bar, the generation
+  tabs, the section, the tag strip, the figure slot and Details.
+* `headlines`: the section's numbers from the results rows, with the verdict rule and its explanation in words.
+* `results`: the results files (the newest run per level, the tables with the app's pick marked, the glossary).
+* `assets/style.css`: the viewer's tokens, written anew, and the type scale; `assets/map_side.js`: the map's side,
+  the height under the top bar; `assets/panel_rows.js`: a generation tab's, a results row's or a target's click
+  into the hidden input the callback reads.
 
 The launchers start it with `main` (start.py after the mode question of app.launch; both launchers as a process
 next to the viewer in full mode, on a port of its own, with the viewer's URL for the page's Sputnik link in the top

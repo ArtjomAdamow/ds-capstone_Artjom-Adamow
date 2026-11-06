@@ -1,8 +1,8 @@
-/* The model panels' clickable rows: a generation's row (layout.generation_rows, class level-row) sends its
-   generation (data-level), a results table's row (layout.results_table, class measure-row) its key (data-measure),
+/* The page's clickable rows: a generation's tab (layout.level_tabs, class level-tab) sends its generation
+   (data-level), a results table's row in Details (layout.results_table, class measure-row) its key (data-measure),
    the close box of the open description (measure-close) a null measure, one of P1's targets (layout.prompt_answer,
    class prompt-target) the deck, the topic and the card it shows (data-target); all go to the page's callback through the
-   hidden input #row-click, which the server reads (app.Page.step: the expanded generation and the one open row live
+   hidden input #row-click, which the server reads (app.Page.step: the open generation and the one open row live
    in the view store; a second click on the open row closes it too). The value is a JSON of the generation or the key
    and a sequence number, so every click is a new value. The transport is the viewer's:
    dash_clientside.set_props, else the native setter and an input event. Dash serves this with the page's assets. */
@@ -34,7 +34,7 @@
     if (!target || typeof target.closest !== "function") {
       return;
     }
-    const level = target.closest(".level-row");
+    const level = target.closest(".level-tab");
     if (level && level.dataset && level.dataset.level) {
       send({ level: level.dataset.level });
       return;

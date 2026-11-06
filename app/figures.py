@@ -7,11 +7,15 @@
   connections;
 * the dendrogram of a clustering (dendrogram_figure): scipy's linkage of the same vectors the connections come from
   (models.clustering), laid out by scipy's coordinates, the real merge distances as heights, with the cut-off line
-  above the last kept merge.
+  above the last kept merge, labelled on the plot;
+* a selected card's neighbours (neighbours_figure): a bar per neighbour, its length the score, coloured by where
+  the neighbour lies.
 
-Colours: the sequential ramp and the two series colours are the dataviz reference steps for a dark surface,
-validated against the panel's background; the levels are named on the axes, so no colour carries them alone. The
-theme's tokens (INK, MUTED, GOLD) are the viewer's values, written here anew.
+Every figure takes the size of its slot (no fixed height: the page's figure slot gives it), and no font is below
+FONT_SIZE (16 px): the page's type scale (standalone/assets/style.css) reaches no plotly figure, so the sizes are
+set here. Colours: the sequential ramp and the two series colours are the dataviz reference steps for a dark
+surface, validated against the panel's background; the levels are named on the axes, so no colour carries them
+alone. The theme's tokens (INK, MUTED, GOLD) are the viewer's values, written here anew.
 """
 
 import math
@@ -32,17 +36,30 @@ SEQUENTIAL = [[0.0, "#0d366b"], [0.5, "#3987e5"], [1.0, "#cde2fb"]]  # blue, fro
 RATED_COLOR = "#3987e5"  # blue: the rated quizzes (training)
 PREDICTED_COLOR = "#c98500"  # yellow: the predicted unrated quizzes (test)
 CUT_COLOR = "#e06c75"  # the cut-off line, as the viewer draws it
-FONT = {"color": INK, "family": "DM Mono, monospace", "size": 11}
+FONT_SIZE = 16  # the least font of every figure
+LABEL_SIZE = 18  # the axes' titles, the matrix's cells, the labels on the plots
+FONT = {"color": INK, "family": "DM Mono, monospace", "size": FONT_SIZE}
+LABEL_FONT = {**FONT, "size": LABEL_SIZE}
 TABLE_ROWS = (("macro_f1", "macro-F1"), ("balanced_accuracy", "balanced accuracy"), ("kappa", "weighted kappa"), ("accuracy", "accuracy"))
 SURFACE_ALPHA = 0.1  # faint, so the cards and their connections stand out
 SURFACE_STEPS = 24  # the sphere's mesh: this many steps around and half as many from pole to pole
 ARC_STEP = math.radians(5)  # an arc is sampled every 5 degrees
 ARC_LIFT = 1.01  # the arcs sit a hair above the surface, clear of the mesh's facets
 LABEL_LENGTH = 18  # the dendrogram's leaf labels
-LABEL_MARGIN = (20, 5)  # the space under the dendrogram: a base and a step per character of its longest label
+LEAF_LABELS = 12  # the dendrogram labels its leaves up to this many; beyond, the hover alone names them
+LABEL_MARGIN = (28, 9)  # the space under the dendrogram: a base and a step per character of its longest label
 CUT_LIFT = 0.04  # a cut-off line above the whole tree sits this share of its height above the top merge
+TRANSPARENT = "rgba(0, 0, 0, 0)"
+# Where a neighbour lies, and its bar's colour: the entered topic, the entered deck, another deck
+HERE, THIS_DECK, ELSEWHERE = "this topic", "this deck", "another deck"
+PLACE_COLORS = {HERE: "#cde2fb", THIS_DECK: "#3987e5", ELSEWHERE: "#0d366b"}
 
 Point = tuple[float, float, float]
+
+
+def plain_layout(**kwargs) -> dict:
+    """A figure's layout on the page: transparent, the page's font, no drag, the size of its slot."""
+    return {"paper_bgcolor": TRANSPARENT, "plot_bgcolor": TRANSPARENT, "font": FONT, "dragmode": False, "autosize": True, **kwargs}
 
 
 # --- D1's metrics ---------------------------------------------------------------------------------------------
@@ -112,7 +129,8 @@ def metrics_subtitle(report: DifficultyReport) -> str:
 
 
 def confusion_figure(report: DifficultyReport) -> go.Figure:
-    """Rows: the true level, columns: the predicted level, each row's shares (the diagonal is the recall)."""
+    """Rows: the true level, columns: the predicted level, each row's shares (the diagonal is the recall); the cells
+    at LABEL_SIZE."""
     shares = report.confusion
     figure = go.Figure(
         go.Heatmap(
@@ -125,14 +143,13 @@ def confusion_figure(report: DifficultyReport) -> go.Figure:
             value = float(shares[row][column])
             figure.add_annotation(
                 x=predicted_level, y=true_level, text=f"{value:.0%}", showarrow=False,
-                font={**FONT, "color": DARK_INK if value > 0.55 else INK},
+                font={**LABEL_FONT, "color": DARK_INK if value > 0.55 else INK},
             )
-    figure.update_layout(
-        height=210, margin={"l": 64, "r": 8, "t": 8, "b": 40}, paper_bgcolor="rgba(0, 0, 0, 0)", plot_bgcolor="rgba(0, 0, 0, 0)",
-        font=FONT, dragmode=False,
-        xaxis={"title": {"text": "predicted", "font": {"color": MUTED}}, "side": "bottom", "fixedrange": True},
-        yaxis={"title": {"text": "true", "font": {"color": MUTED}}, "autorange": "reversed", "fixedrange": True},
-    )
+    figure.update_layout(plain_layout(
+        margin={"l": 80, "r": 10, "t": 10, "b": 60}, hoverlabel={"font": FONT},
+        xaxis={"title": {"text": "predicted", "font": {**LABEL_FONT, "color": MUTED}}, "side": "bottom", "fixedrange": True},
+        yaxis={"title": {"text": "true", "font": {**LABEL_FONT, "color": MUTED}}, "autorange": "reversed", "fixedrange": True},
+    ))
     return figure
 
 
@@ -151,18 +168,17 @@ def shares_figure(report: DifficultyReport) -> go.Figure:
         figure.add_trace(
             go.Bar(
                 x=list(LEVELS), y=values, name=name, marker={"color": color, "cornerradius": 4},
-                text=[f"{value:.0%}" for value in values], textposition="outside", textfont={"color": INK},
+                text=[f"{value:.0%}" for value in values], textposition="outside", textfont={**FONT, "color": INK},
                 customdata=list(counts), hovertemplate=f"{name}, %{{x}}: %{{y:.0%}} (%{{customdata}} quizzes)<extra></extra>",
                 cliponaxis=False,
             )
         )
-    figure.update_layout(
-        height=190, margin={"l": 40, "r": 8, "t": 30, "b": 28}, paper_bgcolor="rgba(0, 0, 0, 0)", plot_bgcolor="rgba(0, 0, 0, 0)",
-        font=FONT, dragmode=False, barmode="group", bargap=0.3, bargroupgap=0.1,
-        legend={"orientation": "h", "x": 0, "y": 1.18, "font": {"color": MUTED}},
+    figure.update_layout(plain_layout(
+        margin={"l": 60, "r": 10, "t": 40, "b": 40}, barmode="group", bargap=0.3, bargroupgap=0.1, hoverlabel={"font": FONT},
+        legend={"orientation": "h", "x": 0, "y": 1.2, "font": {**FONT, "color": MUTED}},
         xaxis={"fixedrange": True},
         yaxis={"tickformat": ".0%", "range": [0, 1], "gridcolor": GRID, "zeroline": False, "fixedrange": True},
-    )
+    ))
     return figure
 
 
@@ -234,12 +250,16 @@ def cut_height(merges: np.ndarray, kept: int) -> float:
 
 
 def dendrogram_figure(
-    merges: np.ndarray, ids: Sequence[str], label_of: Mapping[str, str], kept: Optional[int] = None
+    merges: np.ndarray, ids: Sequence[str], label_of: Mapping[str, str], kept: Optional[int] = None,
+    hover_of: Optional[Mapping[str, str]] = None, cut_label: str = "", max_labels: int = LEAF_LABELS,
 ) -> go.Figure:
     """The tree of a clustering: `merges` is scipy's linkage of the rows that `ids` name (at least two), laid out
     by scipy's own coordinates (U-shaped lines, the leaves left to right in tree order), the merge distances as
-    heights. With `kept` (the merges below the cut-off preset, models.clustering.preset_rank) a dashed line crosses
-    the tree above the last kept merge (cut_height); the figure's meta carries its height."""
+    heights. The leaves are labelled by `label_of` (a dot's id without it) up to `max_labels` leaves, beyond that
+    by the hover alone; the hover is `hover_of` (a topic's label with its hash), by default the label. With `kept`
+    (the merges below the cut-off preset, models.clustering.preset_rank) a dashed line crosses the tree above the
+    last kept merge (cut_height), `cut_label` written on it; the figure's meta carries its height. The axis
+    "distance" and its few ticks stand in full colour at the figures' size."""
     tree = dendrogram(np.asarray(merges, dtype=float), no_plot=True)
     line_x: list = []
     line_y: list = []
@@ -249,12 +269,13 @@ def dendrogram_figure(
     leaf_ids = [ids[leaf] for leaf in tree["leaves"]]
     leaf_x = [5.0 + 10.0 * position for position in range(len(leaf_ids))]  # scipy puts the leaves at 5, 15, 25, ...
     labels = [label_of.get(dot, dot) for dot in leaf_ids]
+    hovers = [(hover_of or label_of).get(dot, dot) for dot in leaf_ids]
     figure = go.Figure()
     figure.add_trace(go.Scatter(x=line_x, y=line_y, mode="lines", line={"color": GOLD, "width": 2}, hoverinfo="skip", name="Merges"))
     figure.add_trace(
         go.Scatter(
-            x=leaf_x, y=[0] * len(leaf_x), mode="markers", marker={"color": MUTED, "size": 7}, customdata=leaf_ids,
-            text=labels, hovertemplate="%{text}<extra></extra>", name="Leaves",
+            x=leaf_x, y=[0] * len(leaf_x), mode="markers", marker={"color": MUTED, "size": 9}, customdata=leaf_ids,
+            text=hovers, hovertemplate="%{text}<extra></extra>", name="Leaves",
         )
     )
     meta = None
@@ -266,17 +287,50 @@ def dendrogram_figure(
                 line={"color": CUT_COLOR, "width": 2, "dash": "dash"}, hoverinfo="skip", name="Cut-off",
             )
         )
+        if cut_label:
+            figure.add_annotation(x=1.0, xref="paper", y=height, text=cut_label, showarrow=False, xanchor="right", yanchor="bottom",
+                                  xshift=-4, font={**FONT, "color": CUT_COLOR}, bgcolor="rgba(7, 24, 39, 0.75)")
         meta = {"cut": height, "kept": kept}
-    ticks = [_short(label) for label in labels]
+    labelled = len(leaf_ids) <= max_labels
+    ticks = [_short(label) for label in labels] if labelled else []
     base, step = LABEL_MARGIN
-    figure.update_layout(
-        height=320, meta=meta, margin={"l": 44, "r": 10, "t": 10, "b": base + step * max(len(tick) for tick in ticks)},
-        paper_bgcolor="rgba(0, 0, 0, 0)", plot_bgcolor="rgba(0, 0, 0, 0)",
-        font={"color": INK, "family": "DM Mono, monospace", "size": 12}, showlegend=False, dragmode=False,
+    figure.update_layout(plain_layout(
+        meta=meta, margin={"l": 70, "r": 10, "t": 10, "b": base + step * max((len(tick) for tick in ticks), default=0)},
+        showlegend=False, hoverlabel={"font": FONT},
         xaxis={
-            "tickvals": leaf_x, "ticktext": ticks, "tickangle": -60,
+            "tickvals": leaf_x if labelled else [], "ticktext": ticks, "tickangle": -60, "tickfont": FONT,
             "showgrid": False, "zeroline": False, "fixedrange": True,
         },
-        yaxis={"title": {"text": "distance"}, "rangemode": "tozero", "gridcolor": GRID, "zeroline": False, "fixedrange": True},
-    )
+        yaxis={"title": {"text": "distance", "font": LABEL_FONT}, "tickfont": FONT, "nticks": 4, "rangemode": "tozero",
+               "gridcolor": GRID, "zeroline": False, "fixedrange": True},
+    ))
+    return figure
+
+
+# --- a card's neighbours -------------------------------------------------------------------------------------
+
+
+def neighbours_figure(rows: Sequence[tuple[str, float, str]]) -> go.Figure:
+    """A selected card's neighbours, best on top: a bar per neighbour, its length the score, its label the card's
+    id and its colour where it lies (HERE, THIS_DECK, ELSEWHERE; PLACE_COLORS), each place an entry of the legend
+    where a neighbour lies there."""
+    figure = go.Figure()
+    places = [place if place in PLACE_COLORS else ELSEWHERE for _id, _score, place in rows]
+    for place in (HERE, THIS_DECK, ELSEWHERE):
+        own = [(card_id, score, where) for (card_id, score, _place), where in zip(rows, places) if where == place]
+        if not own:
+            continue
+        figure.add_trace(go.Bar(
+            x=[score for _id, score, _where in own], y=[card_id for card_id, _score, _where in own], orientation="h",
+            marker={"color": PLACE_COLORS[place], "cornerradius": 4}, name=place,
+            text=[f"{score:.2f}" for _id, score, _where in own], textposition="outside", textfont={**FONT, "color": INK},
+            customdata=[where for _id, _score, where in own], hovertemplate="%{y} · %{x:.2f} · %{customdata}<extra></extra>",
+            cliponaxis=False,
+        ))
+    figure.update_layout(plain_layout(
+        margin={"l": 90, "r": 60, "t": 40, "b": 50}, barmode="overlay", bargap=0.3, hoverlabel={"font": FONT},
+        legend={"orientation": "h", "x": 0, "y": 1.18, "font": {**FONT, "color": MUTED}},
+        xaxis={"title": {"text": "cosine", "font": LABEL_FONT}, "range": [0, 1], "gridcolor": GRID, "zeroline": False, "fixedrange": True, "tickfont": FONT},
+        yaxis={"categoryorder": "array", "categoryarray": [card_id for card_id, _score, _where in reversed(rows)], "tickfont": FONT, "fixedrange": True},
+    ))
     return figure

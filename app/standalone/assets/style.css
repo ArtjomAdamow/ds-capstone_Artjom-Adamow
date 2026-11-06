@@ -1,11 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-/* The standalone page (app.standalone): the viewer's theme, its tokens written anew here (no file of the
-   viewer is copied). The map, a square of 12.5 % of the window's area (map_side.js sets its side); the two windows in a
-   column (.windows): the dendrogram's window (window A) and under it window B, the expanded generation's graphs, shown
-   with D or T expanded; the column under the map in landscape, beside it in portrait, where window A and window B
-   together take the map's height (window A its content's, window B the rest; window A alone all of it); the model panels
-   a column right of all in landscape, under them at the window's width in portrait, their text at double size
-   (--panel-font). The legends are the map's (plotly's), none is the page's. The page scrolls as a document. */
+/* The standalone page (app.standalone): the viewer's theme, its tokens written anew here (no file of the viewer is
+   copied), in the slides look: two columns under the top bar at the screen's height, no scroll bar at the top level.
+   The map, the left column, a square at the full height under the top bar (map_side.js sets --map-side); the right
+   column a grid from top to bottom: the tab bar, the generation tabs, the section and the tag strip at their content's
+   height, the figure slot the rest (at least --figure-min). Details opens in the slot's place and scrolls inside it,
+   the page's one scroll bar. The type scale: the large numbers --size-number, the headings --size-heading, the body
+   --size-body, Details --size-details; nothing below 16 px. In portrait and narrow windows the map takes the full
+   width and the right column follows under it, each at the screen's height, the page scrolling from one to the other.
+   The legends are the map's (plotly's), none is the page's. */
 
 :root {
   --ink: #f7f2e8;
@@ -15,101 +17,155 @@
   --gold: #f5b942;
   --hover: rgba(247, 242, 232, 0.08);
   --line: rgba(247, 242, 232, 0.16);
-  --panel-min: 270px;
-  --map-side: 47vmin;  /* until map_side.js sets it: about 12.5 % of a 16:9 window's area */
-  --panel-font: 2;  /* the model panels' text, a multiple of the page's sizes */
+  --chrome: 150px;  /* the top bar, the breadcrumb and the paddings above and below the workspace, fixed heights */
+  --map-side: calc(100vh - var(--chrome));  /* the height under the top bar (map_side.js measures the same) */
+  --figure-min: 240px;  /* the figure slot's least height; under it the tag strip folds into the section */
+  --size-number: 3rem;
+  --size-heading: 1.5rem;
+  --size-body: 1.25rem;
+  --size-details: 1rem;
+  --gap: 20px;
+  --level-easy: #4f7fcf;
+  --level-medium: #b8956a;
+  --level-hard: #ff5349;
+  --level-predicted: #c98500;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--navy-deep); color: var(--ink); font-family: 'Space Grotesk', sans-serif; }
-.app-shell { min-height: 100vh; padding: 16px 42px 42px; background: radial-gradient(circle at 78% 18%, rgba(245, 185, 66, 0.12), transparent 28%), linear-gradient(135deg, var(--navy-deep), var(--navy)); }
-.topbar, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.topbar { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+html, body { height: 100%; }
+body { margin: 0; background: var(--navy-deep); color: var(--ink); font-family: 'Space Grotesk', sans-serif; font-size: var(--size-body); line-height: 1.35; }
+.app-shell { height: 100vh; display: flex; flex-direction: column; padding: 14px 32px 20px; overflow: hidden; background: radial-gradient(circle at 78% 18%, rgba(245, 185, 66, 0.12), transparent 28%), linear-gradient(135deg, var(--navy-deep), var(--navy)); }
+.topbar, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex: 0 0 auto; }
+.topbar { height: 72px; padding-bottom: 10px; border-bottom: 1px solid var(--line); overflow: hidden; }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
-.eyebrow, .card-label { color: var(--gold); font-family: 'DM Mono', monospace; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
-h1 { margin: 2px 0 0; font-size: clamp(1.8rem, 4vw, 3.4rem); line-height: 0.98; font-weight: 600; }
-.top-button { border: 1px solid var(--gold); background: transparent; color: var(--gold); padding: 12px 18px; font: 600 0.9rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.eyebrow, .card-label { color: var(--gold); font-family: 'DM Mono', monospace; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.eyebrow { margin: 0; }
+h1 { margin: 2px 0 0; font-size: clamp(1.5rem, 2.6vw, 2.4rem); line-height: 1; font-weight: 600; }
+.top-button { border: 1px solid var(--gold); background: transparent; color: var(--gold); padding: 10px 18px; font: 600 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
 .top-button:hover { background: var(--hover); }
 .top-button:disabled { opacity: 0.4; cursor: not-allowed; }
 a.top-button { display: inline-block; text-decoration: none; }  /* the Sputnik link to the viewer served next to the page */
-.toolbar { padding: 12px 0; }
-.card-count { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.8rem; }
-/* The hidden input a generation's or a results row's click sets (panel_rows.js); never shown, never focused by hand */
+.toolbar { height: 44px; padding: 8px 0; overflow: hidden; }
+.breadcrumb { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 1.3rem; white-space: nowrap; }
+/* The hidden input a generation's tab, a results row's or a target's click sets (panel_rows.js); never shown */
 .row-click { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-/* The workspace: landscape, the map and the two windows in a column on the left, the model panels on the right over
-   all the rows; the last row takes the panels' extra height, so the map and the windows keep their own heights and no
-   gap opens between the map and window A */
-.workspace { display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); grid-template-rows: auto auto 1fr; gap: 28px; align-items: start; }
-.map-frame { grid-column: 1; grid-row: 1; width: var(--map-side); max-width: 100%; aspect-ratio: 1; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
+/* The workspace: the map's square left, the right column the rest of the width, both at the height under the top bar */
+.workspace { flex: 0 0 auto; height: var(--map-side); display: grid; grid-template-columns: var(--map-side) minmax(0, 1fr); grid-template-rows: var(--map-side); gap: var(--gap); align-items: stretch; }
+.map-frame { position: relative; width: var(--map-side); height: var(--map-side); max-width: 100%; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; }
 #map { width: 100%; height: 100%; }
-.windows { grid-column: 1; grid-row: 2; min-width: 0; display: flex; flex-direction: column; gap: 28px; }
-.window-a, .window-b { min-width: 0; }
-.window-b.collapsed { display: none; }
-.model-panels { grid-column: 2; grid-row: 1 / span 3; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+/* The check boxes inside the map, one per model: the layers (Dash's checklist markup: a label per option with its
+   box and its text) */
+.layers { position: absolute; top: 10px; left: 12px; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: rgba(7, 24, 39, 0.7); border: 1px solid var(--line); }
+.layers .dash-options-list-option { display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0; }
+.layers .dash-options-list-option-wrapper { display: flex; }
+.layer-label, .layers .dash-options-list-option-text { font: 1.125rem 'DM Mono', monospace; color: var(--ink); white-space: nowrap; }
+.layer-box { width: 18px; height: 18px; margin: 0; accent-color: var(--gold); cursor: pointer; }
 
-/* The readout tables: C1's measures, S1's and T1's live measures, the selected dot's ids */
-.readout-scope { margin: 6px 0 2px; color: var(--ink); font: 0.72rem/1.35 'DM Mono', monospace; }
-.readout-table { width: 100%; border-collapse: collapse; white-space: nowrap; color: var(--muted); font: 0.72rem/1.35 'DM Mono', monospace; }
-.readout-table th { padding: 6px 0 1px; text-align: left; color: var(--ink); font-weight: normal; opacity: 0.85; }
-.readout-table td { padding: 0 16px 0 8px; }
-.readout-table .readout-value { padding: 0; text-align: right; color: var(--ink); }
+/* The right column: the tab bar, the generation tabs, the section and the tag strip at their content's height, the figure slot the rest */
+.right-column { min-width: 0; min-height: 0; height: var(--map-side); display: grid; grid-template-rows: auto auto auto auto minmax(var(--figure-min), 1fr); gap: 12px; container-type: size; container-name: column; }
+/* Each region in its own row, so a hidden tag strip or an empty generation row leaves the slot in the last row */
+.tab-bar { grid-row: 1; display: flex; gap: 8px; }
+.level-tabs { grid-row: 2; }
+.section { grid-row: 3; }
+.tag-strip { grid-row: 4; }
+.figure-slot { grid-row: 5; }
+.tab { flex: 1 1 0; display: flex; align-items: baseline; gap: 10px; padding: 8px 14px; border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); color: var(--muted); cursor: pointer; text-align: left; font-family: 'Space Grotesk', sans-serif; }
+.tab:hover { background: var(--hover); color: var(--ink); }
+.tab.open { border-color: var(--gold); color: var(--gold); }
+.tab-letter { font: 600 var(--size-heading) 'DM Mono', monospace; }
+.tab-name { font-size: 1rem; }
+.level-tabs { display: block; margin-bottom: -8px; }
+.level-tabs:empty { display: none; }
+.level-tab { display: inline-flex; align-items: center; gap: 10px; margin: 0 8px 8px 0; padding: 4px 12px; border: 1px solid var(--line); color: var(--muted); font: 500 1rem 'DM Mono', monospace; letter-spacing: 0.04em; cursor: pointer; vertical-align: top; }
+.level-tab:hover { background: var(--hover); color: var(--ink); }
+.level-tab.open { border-color: var(--gold); color: var(--gold); cursor: default; }
+.level-tab.open:hover { background: transparent; }
+.app-mark { padding: 1px 8px; border: 1px solid var(--gold); color: var(--gold); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; }
 
-/* Window A: the selected dot's ids, or the dendrogram; window B: D's matrix and shares, T's margins */
-.card-panel { min-height: var(--panel-min); padding: 30px; border: 1px solid var(--gold); background: rgba(16, 42, 67, 0.72); display: flex; flex-direction: column; justify-content: center; }
-.dot-panel-enter { cursor: pointer; }
-.dot-panel-enter:hover { background: rgba(16, 42, 67, 0.9); }
-.overview-panel, .graph-panel { justify-content: flex-start; }
-.graph-panel { min-height: 0; }
-.id-table { width: auto; margin: 14px 0; color: var(--muted); font: 0.9rem/1.6 'DM Mono', monospace; }
-.deck-description { margin: 4px 0 8px; color: var(--muted); font-size: 0.95rem; line-height: 1.4; }
-.card-hint, .empty-state { color: var(--muted); font-size: 0.88rem; line-height: 1.5; }
-.dendrogram-graph { width: 100%; height: 320px; }
+/* The section: the headline, the two numbers with their contrast, sentence and verdict, the chosen variant; T's line, P's box and answer; Details' button */
+.section { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.section-head { display: flex; flex-direction: column; gap: 8px; }
+.section-head:empty { display: none; }
+.headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; padding-right: 110px; font-size: var(--size-heading); font-weight: 600; line-height: 1.2; }
+.headline-scope { color: var(--muted); font: 1rem 'DM Mono', monospace; letter-spacing: 0.04em; text-transform: uppercase; }
+.section-none { font-size: var(--size-heading); line-height: 1.3; color: var(--ink); }
+.numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; }
+.number-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.number-value { font: 600 var(--size-number) 'DM Mono', monospace; line-height: 1; color: var(--ink); }
+.number-label { font-size: var(--size-body); color: var(--gold); }
+.number-contrast-line { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font: var(--size-body) 'DM Mono', monospace; }
+.number-contrast-line:empty { display: none; }
+.number-gain { color: var(--ink); }
+.number-sentence { margin: 2px 0 0; color: var(--muted); font-size: var(--size-body); line-height: 1.3; }
+.number-verdict { font-size: var(--size-body); line-height: 1.3; }
+.verdict-word { color: var(--ink); font-weight: 600; }
+.verdict-words { color: var(--muted); }
+.variant { color: var(--muted); font-size: var(--size-body); }
+.variant-label { color: var(--ink); }
+.section-live:empty { display: none; }
+.live-line { font: var(--size-heading) 'DM Mono', monospace; color: var(--ink); }
+.details-toggle { position: absolute; top: 0; right: 0; border: 1px solid var(--line); background: transparent; color: var(--muted); padding: 6px 16px; font: 600 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.details-toggle:hover { background: var(--hover); color: var(--ink); }
+.details-toggle.open { border-color: var(--gold); color: var(--gold); }
+.details-toggle.hidden { display: none; }
 
-/* The model panels: a row each, expanded one at a time */
-.model-panel { border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); }
-.model-panel.expanded { border-color: var(--gold); }
-.panel-head { display: flex; align-items: stretch; }
-.panel-row { flex: 1; border: none; background: transparent; color: var(--gold); padding: 12px 16px; text-align: left; font: 500 0.78rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
-.panel-row:hover { background: var(--hover); }
-.panel-close { border: none; border-left: 1px solid var(--line); background: transparent; color: var(--muted); width: 44px; font: 1.1rem 'Space Grotesk', sans-serif; cursor: pointer; }
-.panel-close:hover { color: var(--ink); background: var(--hover); }
-.model-panel.collapsed .panel-close { display: none; }
-.model-panel.collapsed .panel-content { display: none; }
-.panel-content { padding: 4px 16px 18px; border-top: 1px solid var(--line); }
-.level-section + .level-section { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
-/* The generations of an expanded panel: a row each, the newest open with its section under it */
-.level-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); color: var(--muted); font: 500 0.72rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
-.level-row:hover { background: var(--hover); color: var(--ink); }
-.level-row.open { border-color: transparent; border-bottom-color: var(--gold); color: var(--gold); cursor: default; }
-.level-row.open:hover { background: transparent; }
-.level-mark { width: 1em; }
-.results-block { margin-top: 14px; }
-.results-scroll { overflow-x: auto; }
-
-/* The P panel: the request box under its row, shown while P is expanded; P1's answer, its targets a click each */
-.prompt-box { display: flex; gap: 10px; padding: 12px 16px 0; border-top: 1px solid var(--line); }
-.model-panel.collapsed .prompt-box { display: none; }
-.prompt-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 10px 12px; font: 0.9rem 'Space Grotesk', sans-serif; }
+/* P's request box, shown with P's tab open; P1's answer, its targets a click each */
+.prompt-box { display: flex; gap: 10px; }
+.prompt-box.hidden { display: none; }
+.prompt-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 8px 12px; font: var(--size-body) 'Space Grotesk', sans-serif; }
 .prompt-input:focus { outline: none; border-color: var(--gold); }
-.prompt-go { padding: 10px 18px; }
-.prompt-answer { margin-top: 10px; }
-.prompt-request { color: var(--ink); font-size: 0.88rem; }
-.prompt-decision { margin: 4px 0 8px; color: var(--gold); font: 0.72rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
-.prompt-target { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 6px 10px; border: 1px solid var(--line); color: var(--muted); font: 0.72rem/1.4 'DM Mono', monospace; cursor: pointer; }
-.prompt-target + .prompt-target { margin-top: 6px; }
+.prompt-input:disabled { opacity: 0.4; }
+.prompt-go { padding: 8px 18px; }
+.prompt-answer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.prompt-request { color: var(--ink); font-size: var(--size-body); }
+.prompt-decision { color: var(--gold); font: 1rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.prompt-target { flex: 1 1 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px; padding: 2px 10px; border: 1px solid var(--line); color: var(--muted); font: 1rem/1.4 'DM Mono', monospace; cursor: pointer; }
 .prompt-target:hover { background: var(--hover); color: var(--ink); }
 .prompt-label { color: var(--ink); }
 
-/* D's scores in the panel; T's histogram in window B */
-.tool-panel { padding: 14px 0 6px; }
-.margin-histogram { width: 100%; height: 200px; margin-top: 8px; }
+/* The tag strip: the selected dot's title and tags, its Open for a deck or a topic */
+.tag-strip { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; border: 1px solid var(--gold); background: rgba(16, 42, 67, 0.72); }
+.tag-strip.hidden { display: none; }
+.tag-strip.no-open .tag-open { display: none; }
+.tag-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; min-width: 0; }
+.tag-title { font: 600 var(--size-heading) 'DM Mono', monospace; color: var(--ink); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.tag { padding: 2px 10px; border: 1px solid var(--line); color: var(--muted); font: 1rem 'DM Mono', monospace; }
+.tag.level { color: var(--ink); border-color: transparent; }
+.tag.level.easy { background: var(--level-easy); }
+.tag.level.medium { background: var(--level-medium); }
+.tag.level.hard { background: var(--level-hard); }
+.tag.level.predicted { background: var(--level-predicted); color: var(--navy-deep); }
+.tag.s { border-color: #3987e5; color: var(--ink); }
+.tag.t { border-color: #14b8a6; color: var(--ink); }
+
+/* The figure slot: one figure filling it, or Details scrolling inside it */
+.figure-slot { min-height: 0; min-width: 0; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); overflow: hidden; display: flex; flex-direction: column; }
+.figure-slot > .dash-graph, .figure-slot .js-plotly-plot, .figure-slot .plot-container { height: 100%; width: 100%; }
+.figure-slot > .dash-graph { flex: 1 1 auto; min-height: 0; }
+.slot-note { padding: 20px; }
+.details { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 18px; font-size: var(--size-details); }
+.details .dash-graph { height: 260px; }
+.empty-state, .card-hint, .deck-description { color: var(--muted); font-size: inherit; line-height: 1.4; }
+.empty-state { margin: 0; }
+
+/* Details' content at --size-details: the readout tables (C1's measures, S's and T1's live measures), the results tables */
+.readout-scope { margin: 6px 0 2px; color: var(--ink); font: 1rem/1.35 'DM Mono', monospace; }
+.readout-table { width: 100%; border-collapse: collapse; white-space: nowrap; color: var(--muted); font: 1rem/1.35 'DM Mono', monospace; }
+.readout-table th { padding: 6px 0 1px; text-align: left; color: var(--ink); font-weight: normal; opacity: 0.85; }
+.readout-table td { padding: 0 16px 0 8px; }
+.readout-table .readout-value { padding: 0; text-align: right; color: var(--ink); }
+.deck-description { margin: 4px 0 8px; }
+.results-block { margin-top: 14px; }
+.results-scroll { overflow-x: auto; }
+.tool-panel { padding: 8px 0 6px; }
 .metrics-heading { margin-top: 10px; }
-.difficulty-scores { margin: 6px 0; border-collapse: collapse; font: 0.8rem 'DM Mono', monospace; }
+.difficulty-scores { margin: 6px 0; border-collapse: collapse; font: 1rem 'DM Mono', monospace; }
 .difficulty-scores th, .difficulty-scores td { padding: 2px 10px 2px 0; text-align: right; color: var(--muted); font-weight: normal; }
 .difficulty-scores .score-label { text-align: left; }
 .difficulty-scores .score-model, .results-table .chosen { color: var(--ink); }
-.results-table th { vertical-align: bottom; white-space: normal; max-width: 150px; line-height: 1.25; }
+.results-table th { vertical-align: bottom; white-space: normal; max-width: 180px; line-height: 1.25; }
 .results-table th.chosen { font-weight: 600; }
 .results-table td { white-space: nowrap; }
 
@@ -121,46 +177,49 @@ a.top-button { display: inline-block; text-decoration: none; }  /* the Sputnik l
 .measure-description td > * { vertical-align: top; }
 .measure-close { float: right; margin: 0 0 6px 12px; border: 1px solid var(--line); background: transparent; color: var(--muted); width: 28px; height: 28px; font: 1rem 'Space Grotesk', sans-serif; line-height: 1; cursor: pointer; }
 .measure-close:hover { color: var(--ink); background: var(--hover); }
-.measure-text { color: var(--muted); font-family: 'Space Grotesk', sans-serif; font-size: 0.82rem; line-height: 1.4; }
+.measure-text { color: var(--muted); font-family: 'Space Grotesk', sans-serif; font-size: 1rem; line-height: 1.4; }
 .measure-text > div + div { margin-top: 4px; }
 .measure-range { font-family: 'DM Mono', monospace; }
 
-/* The model panels' text at double size: every size above, times --panel-font */
-.model-panels .panel-row { font-size: calc(0.78rem * var(--panel-font)); }
-.model-panels .panel-close { width: 64px; font-size: calc(1.1rem * var(--panel-font)); }
-.model-panels .card-label, .model-panels .level-row { font-size: calc(0.72rem * var(--panel-font)); }
-.model-panels .deck-description { font-size: calc(0.95rem * var(--panel-font)); }
-.model-panels .card-hint, .model-panels .empty-state { font-size: calc(0.88rem * var(--panel-font)); }
-.model-panels .readout-scope, .model-panels .readout-table { font-size: calc(0.72rem * var(--panel-font)); }
-.model-panels .difficulty-scores { font-size: calc(0.8rem * var(--panel-font)); }
-.model-panels .results-table th { max-width: calc(150px * var(--panel-font)); }
-.model-panels .measure-text { font-size: calc(0.82rem * var(--panel-font)); }
-.model-panels .measure-close { width: calc(28px * var(--panel-font)); height: calc(28px * var(--panel-font)); font-size: calc(1rem * var(--panel-font)); }
-.model-panels .prompt-input, .model-panels .prompt-request { font-size: calc(0.88rem * var(--panel-font)); }
-.model-panels .prompt-go { font-size: calc(0.9rem * var(--panel-font)); }
-.model-panels .prompt-decision, .model-panels .prompt-target { font-size: calc(0.72rem * var(--panel-font)); }
-
-/* Portrait: the windows beside the map, window A and window B together at the map's height: window A at its content's
-   height (its panel without the minimum), at most 60 % of it, window B the rest; each scrolls what does not fit. With
-   window B collapsed window A takes the whole height, its panel filling it. The panels under all. Below 821 px the
-   narrow rules below hold instead. */
-@media (orientation: portrait) and (min-width: 821px) {
-  .workspace { grid-template-rows: auto auto; }
-  .windows { grid-column: 2; grid-row: 1; height: var(--map-side); }
-  .window-a { flex: 0 1 auto; min-height: 0; max-height: 60%; overflow-y: auto; }
-  .window-a > .card-panel { min-height: 0; }
-  .window-b { flex: 1 1 0; min-height: 0; overflow-y: auto; }
-  .window-b > .card-panel { min-height: 100%; }
-  .windows:has(> .window-b.collapsed) > .window-a { flex: 1 1 auto; max-height: none; }
-  .windows:has(> .window-b.collapsed) > .window-a > .card-panel { min-height: 100%; }
-  .model-panels { grid-column: 1 / -1; grid-row: 2; }
+/* A projector's 1280 x 720 and other windows under 1400 px: the type scale a step smaller (nothing below 16 px), the
+   tabs' names as their tooltips, the strip's and the slot's paddings tighter, so the section, the tag strip and the
+   figure fit the screen's height */
+@media (max-width: 1400px) {
+  :root { --size-number: 2.25rem; --size-heading: 1.25rem; --size-body: 1rem; --figure-min: 180px; --gap: 14px; --chrome: 140px; }
+  .app-shell { padding: 10px 20px 14px; }
+  .tab { padding: 6px 12px; }
+  .tab-name { display: none; }
+  .right-column { gap: 8px; }
+  .numbers { gap: 6px 20px; }
+  .tag-strip { padding: 6px 12px; }
+  .tag-title { font-size: 1.125rem; }
+  .live-line { font-size: 1.125rem; }
 }
 
-@media (max-width: 820px) {
-  .app-shell { padding: 22px 16px 28px; }
-  .topbar, .toolbar { align-items: flex-start; flex-direction: column; }
-  .workspace { grid-template-columns: 1fr; grid-template-rows: none; }
-  .map-frame, .windows, .model-panels { grid-column: 1; grid-row: auto; height: auto; }
-  .window-b.collapsed { display: none; }
-  :root { --panel-min: 220px; }
+/* A short right column (a projector's 1280 x 720: 580 px): the figure keeps its least height, so the tag strip folds
+   into one compact line and each number folds its sentence (the label, the contrast, the verdict and its explanation
+   stay; the sentence's measure is the row's description in Details) */
+@container column (max-height: 640px) {
+  .right-column { gap: 6px; --figure-min: 160px; }
+  .number-sentence, .variant, .headline-scope { display: none; }
+  .headline { padding-right: 90px; }
+  .details-toggle { padding: 4px 10px; }
+  .tag-strip { padding: 4px 12px; }
+  .tag-title { font-size: 1rem; }
+  .tag { padding: 0 8px; }
+  .live-line { font-size: 1rem; }
+  .section { gap: 4px; }
+  .numbers { gap: 4px 20px; }
+  .prompt-input, .prompt-go { padding: 4px 10px; }
+  .prompt-target { flex: 1 1 45%; }
+}
+
+/* Portrait and narrow windows: the map at the full width, the right column under it, each at the screen's height, the
+   page scrolling from one to the other */
+@media (orientation: portrait), (max-width: 1000px) {
+  .app-shell { height: auto; min-height: 100vh; overflow: visible; padding: 14px 16px 20px; }
+  .workspace { display: flex; flex-direction: column; height: auto; gap: var(--gap); }
+  .map-frame { width: 100%; height: auto; aspect-ratio: 1; }
+  .right-column { height: calc(100vh - 40px); container-type: normal; }
+  .numbers { grid-template-columns: 1fr; }
 }

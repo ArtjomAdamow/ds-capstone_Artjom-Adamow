@@ -1,52 +1,38 @@
-"""The standalone page's layout, map and panels (Dash and plotly; nothing of the viewer), written anew after the
-viewer's in its theme (assets/style.css holds the tokens):
+"""The standalone page's layout, map and regions (Dash and plotly; nothing of the viewer), written anew after the
+viewer's in its theme (assets/style.css holds the tokens and the type scale). The slides look: two columns under
+the top bar, large type, the most relevant on top, everything else under Details.
 
 * the top bar: the title, Back and Open, and the Sputnik link (`viewer-link`) where the launcher serves the viewer
-  next to the page (a URL; nothing of the viewer is imported), none without it;
-* the map (`map`), a square of 12.5 % of the window's area (assets/map_side.js): the view's dots on the sphere, and
-  what the expanded model generation adds (app.Page decides, map_figure draws): with S1 or S2 the generation's
-  neighbours (every dot coloured by the share of its cards' neighbours in its own deck or topic, a card by the share
-  in the entered topic, on the figures' blue ramp, a dot without a neighbour an open grey circle; in the cards view
-  the neighbour pairs inside the topic as lines along the surface, the selected card's bright); with C the
-  connections below the preset gold and dashed (straight between decks, along the surface between cards), the
-  centroid of a deck and the axes with their ticks, the map's own coordinates, the unit sphere's; with T the
-  centroid, the axes and T1's markers (a card's margin on a teal scale, a cross below the threshold, the diamonds of
-  the moved cards, a topic's dot grown with its share of cards between two topics); with D1 or D2 the cards coloured
-  as the viewer colours them after Helper: a rated quiz by its level, a quiz the generation predicted in the predicted
-  colour as a cross (its level on the hover), a flashcard grey; with P T1's membership at C1's positions, the
-  membership P1 answers in, grey, the centroid and the axes and no connections; with every panel collapsed grey dots
-  at random positions, nothing else. S, T and D keep their legends inside the map: plotly's legend at the top left, drawn from
-  one marker per class the view holds (legend_traces), and S's and T's colour scale as a colour bar at the bottom
-  left (scale_trace);
-* window A (`dot-panel`), under the map (beside it in portrait): the selected dot's ids and counts, a click on a
-  deck's or a topic's enters it; with nothing selected the dendrogram of the view's membership with the preset's
-  cut-off line, its leaves by id (figures.dendrogram_figure); in the topics view the deck's tree of its topics (the
-  topic vectors' clustering, app.Page.topic_tree), the full tree, its leaves by label;
-* window B (`graph-window`), under window A at its width in both orientations, the expanded generation's graphs,
-  shown with D or T expanded only: D's confusion matrix and the shares of the levels of the view's part of the course
-  (metrics_window), T's margins of the view's cards (margins_window). The two windows are one column (`windows`); in
-  portrait they take the map's height together, window A its content's and window B the rest (style.css);
-* the model panels (`box-S` to `box-P`), a column right of all three (under them in portrait): one per model letter, a
-  row with its letter and name (`panel-S`, a click expands it and collapses any other) and a close box (`close-S`);
-  expanded, a row per generation in a fixed order, the oldest on top (S1 above S2, D1 above D2; C1 and T1 alone:
-  GENERATIONS), the newest expanded by default; a click on another generation's row expands it in place and collapses
-  the expanded one, the order unchanged (generation_rows). An expanded generation holds
-  what it is, its live measures and the tables of the newest run of its rows, one row per measure and one column per
-  variant with the chosen one marked. A click on a measure's row opens its description under it (what the measure
-  is, its range, from app/docs/columns.md), one row at a time: a click on another row moves it, a click on the same
-  row or the description's close box closes it. Both clicks go through the hidden input `row-click`
-  (assets/panel_rows.js sets it); the expanded generation and the one open row live in the `view` store. The panels'
-  text is at double size (style.css, `--panel-font`). The P panel holds the request box under its row, in the layout
-  from the start so the callback can read it (`prompt-text`, Enter submits, and `prompt-go`), shown while P is
-  expanded; P1's answer is its section's live part (prompt_answer): the decision line with the time, and the three
-  nearest topics by label with every route's score and the topic's nearest card, each a click
-  that navigates to it (`data-target`, through `row-click` as the rows' clicks).
-
-Every graph's axes, the map's too, have their titles and tick labels at AXIS_ALPHA of their colour (fade_axes).
+  next to the page (a URL; nothing of the viewer is imported), none without it; under it the breadcrumb (`where`:
+  "Deck 17 › Topic 02", without a topic's hash);
+* the map (`map`), the left column, a square at the full height under the top bar (assets/map_side.js): the view's
+  dots on the sphere, drawn by layers: the check boxes inside the map (`layers`, one per model letter) say which
+  models draw, each on a channel of its own, whatever set is checked (app.Page decides their states, map_figure
+  draws): the positions and the connections from C (gold and dashed, straight between decks, along the surface
+  between cards; the centroid of a deck; C on the scripted topics where T is off), the membership with its fill by
+  margin and its symbols from T (a cross below the threshold, the diamonds of the moved cards, a topic's dot grown
+  with its share of cards between two topics, an emptied topic an open circle), the ring colours from D (a rated
+  quiz's by its level, a predicted quiz's amber, a ring behind a quiz the two generations put at different levels),
+  the selected card's neighbour pairs as lines along the surface from S (the selected card's bright), P1's answer
+  as the highlighted target from P; nothing checked, the bare course: the scripted topics' grey dots at random. The
+  legend stands in a strip of its own under the sphere, one group per layer in force with its plain title
+  (LEGEND_TITLES), the symbols at a constant size; T's margin as a colour bar along the full height at the right
+  edge; no axes; the hover names a dot by id (a topic by its label with its hash);
+* the right column, from top to bottom: the tab bar (`tab-S` to `tab-P`, the model letters with their names; a
+  click opens one, a second click closes it), the open model's generations as small tabs (`levels`, their clicks
+  through assets/panel_rows.js as the rows' were; the "app" mark on the one the app runs), the section
+  (`section-head`: the headline, the two numbers with their contrast, sentence, verdict and explanation, the chosen
+  variant in plain words; `section-live`: what stays on top for the live demo, T's line of the view next to the
+  course and P's answer; P's request box `prompt-box` and the Details button `details-toggle` stand in the layout
+  from the start, hidden where they do not apply), the selected dot's tag strip (`tag-strip`: a large title and a
+  few tags, its Open `tag-open` for a deck or a topic; hidden with nothing selected) and the figure slot
+  (`figure-slot`, the rest of the height): one figure by the open tab, filling the slot, or Details opened in its
+  place, scrolling inside it, the page's one scroll bar (today's generation section with its live measures and its
+  results tables, whose rows open their description on a click, and what moved in).
 
 No learning material shows: no card's question, answer or explanation, no deck's description; a card is its
-comb_id. The map's hover labels and the line under the top bar are ids too: a deck's id, a topic's label (its topic
-id and a hash of the name, app.Page.topic_label), a card's comb_id.
+comb_id. The map's hover labels and the breadcrumb are ids too: a deck's id, a topic's id (the hover with the hash,
+app.Page.topic_label), a card's comb_id.
 
 What the views show comes from app.Page; the view itself lives in the `view` store (app.HOME's keys).
 """
@@ -58,9 +44,10 @@ from dash import dcc, html
 
 from ..cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE
 from ..figures import (
-    CUT_COLOR, FONT, GOLD, GRID, INK, MUTED, PREDICTED_COLOR, SEQUENTIAL, confusion_figure, metrics_subtitle, score_header,
-    score_rows, shares_figure, sphere_surface, surface_arc,
+    CUT_COLOR, FONT, GOLD, GRID, INK, LABEL_FONT, MUTED, PREDICTED_COLOR, SEQUENTIAL, TRANSPARENT, confusion_figure, metrics_subtitle,
+    plain_layout, score_header, score_rows, shares_figure, sphere_surface, surface_arc,
 )
+from .headlines import NO_TAB, WHAT, Headline, plain_words
 from .results import Table, glossary_entry
 
 CARDS_VIEW = "cards"
@@ -74,67 +61,61 @@ LEVEL_COLORS = {"easy": "#4f7fcf", "medium": "#b8956a", "hard": "#ff5349"}  # bl
 PREDICTED_SYMBOL = "cross"
 DISAGREE = "D1 and D2 disagree"  # the ring behind a predicted quiz the two generations put at different levels
 DISAGREE_SYMBOL = "circle-open"
-DISAGREE_SIZE = 15
+DISAGREE_SIZE = 24
 PREDICTED = "predicted"
-FLASHCARD = "flashcard"
-UNRATED = "unrated quiz"  # an unrated quiz without a prediction (D1 without metrics)
+NOT_RATED = "not rated"  # a flashcard, or an unrated quiz without a prediction: grey, one entry
 DECK_COLOR = MUTED  # the decks in one colour
 TOPIC_COLOR = MUTED
 LINK_WIDTH = 4
-DOT_SIZE = {DECKS_VIEW: 8, TOPICS_VIEW: 10, CARDS_VIEW: 9}
+DOT_SIZE = 13  # every view's dots
 TOPIC_GROWTH = 8  # a topic's dot grows by this many px at a share of 1 of its cards below the threshold (T)
-SELECTED_SIZE = 14
+SELECTED_SIZE = 20
 SELECTED_RING = "rgba(255, 255, 255, 0.55)"
+RING_WIDTH = 3  # D's ring around a card's dot
+TARGET_SIZE = 28  # P1's target: a gold ring behind the dot
+TARGET = "P1's target"
 EMPTIED_SYMBOL = "circle-open"  # a topic the model left without cards
 CROSS_SYMBOL = "cross"  # a card below the threshold, between two topics (T)
 MOVED_IN_SYMBOL, MOVED_IN_COLOR = "diamond", "#c084fc"  # a card T1 moved into the topic from another scripted topic
 MOVED_OUT_SYMBOL, MOVED_OUT_COLOR = "diamond-open", "#f472b6"  # a card scripted here that T1 moved elsewhere
 MARGIN_PALE, MARGIN_FULL = (204, 251, 241), (20, 184, 166)  # the teal scale of a card's margin: #ccfbf1 to #14b8a6
-# S: a dot's share of neighbours in its own part on the figures' blue ramp (the confusion matrix's), from its middle
-# step at 0 to its light step at 1, so every dot stays clear of the dark surface; the neighbour pairs' lines on the
-# same ramp, the selected card's bright, the others faint
+# S: the neighbour pairs' lines on the figures' blue ramp, the selected card's bright, the others faint
 SHARE_LOW, SHARE_HIGH = SEQUENTIAL[1][1], SEQUENTIAL[2][1]
-NO_NEIGHBOUR_SYMBOL = "circle-open"  # a dot without a neighbour above the generation's minimum score
 NEIGHBOUR_LINE = {"color": SHARE_LOW, "width": 3, "opacity": 0.5}
 SELECTED_LINE = {"color": SHARE_HIGH, "width": 5, "opacity": 1.0}
 NEIGHBOUR_PAIRS, SELECTED_PAIRS = "neighbour pairs", "the selected card's pairs"  # the lines' traces, by their legend names
 CENTROID_GLOW = (16, 10, 4)  # the sizes of the centroid's stacked markers, outside in
 CENTROID_ALPHA = 0.4  # the centroid's opacity at its core, where all its markers overlap
 AXIS_RANGE = [-1.15, 1.15]
-AXIS_TICKS = [-1, -0.5, 0, 0.5, 1]  # the unit sphere's coordinates
-AXIS_ALPHA = 0.7  # the axes' titles and tick labels, on the map and in every graph: this share of their colour
-AXIS_FONT = {"color": "rgba(159, 179, 200, 0.7)", "family": "DM Mono, monospace", "size": 10}  # MUTED at AXIS_ALPHA
 DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
-# The classes of the cards view with D, in legend order: (name, colour, symbol)
+MAP_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 18}  # the legend and the colour bar
+HOVER_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 16}
+LEGEND_STRIP = 0.16  # the share of the map's height under the sphere for the legend's strip
+BAR_WIDTH = 0.1  # the share of the map's width at the right edge for the colour bar
+# The classes of the cards view with D, in legend order: (name, colour, symbol); a ring in the class's colour
 LEGEND = (
     ("easy", LEVEL_COLORS["easy"], "circle"), ("medium", LEVEL_COLORS["medium"], "circle"), ("hard", LEVEL_COLORS["hard"], "circle"),
-    (PREDICTED, PREDICTED_COLOR, PREDICTED_SYMBOL), (FLASHCARD, GREY, "circle"), (UNRATED, GREY, "circle"),
+    (PREDICTED, PREDICTED_COLOR, PREDICTED_SYMBOL), (NOT_RATED, GREY, "circle"),
 )
-# S's and T's classes, each told by its symbol (by_symbol); T's cross takes the pale end of the margin scale
-NO_NEIGHBOUR = "no neighbour"
-S_LEGEND = ((NO_NEIGHBOUR, GREY, NO_NEIGHBOUR_SYMBOL),)
 BETWEEN, MOVED_IN, MOVED_OUT = "between two topics", "moved in", "moved out"
-EMPTIED, GROWN = "emptied topic", "grown: cards between two topics"
+EMPTIED, GROWN = "emptied topic", "larger = more<br>uncertain cards"  # two lines in the strip
 T_TOPIC_LEGEND = ((EMPTIED, TOPIC_COLOR, EMPTIED_SYMBOL), (GROWN, TOPIC_COLOR, "circle"))
-# The colour scales inside the map: S's share of neighbours on the blue ramp (T's margin: margin_scale)
-SHARE_SCALE = [[0.0, SHARE_LOW], [1.0, SHARE_HIGH]]
-SHARE_TITLES = {DECKS_VIEW: "neighbours in its deck", TOPICS_VIEW: "neighbours in its topic", CARDS_VIEW: "neighbours in this topic"}
-MAP_BOX = {"bgcolor": "rgba(7, 24, 39, 0.65)", "bordercolor": "rgba(247, 242, 232, 0.16)", "borderwidth": 1}  # the legend's and the scale's box
-MAP_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 11}
+LEGEND_TITLES = {"S": "Similar cards", "T": "Topic fit", "D": "Difficulty", "P": "Prompt"}  # plain, per layer
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
 STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
 PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty", "P": "Prompt"}
 PANEL_LETTERS = tuple(PANEL_NAMES)
-# The model generations of each panel, in their rows' fixed order, the oldest on top; the newest is expanded when its
-# panel opens
+# The model generations of each tab, in their tabs' fixed order, the oldest first; the newest is open when its tab opens
 GENERATIONS = {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2"), "P": ("P1",)}
 GENERATION_NAMES = {
     "S1": "S1 · similarity, TF-IDF", "S2": "S2 · similarity, sentence encoder", "C1": "C1 · course model",
     "T1": "T1 · topics", "D1": "D1 · difficulty, text statistics", "D2": "D2 · difficulty, zero-shot tags",
     "P1": "P1 · navigation prompt",
 }
+APP_MARK = "app"  # on the generation tab the app runs
 PROMPT_PLACEHOLDER = "A question, a concept or a code name"
-PROMPT_HINT = "Type a request above and press Go or Enter: P1 answers with the three nearest topics, and the page goes where it points."
+PROMPT_HINT = "Type a request and press Go or Enter: P1 answers with the three nearest topics, and the page goes where it points."
+PROMPT_OFF = "P1 needs S: check S's layer to ask."
 TARGET_HINT = "Click to go to this target."
 NO_LINKS = {
     DECKS_VIEW: "No connections between the decks.",
@@ -144,32 +125,28 @@ NO_LINKS = {
 VIEWER_LINK = "Sputnik"  # the top bar's link to the viewer served next to the page
 VIEWER_LINK_TITLE = "The viewer Sputnik, served next to this page: the map with the Helper button, in a new tab"
 OVERVIEW_HINT = {
-    DECKS_VIEW: "Select a deck to see its ids; Open enters it.",
-    TOPICS_VIEW: "Select a topic to see its ids and its cards' counts; Open enters it. Back goes up to the decks.",
-    CARDS_VIEW: "Select a card to see its ids and its level. Back goes up to the topics.",
+    DECKS_VIEW: "Select a deck to see its tags; Open enters it.",
+    TOPICS_VIEW: "Select a topic to see its tags and its cards' counts; Open enters it. Back goes up to the decks.",
+    CARDS_VIEW: "Select a card to see its tags and its level. Back goes up to the topics.",
 }
-TOPICS_NOTE = "The topic connections are not drawn on the map: the topics stand at random, so a line would say nothing; the dendrogram in window A shows the deck's tree."
-WINDOW_NOTE = "The confusion matrix and the shares of the levels are in the window under the dendrogram's window."
-MARGINS_NOTE = "The histogram of the margins is in the window under the dendrogram's window; the markers' legend is on the map."
-HISTOGRAM_HEIGHT = 200
+TOPICS_NOTE = "The topic connections are not drawn on the map: the topics stand at random, so a line would say nothing; the dendrogram shows the deck's tree."
+MACRO_F1_NOTE = "With the deck shares every level keeps its true count, so macro-F1 equals the balanced accuracy."
+CUT_LABELS = {DECKS_VIEW: "groups of ≤ {size} decks", CARDS_VIEW: "groups of ≤ {size} cards", TOPICS_VIEW: "the full tree"}
+SELECT_A_CARD = "Select a card to see its neighbours; until then the dendrogram."
+NO_CARDS = "No cards in this view."
 ROW_HINT = "Click a row for what the measure is."
-LEVEL_HINT = "Click to expand this generation; the map follows it."
+LEVEL_HINT = "Click to open this generation."
 NO_DESCRIPTION = "No description of this column yet."
+DETAILS = "Details"
+LAYER_NOTES = {"fallback": "scripted topics", "off": "needs S"}  # what a check box says of its layer's state
 
 
 # --- the map ---------------------------------------------------------------------------------------------------
 
 
-def _axis(title: str, visible: bool) -> dict:
-    """An axis of the scene: the fixed range, its ticks and a faint grid, no spike lines on hover; hidden without
-    the model's positions (the range stays, so the sphere keeps its size)."""
-    axis = {"visible": visible, "range": AXIS_RANGE, "showspikes": False}
-    if visible:
-        axis.update({
-            "tickvals": AXIS_TICKS, "tickfont": AXIS_FONT, "title": {"text": title, "font": AXIS_FONT}, "gridcolor": GRID,
-            "zeroline": False, "showbackground": False,
-        })
-    return axis
+def _axis() -> dict:
+    """An axis of the scene: hidden, the fixed range (so the sphere keeps its size), no spike lines on hover."""
+    return {"visible": False, "range": AXIS_RANGE, "showspikes": False}
 
 
 def _anchor() -> go.Scatter3d:
@@ -181,10 +158,11 @@ def _anchor() -> go.Scatter3d:
 
 
 def links_trace(points: Mapping, pairs, along_surface: bool, name: str = "Connections", color: str = GOLD,
-                dash: str = "dash", width: float = LINK_WIDTH, opacity: float = 1.0, legend: bool = False) -> Optional[go.Scatter3d]:
+                dash: str = "dash", width: float = LINK_WIDTH, opacity: float = 1.0, legend: bool = False,
+                group: Optional[str] = None) -> Optional[go.Scatter3d]:
     """Pairs of drawn dots as one trace (None between two lines), straight or along the sphere's surface: by default
     the model's connections, gold and dashed; S's neighbour pairs solid on the blue ramp, an entry of the legend by
-    their name. None without a pair of two drawn dots."""
+    their name in the layer's group. None without a pair of two drawn dots."""
     xs: list = []
     ys: list = []
     zs: list = []
@@ -202,16 +180,31 @@ def links_trace(points: Mapping, pairs, along_surface: bool, name: str = "Connec
         return None
     return go.Scatter3d(
         x=xs, y=ys, z=zs, mode="lines", line={"color": color, "width": width, "dash": dash}, opacity=opacity,
-        hoverinfo="skip", showlegend=legend, name=name,
+        hoverinfo="skip", showlegend=legend, name=name, **_group(group),
     )
 
 
+def _group(letter: Optional[str]) -> dict:
+    """A legend entry's group: the layer's letter and its plain title."""
+    if letter is None:
+        return {}
+    return {"legendgroup": letter, "legendgrouptitle": {"text": LEGEND_TITLES.get(letter, letter), "font": {**MAP_FONT, "color": MUTED}}}
+
+
+def _marker(color: str, symbol: str, size: float, ring: Optional[str] = None) -> dict:
+    """A dot's marker: its fill, symbol and size, and D's ring where it has one (a transparent line without)."""
+    return {"size": size, "color": color, "symbol": symbol, "line": {"width": RING_WIDTH, "color": ring or TRANSPARENT}}
+
+
 def dots_trace(points: Mapping, labels: Mapping, colors: Mapping, view: str, symbols: Optional[Mapping] = None,
-               sizes: Optional[Mapping] = None) -> go.Scatter3d:
-    """The view's dots, clickable: their ids are the customdata."""
+               sizes: Optional[Mapping] = None, rings: Optional[Mapping] = None) -> go.Scatter3d:
+    """The view's dots, clickable: their ids are the customdata; D's rings as the markers' lines."""
     ids = list(points)
-    marker: dict = {"size": [sizes.get(dot, DOT_SIZE[view]) for dot in ids] if sizes else DOT_SIZE[view],
-                    "color": [colors[dot] for dot in ids], "line": {"width": 0}}
+    marker: dict = {
+        "size": [sizes.get(dot, DOT_SIZE) for dot in ids] if sizes else DOT_SIZE,
+        "color": [colors[dot] for dot in ids],
+        "line": {"width": RING_WIDTH, "color": [rings.get(dot) or TRANSPARENT for dot in ids] if rings else TRANSPARENT},
+    }
     if symbols:
         marker["symbol"] = [symbols.get(dot, "circle") for dot in ids]
     return go.Scatter3d(
@@ -221,21 +214,25 @@ def dots_trace(points: Mapping, labels: Mapping, colors: Mapping, view: str, sym
     )
 
 
-def legend_traces(points: Mapping, classes: Mapping[str, str], entries=LEGEND, view: str = CARDS_VIEW,
-                  sizes: Optional[Mapping] = None) -> list[go.Scatter3d]:
-    """The legend inside the map with S, T or D: one entry per class the view holds, in `entries`' order ((name,
-    colour, symbol): D's LEGEND, S_LEGEND, T's), each a marker in the class's colour and symbol on one of its dots, at
-    its size (under the dots trace, neither hoverable nor clickable), so plotly draws the legend from real markers."""
+def legend_traces(points: Mapping, classes: Mapping[str, str], entries, group: str, colors: Optional[Mapping] = None,
+                  symbols: Optional[Mapping] = None, sizes: Optional[Mapping] = None, rings: Optional[Mapping] = None) -> list[go.Scatter3d]:
+    """The legend's entries of one layer: one per class the view holds, in `entries`' order ((name, colour,
+    symbol): D's LEGEND, T's), each a marker on one of its dots as that dot is drawn (its fill and symbol, D's ring
+    in the class's colour; under the dots trace, neither hoverable nor clickable), so plotly draws the legend from
+    real markers, in the layer's group with its plain title."""
     traces = []
     for name, color, symbol in entries:
         dot = next((dot for dot in points if classes.get(dot) == name), None)
         if dot is None:
             continue
         x, y, z = points[dot]
-        size = sizes.get(dot, DOT_SIZE[view]) if sizes else DOT_SIZE[view]
+        fill = colors.get(dot, color) if colors else color
+        drawn = symbols.get(dot, symbol) if symbols else symbol
+        ring = rings.get(dot) if rings else None
+        size = sizes.get(dot, DOT_SIZE) if sizes else DOT_SIZE
         traces.append(go.Scatter3d(
-            x=[x], y=[y], z=[z], mode="markers", marker={"size": size, "color": color, "symbol": symbol, "line": {"width": 0}},
-            hoverinfo="skip", showlegend=True, name=name,
+            x=[x], y=[y], z=[z], mode="markers", marker=_marker(fill, drawn, size, ring), hoverinfo="skip", showlegend=True,
+            name=name, **_group(group),
         ))
     return traces
 
@@ -252,21 +249,21 @@ def t1_entries(scale: float) -> tuple:
             (MOVED_OUT, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL))
 
 
-def legend_style(title: str) -> dict:
-    """The legend inside the map, at the top left, its clicks off (a click would hide the dummy marker alone)."""
+def legend_style() -> dict:
+    """The legend's strip under the sphere: horizontal along the map's full width, its symbols at a constant size,
+    its clicks off (a click would hide the dummy marker alone)."""
     return {
-        "title": {"text": title, "font": {**MAP_FONT, "color": MUTED}}, "x": 0.01, "y": 0.99, "xanchor": "left", "yanchor": "top",
-        **MAP_BOX, "font": MAP_FONT, "itemclick": False, "itemdoubleclick": False,
+        "orientation": "h", "x": 0.0, "y": LEGEND_STRIP, "xanchor": "left", "yanchor": "top", "font": MAP_FONT,
+        "itemsizing": "constant", "itemclick": False, "itemdoubleclick": False, "bgcolor": TRANSPARENT,
     }
 
 
 def scale_trace(colorscale, top: float, title: str, tickformat: str) -> go.Scatter3d:
-    """A colour scale inside the map, at the bottom left: a colour bar from 0 to `top`, drawn by an invisible marker
-    in the scene's corner (neither hoverable nor clickable), its tick labels at AXIS_ALPHA."""
+    """A colour scale inside the map: a colour bar along the full height at the right edge, from 0 to `top`, drawn
+    by an invisible marker in the scene's corner (neither hoverable nor clickable)."""
     colorbar = {
-        "x": 0.01, "y": 0.01, "xanchor": "left", "yanchor": "bottom", "len": 0.3, "thickness": 10, "outlinewidth": 0, **MAP_BOX,
-        "tickformat": tickformat, "tickfont": {**MAP_FONT, "color": faded(INK)},
-        "title": {"text": title, "side": "top", "font": {**MAP_FONT, "color": MUTED}},
+        "x": 1.0, "y": 0.5, "xanchor": "right", "yanchor": "middle", "len": 1.0, "thickness": 16, "outlinewidth": 0,
+        "tickformat": tickformat, "tickfont": MAP_FONT, "title": {"text": title, "side": "right", "font": {**MAP_FONT, "color": MUTED}},
     }
     return go.Scatter3d(
         x=AXIS_RANGE[:1], y=AXIS_RANGE[:1], z=AXIS_RANGE[:1], mode="markers",
@@ -285,7 +282,16 @@ def disagreement_trace(points: Mapping, ids: Sequence[str]) -> Optional[go.Scatt
     return go.Scatter3d(
         x=[points[card_id][0] for card_id in ids], y=[points[card_id][1] for card_id in ids], z=[points[card_id][2] for card_id in ids],
         mode="markers", marker={"size": DISAGREE_SIZE, "color": INK, "symbol": DISAGREE_SYMBOL, "line": {"width": 2, "color": INK}},
-        hoverinfo="skip", showlegend=True, name=DISAGREE,
+        hoverinfo="skip", showlegend=True, name=DISAGREE, **_group("D"),
+    )
+
+
+def target_trace(point) -> go.Scatter3d:
+    """With P: a gold ring behind P1's target in the view, the legend's entry TARGET."""
+    x, y, z = ([value] for value in point)
+    return go.Scatter3d(
+        x=x, y=y, z=z, mode="markers", marker={"size": TARGET_SIZE, "color": GOLD, "symbol": "circle-open", "line": {"width": 3, "color": GOLD}},
+        hoverinfo="skip", showlegend=True, name=TARGET, **_group("P"),
     )
 
 
@@ -324,14 +330,14 @@ def margin_scale() -> list:
     return [[0.0, margin_color(0.0, 1.0)], [1.0, margin_color(1.0, 1.0)]]
 
 
-def faded(color: str, alpha: float = AXIS_ALPHA) -> str:
+def faded(color: str, alpha: float = 0.7) -> str:
     """A hex colour at `alpha`, as rgba."""
     red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
     return f"rgba({red}, {green}, {blue}, {alpha})"
 
 
 def share_color(share: float) -> str:
-    """A dot's share of neighbours in its own part on the blue ramp: SHARE_LOW at 0, SHARE_HIGH at 1."""
+    """A share on the blue ramp: SHARE_LOW at 0, SHARE_HIGH at 1."""
     share = max(0.0, min(1.0, share))
     low, high = (tuple(int(color[index:index + 2], 16) for index in (1, 3, 5)) for color in (SHARE_LOW, SHARE_HIGH))
     red, green, blue = (round(a + (b - a) * share) for a, b in zip(low, high))
@@ -339,109 +345,111 @@ def share_color(share: float) -> str:
 
 
 def map_figure(page, state: dict) -> go.Figure:
-    """The map of the view in `state` (app.HOME's keys) under the expanded generation. The hover labels: a deck's id,
-    a topic's label (its id and a hash of its name, app.Page.topic_label), a card's comb_id; with S the dot's share of
-    neighbours in its part, with T its margin, with D a predicted quiz's level. The legend names the classes the view
-    holds (S's open circle and its two kinds of lines; T's cross, diamonds, emptied and grown topics; D's classes),
-    the colour bar S's share or T's margin."""
-    view, selected, panel = state["view"], state.get("selected"), state.get("panel")
-    model = page.uses_model(state)
+    """The map of the view in `state` (app.HOME's keys) under the layers in force (app.Page.layer_states). The hover
+    labels: a deck's id, a topic's label (its id and a hash of its name, app.Page.topic_label), a card's comb_id,
+    with T its margin, with D a predicted quiz's level. The legend's strip names the classes the view holds, one
+    group per layer (S's two kinds of lines; T's cross, diamonds, emptied and grown topics; D's classes and the
+    disagreement ring; P's target), the colour bar T's margin."""
+    view, selected = state["view"], state.get("selected")
+    states = page.layer_states(state.get("layers"))
+    s_on, t_on, d_on = (states.get(letter) == page.ON for letter in "STD")
+    c_draws = states.get("C") in (page.ON, page.FALLBACK)
+    p_draws = states.get("P") in (page.ON, page.FALLBACK)
     figure = go.Figure()
     figure.add_trace(_anchor())
     symbols = None
     sizes = None
+    rings = None
     links = None
-    rings = None  # with D: the quizzes the two generations disagree on
-    classes: dict = {}  # the legend's: a dot's class by an entry's name
-    entries: Sequence = ()
-    title = ""
+    extra: list = []  # the rings and the lines of the layers, under the dots
     scale = None
     if view == DECKS_VIEW:
         points = page.deck_points(state)
         labels = {deck_id: deck_id for deck_id in points}
         colors = {deck_id: DECK_COLOR for deck_id in points}
-        if panel == "C":
+        if c_draws:
             links = links_trace(points, page.deck_links(), along_surface=False)
     elif view == TOPICS_VIEW:
-        if model:
+        if c_draws:
             figure.add_traces(centroid_traces())
         topics = page.topics(state["deck"], state)
         points = page.topic_points(state["deck"], state)
         labels = {page.topic_dot(topic): page.topic_label(topic) for topic in topics}
         colors = {dot: TOPIC_COLOR for dot in points}
         symbols = {page.topic_dot(topic): EMPTIED_SYMBOL for topic in topics if not topic.ids}
-        if panel == "T":
+        if t_on:
             shares = {page.topic_dot(topic): page.between_share(topic) for topic in topics}
-            sizes = {dot: DOT_SIZE[TOPICS_VIEW] + TOPIC_GROWTH * share for dot, share in shares.items()}
+            sizes = {dot: DOT_SIZE + TOPIC_GROWTH * share for dot, share in shares.items()}
             classes = by_symbol(symbols, T_TOPIC_LEGEND)
             grown = max((dot for dot in shares if dot not in classes), key=shares.get, default=None)
             if grown is not None and shares[grown] > 0:
                 classes[grown] = GROWN  # the topic grown most stands for the size
-            entries, title = T_TOPIC_LEGEND, "Topics by T1"
+            figure.add_traces(legend_traces(points, classes, T_TOPIC_LEGEND, "T", colors, symbols, sizes))
     else:
         topic = page.entered(state)
         figure.add_trace(sphere_surface(GREY))
         points = page.card_points(topic, state) if topic is not None else {}
         labels = {card_id: card_id for card_id in points}
-        report = page.difficulty_of(state) if panel == "D" else None
-        if report is not None:
-            colors, symbols, classes, labels = page.d_markers(points, report)
-            entries, title = LEGEND, "Cards by difficulty"
-            rings = disagreement_trace(points, page.disagreements(points, report))
-        elif panel == "T" and topic is not None:
+        colors = {card_id: GREY for card_id in points}
+        if t_on and topic is not None:
             colors, symbols, labels = page.t1_markers(topic, points)
-            entries, title = t1_entries(page.margin_scale), "Cards by T1"
-            classes = by_symbol(symbols, entries)
+            entries = t1_entries(page.margin_scale)
+            figure.add_traces(legend_traces(points, by_symbol(symbols, entries), entries, "T", colors, symbols))
             scale = scale_trace(margin_scale(), page.margin_scale, "margin", ".2f")
-        else:
-            colors = {card_id: GREY for card_id in points}
-        if panel == "C" and topic is not None:
+        if d_on:
+            report = page.difficulty_of(state)
+            if report is not None:
+                rings, classes, levels = page.d_rings(points, report)
+                labels = {card_id: f"{labels[card_id]} · {levels[card_id]}" if card_id in levels else labels[card_id] for card_id in points}
+                figure.add_traces(legend_traces(points, classes, LEGEND, "D", colors, symbols, None, rings))
+                ring = disagreement_trace(points, page.disagreements(points, report))
+                if ring is not None:
+                    extra.append(ring)
+        if c_draws and topic is not None:
             links = links_trace(points, page.card_links(topic, state), along_surface=True)
-        if panel == "S":
+        if s_on:
             pairs, own = page.neighbour_pairs(points, state)
-            figure.add_traces([trace for trace in (
-                links_trace(points, own, True, SELECTED_PAIRS, dash="solid", legend=True, **SELECTED_LINE),
-                links_trace(points, pairs, True, NEIGHBOUR_PAIRS, dash="solid", legend=True, **NEIGHBOUR_LINE),
-            ) if trace is not None])
-    if panel == "S":
-        marked = page.s_markers(state, points)
-        if marked is not None:
-            colors, symbols, labels = marked
-            classes, entries, title = by_symbol(symbols, S_LEGEND), S_LEGEND, f"{page.level_of(state)}'s neighbours"
-            scale = scale_trace(SHARE_SCALE, 1.0, SHARE_TITLES[view], ".0%")
-    figure.add_traces(legend_traces(points, classes, entries, view, sizes))
-    if scale is not None and points:
-        figure.add_trace(scale)
+            extra += [trace for trace in (
+                links_trace(points, own, True, SELECTED_PAIRS, dash="solid", legend=True, group="S", **SELECTED_LINE),
+                links_trace(points, pairs, True, NEIGHBOUR_PAIRS, dash="solid", legend=True, group="S", **NEIGHBOUR_LINE),
+            ) if trace is not None]
+    if p_draws:
+        target = page.target_dot(state)
+        if target in points:
+            extra.append(target_trace(points[target]))
     if links is not None:
         figure.add_trace(links)
-    if rings is not None:
-        figure.add_trace(rings)
+    figure.add_traces(extra)
     if points:
-        figure.add_trace(dots_trace(points, labels, colors, view, symbols, sizes))
+        figure.add_trace(dots_trace(points, labels, colors, view, symbols, sizes, rings))
     if selected in points:
         figure.add_traces(selected_trace(points[selected], colors[selected]))
+    legend = any(trace.showlegend for trace in figure.data)
+    if scale is not None and points:
+        if legend:  # the bar along the sphere's full height, above the legend's strip
+            scale.marker.colorbar.update(len=1.0 - LEGEND_STRIP, y=1.0, yanchor="top")
+        figure.add_trace(scale)
     figure.update_layout(
-        uirevision=f"standalone:{view}:{state.get('deck') or ''}:{state.get('topic') or ''}:{'model' if model else 'random'}",
+        uirevision=f"standalone:{view}:{state.get('deck') or ''}:{state.get('topic') or ''}:{page.positions_of(state)}",
         paper_bgcolor=BACKGROUND, plot_bgcolor=BACKGROUND, font={"color": INK, "family": "Georgia"},
-        margin={"l": 0, "r": 0, "t": 10, "b": 0}, showlegend=any(trace.showlegend for trace in figure.data), legend=legend_style(title),
+        margin={"l": 0, "r": 0, "t": 0, "b": 0}, showlegend=legend, legend=legend_style(), hoverlabel={"font": HOVER_FONT},
         scene={
             "aspectmode": "cube", "bgcolor": BACKGROUND, "camera": DEFAULT_CAMERA,
-            "xaxis": _axis("x", model), "yaxis": _axis("y", model), "zaxis": _axis("z", model),
+            "xaxis": _axis(), "yaxis": _axis(), "zaxis": _axis(),
+            "domain": {"x": [0.0, 1.0 - BAR_WIDTH if scale is not None else 1.0], "y": [LEGEND_STRIP if legend else 0.0, 1.0]},
         },
-        meta={"view": view, "panel": panel},
+        meta={"view": view, "layers": dict(states)},
     )
     return figure
 
 
 def card_class(card, predicted: bool) -> str:
-    """A card's class on the map with D, as the viewer colours it after Helper: its authored level; a quiz D1
-    predicted "predicted" (the oldest group there, so its colour decides, not the predicted level's); a flashcard
-    "flashcard"; an unrated quiz without a prediction "unrated quiz"."""
+    """A card's class on the map with D, as the viewer colours it after Helper: its authored level; a quiz the
+    generation predicted "predicted" (the oldest group there, so its colour decides, not the predicted level's); a
+    flashcard or an unrated quiz without a prediction "not rated"."""
     if card.difficulty in LEVEL_COLORS:
         return card.difficulty
-    if predicted:
-        return PREDICTED
-    return UNRATED if card.stack in QUIZ_STACKS else FLASHCARD
+    return PREDICTED if predicted else NOT_RATED
 
 
 def class_style(name: str) -> tuple[str, str]:
@@ -449,7 +457,17 @@ def class_style(name: str) -> tuple[str, str]:
     return next((color, symbol) for class_name, color, symbol in LEGEND if class_name == name)
 
 
-# --- the readout tables (C1's measures, the dot's ids, S1's and T1's live measures) ---------------------------------
+def layer_options(states: Mapping[str, str], notes: Mapping[str, str] = LAYER_NOTES) -> list[dict]:
+    """The check boxes' options: every model letter, its label saying its layer's state where it is not plainly on
+    ("C · scripted topics", "T · needs S"; app.Page.layer_states)."""
+    options = []
+    for letter in PANEL_LETTERS:
+        note = notes.get(states.get(letter, ""), "")
+        options.append({"label": f"{letter} · {note}" if note else letter, "value": letter})
+    return options
+
+
+# --- the readout tables (C1's measures, S1's and T1's live measures), in Details -----------------------------
 
 
 def model_readout(scope: str, sections) -> list:
@@ -465,86 +483,35 @@ def model_readout(scope: str, sections) -> list:
     return [html.Div(scope, className="readout-scope"), html.Table(html.Tbody(rows), className="readout-table")]
 
 
-def id_table(rows) -> html.Table:
-    """A selected dot's ids and counts, one row of label and value each, in the readout's table."""
-    return html.Table(
-        html.Tbody([html.Tr([html.Td(label), html.Td(value, className="readout-value")]) for label, value in rows]),
-        className="readout-table id-table",
-    )
+# --- the figures of the slot and of Details -------------------------------------------------------------------
 
 
-# --- window A: the selected dot's ids, or the dendrogram ---------------------------------------------------------
+def graph(figure: go.Figure, class_name: str) -> dcc.Graph:
+    """A graph of the page, without plotly's bar, following its slot's size."""
+    return dcc.Graph(figure=figure, config={"displayModeBar": False, "responsive": True}, responsive=True, className=class_name,
+                     style={"height": "100%", "width": "100%"})
 
 
-def deck_panel(deck_id: str, topics: int, cards: int) -> html.Div:
-    """A selected deck: its id, its topics and their cards under the membership; Open or a click on the panel
-    enters it."""
-    return html.Div(
-        [
-            html.Div("Deck", className="card-label"),
-            id_table([("deck_id", deck_id), ("topics", topics), ("cards", cards)]),
-            html.Div("Open, or a click on this frame, enters the deck. Back unselects it.", className="card-hint"),
-        ],
-        className="card-panel dot-panel-enter",
-    )
+def empty_slot(text: str) -> html.Div:
+    """The figure slot, or a part of Details, with a line instead of a figure."""
+    return html.Div(html.P(text, className="empty-state"), className="slot-note")
 
 
-def topic_counts(topic, card_by_id) -> list[tuple[str, int]]:
-    """A topic's size and mix of cards under the membership."""
-    cards = [card_by_id[card_id] for card_id in topic.ids if card_id in card_by_id]
-    quizzes = sum(card.stack in QUIZ_STACKS for card in cards)
-    rated = sum(card.difficulty is not None for card in cards)
-    return [("cards", len(cards)), ("flashcards", len(cards) - quizzes), ("quizzes", quizzes), ("rated", rated)]
-
-
-def topic_panel(topic, card_by_id, rest: bool = False) -> html.Div:
-    """A selected topic: its ids, whether it is the deck's rest topic (the cards that fit no other) and its counts;
-    Open or a click on the panel enters it."""
-    rows = [("deck_id", topic.deck_id), ("topic_id", topic.topic_id), ("rest topic", "yes" if rest else "no")]
-    emptied = [] if topic.ids else [html.Div("No cards: the model moved every card of this topic to another one.", className="deck-description")]
-    return html.Div(
-        [html.Div("Topic", className="card-label"), id_table(rows + topic_counts(topic, card_by_id))]
-        + emptied
-        + [html.Div("Open, or a click on this frame, enters the topic. Back unselects it.", className="card-hint")],
-        className="card-panel dot-panel-enter",
-    )
-
-
-def card_panel(card, deck_id: str, topic_id: str, predicted: Optional[str] = None, between: bool = False,
-               extra: Sequence[tuple[str, str]] = (), by: str = "D1", other: Optional[tuple[str, str]] = None) -> html.Div:
-    """A selected card: its ids, its stack, its difficulty, authored or predicted (`by` D1, or D2 with D2
-    expanded; `other`, the other generation's name and level where it differs), whether T1 placed it between two
-    topics, and `extra` rows (with S where its neighbours lie; with T its margin, its runner-up topic, a moved
-    card's other topic); not its text."""
-    if card.difficulty:
-        level = card.difficulty
-    elif predicted and other:
-        level = f"{predicted} (predicted by {by}; {other[0]}: {other[1]})"
-    elif predicted:
-        level = f"{predicted} (predicted by {by})"
-    else:
-        level = "–"
-    rows = [
-        ("comb_id", card.id), ("deck_id", deck_id), ("topic_id", topic_id), ("stack", f"{card.stack} · {STACK_NAMES[card.stack]}"),
-        ("difficulty", level), ("between two topics", "yes" if between else "no"),
-    ] + list(extra)
-    return html.Div([html.Div("Card", className="card-label"), id_table(rows)], className="card-panel")
-
-
-def overview_panel(title: str, figure: Optional[go.Figure], view: str, subtitle: Optional[str] = None) -> html.Div:
-    """Nothing selected: the dendrogram of the view's membership with the preset's line, or why there is none."""
-    body = (
-        _graph(figure, "dendrogram-graph") if figure is not None else html.P(NO_LINKS[view], className="empty-state")
-    )
-    return html.Div(
-        [html.Div(title, className="card-label")]
-        + ([html.Div(subtitle, className="deck-description")] if subtitle else [])
-        + [body, html.Div(OVERVIEW_HINT[view], className="card-hint")],
-        className="card-panel overview-panel",
-    )
-
-
-# --- the graphs: D1's and D2's scores in the D panel, the matrix and the shares in window B, T1's margins there ----
+def margin_histogram(margins: Sequence[float], threshold: float) -> go.Figure:
+    """The view's margins in bins, the threshold as a dashed line labelled on the plot: below it a card is
+    between two topics."""
+    figure = go.Figure(go.Histogram(x=list(margins), nbinsx=20, marker={"color": margin_color(1.0, 1.0)}, hoverinfo="skip"))
+    figure.add_vline(x=threshold, line={"color": CUT_COLOR, "dash": "dash", "width": 2},
+                     annotation={"text": f"between two topics below {threshold:.2f}", "font": {**FONT, "color": CUT_COLOR}},
+                     annotation_position="top right")
+    figure.update_layout(plain_layout(
+        margin={"l": 70, "r": 10, "t": 30, "b": 60},
+        xaxis={"title": {"text": "margin: the best centroid's cosine minus the second best's", "font": LABEL_FONT}, "tickfont": FONT,
+               "gridcolor": GRID, "zeroline": False, "fixedrange": True},
+        yaxis={"title": {"text": "cards", "font": LABEL_FONT}, "tickfont": FONT, "gridcolor": GRID, "zeroline": False, "fixedrange": True},
+        bargap=0.05,
+    ))
+    return figure
 
 
 def score_table(report) -> html.Table:
@@ -557,97 +524,30 @@ def score_table(report) -> html.Table:
     return html.Table([html.Thead(header), html.Tbody(rows)], className="difficulty-scores")
 
 
-def fade_axes(figure: go.Figure, alpha: float = AXIS_ALPHA) -> go.Figure:
-    """A graph's axes with their titles and tick labels at `alpha` of their colour (the figure's font colour where
-    they have none of their own)."""
-    base = figure.layout.font.color or INK
-    for axis in (figure.layout.xaxis, figure.layout.yaxis):
-        axis.update(tickfont={"color": faded(axis.tickfont.color or base, alpha)},
-                    title={"font": {"color": faded(axis.title.font.color or base, alpha)}})
-    return figure
-
-
-def _graph(figure: go.Figure, class_name: str) -> dcc.Graph:
-    """A graph of the page, its axes faded, without plotly's bar."""
-    return dcc.Graph(figure=fade_axes(figure), config={"displayModeBar": False}, className=class_name)
-
-
 def metrics_panel(report, scope: str) -> html.Div:
     """What the generation (`report.model`, D1 or D2) measured for the view's part of the course (`report`, the
-    course's, a deck's or a topic's), in the D panel: the title, what was measured, the score table and where the
-    matrix and the shares are; or why there is nothing to show."""
-    head = [html.Div(f"Difficulty model {report.model} · {scope}", className="card-label")]
+    course's, a deck's or a topic's), in Details: what was measured, the score table and the macro-F1 remark, the
+    shares of the levels; or why there is nothing to show (a part without quizzes: the note)."""
+    head = [html.Div(f"Difficulty model {report.model}", className="card-label")]
     if not report.measured:
-        return html.Div(head + [html.P(report.note or "No difficulty model.", className="empty-state")], className="tool-panel difficulty-panel")
+        body = [html.P(report.note or "No difficulty model.", className="empty-state")]
+        if report.predictions:
+            body += [html.Div("Shares of the levels", className="card-label metrics-heading"), graph(shares_figure(report), "difficulty-shares")]
+        return html.Div(head + body, className="tool-panel difficulty-panel")
     return html.Div(
         head
         + [
             html.Div(metrics_subtitle(report), className="deck-description"),
             score_table(report),
-            html.Div("With the deck shares every level keeps its true count, so macro-F1 equals the balanced accuracy.",
-                     className="card-hint"),
-            html.Div(WINDOW_NOTE, className="card-hint"),
+            html.Div(MACRO_F1_NOTE, className="card-hint"),
+            html.Div("Shares of the levels", className="card-label metrics-heading"),
+            graph(shares_figure(report), "difficulty-shares"),
         ],
         className="tool-panel difficulty-panel",
     )
 
 
-def metrics_window(report, scope: str) -> html.Div:
-    """Window B, under the dendrogram's window, with D expanded: the generation's confusion matrix (the
-    rated quizzes' true and predicted level) and the shares of the levels of the view's part; a part without metrics
-    its predicted shares only (a deck without rated quizzes), a part without quizzes its note."""
-    children = [html.Div(f"Difficulty model {report.model} · {scope}", className="card-label")]
-    if report.measured:
-        children += [
-            html.Div("Rated quizzes: true and predicted level", className="card-label metrics-heading"),
-            _graph(confusion_figure(report), "difficulty-confusion"),
-            html.Div("Shares of the levels", className="card-label metrics-heading"),
-            _graph(shares_figure(report), "difficulty-shares"),
-        ]
-    elif report.predictions:
-        children += [html.Div("Shares of the levels", className="card-label metrics-heading"), _graph(shares_figure(report), "difficulty-shares")]
-    else:
-        children.append(html.P(report.note or "No difficulty model.", className="empty-state"))
-    return html.Div(children, className="card-panel graph-panel")
-
-
-def margins_window(margins: Sequence[float], threshold: float, scope: str) -> html.Div:
-    """Window B with T expanded: the margins of the view's cards in bins, the threshold dashed; a view without
-    cards says so."""
-    children = [html.Div(f"Topic model T1 · {scope}", className="card-label")]
-    if margins:
-        children += [
-            html.Div("Margins of the view's cards", className="card-label metrics-heading"),
-            html.Div(f"The best centroid's cosine minus the second best's; below {threshold:.2f} (dashed) a card is between two topics.",
-                     className="deck-description"),
-            _graph(margin_histogram(margins, threshold), "margin-histogram"),
-        ]
-    else:
-        children.append(html.P("No cards in this view.", className="empty-state"))
-    return html.Div(children, className="card-panel graph-panel")
-
-
-def window_class(expanded: bool) -> str:
-    return f"window-b {'expanded' if expanded else 'collapsed'}"
-
-
-# --- T1's histogram, in window B -----------------------------------------------------------------------------
-
-
-def margin_histogram(margins: Sequence[float], threshold: float) -> go.Figure:
-    """The view's margins in bins, the threshold as a dashed line."""
-    figure = go.Figure(go.Histogram(x=list(margins), nbinsx=20, marker={"color": margin_color(1.0, 1.0)}, hoverinfo="skip"))
-    figure.add_vline(x=threshold, line={"color": CUT_COLOR, "dash": "dash", "width": 1})
-    figure.update_layout(
-        paper_bgcolor="rgba(0, 0, 0, 0)", plot_bgcolor="rgba(0, 0, 0, 0)", font=FONT, height=HISTOGRAM_HEIGHT,
-        margin={"l": 44, "r": 10, "t": 10, "b": 36}, dragmode=False,
-        xaxis={"title": {"text": "margin"}, "gridcolor": GRID, "zeroline": False, "fixedrange": True},
-        yaxis={"title": {"text": "cards"}, "gridcolor": GRID, "zeroline": False, "fixedrange": True}, bargap=0.05,
-    )
-    return figure
-
-
-# --- the model panels ---------------------------------------------------------------------------------------------
+# --- Details: the generation's section ----------------------------------------------------------------------
 
 
 def measure_key(prefix: str, columns: Sequence[str]) -> str:
@@ -670,9 +570,9 @@ def description_row(entry: Optional[tuple[str, str, str]], width: int) -> html.T
 
 
 def results_table(table: Table, prefix: str, expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
-    """A level's results of the newest run: the heads (the chosen variant marked), one row per measure, clickable
-    (its key in `data-measure`; assets/panel_rows.js sends it), the open row's description under it; the
-    bookkeeping as the subtitle."""
+    """A level's results of the newest run: the heads (the chosen variant and the app's marked), one row per
+    measure, clickable (its key in `data-measure`; assets/panel_rows.js sends it), the open row's description under
+    it; the bookkeeping as the subtitle."""
     header = html.Tr([html.Th("")] + [html.Th(head, className="chosen" if chosen else None) for head, chosen in zip(table.heads, table.chosen)])
     rows = []
     for (label, values), columns in zip(table.rows, table.row_columns):
@@ -694,85 +594,168 @@ def results_table(table: Table, prefix: str, expanded: Optional[str], glossary: 
 
 
 def level_section(description: str, live: Sequence, tables: Optional[Sequence[Table]], hint: str, level: str,
-                  expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]]) -> html.Div:
-    """An expanded generation's section (its row names it): what it is, its live measures, its results tables with
-    the one open row's description, or why there is none (`hint`: how to make the file, or that it holds no rows of
-    the generation)."""
+                  expanded: Optional[str], glossary: Mapping[str, tuple[str, str, str]], moved: Sequence = ()) -> html.Div:
+    """Details' content: the open generation's section (what it is, its live measures, its results tables with
+    the one open row's description, or why there is none: `hint`, how to make the file, or that it holds no rows of
+    the generation), then what moved in (`moved`: the dendrogram while the slot shows another figure, the hints)."""
     body = [html.Div(description, className="deck-description")] + list(live)
     if not tables:
         body.append(html.P(hint, className="empty-state"))
     else:
         body += [results_table(table, f"{level}:{index}", expanded, glossary) for index, table in enumerate(tables)]
-    return html.Div(body, className="level-section")
+    return html.Div(body + list(moved), className="level-section details")
 
 
-def generation_rows(letter: str, expanded: str, section) -> list:
-    """An expanded panel's content: a row per generation in GENERATIONS' fixed order, the oldest on top, each
-    clickable (its generation in `data-level`; assets/panel_rows.js sends it), the expanded one open with its section
-    under it wherever it stands: expanding another moves no row."""
-    rows = []
-    for level in GENERATIONS[letter]:
+# --- the right column's regions ------------------------------------------------------------------------------
+
+
+def tab_bar() -> html.Div:
+    """The tab bar: one button per model letter with its name; the callback sets each tab's class."""
+    return html.Div(
+        [
+            html.Button([html.Span(letter, className="tab-letter"), html.Span(name, className="tab-name")],
+                        id=f"tab-{letter}", n_clicks=0, className=tab_class(False), title=f"{name}: open or close")
+            for letter, name in PANEL_NAMES.items()
+        ],
+        id="tabs", className="tab-bar",
+    )
+
+
+def tab_class(is_open: bool) -> str:
+    return "tab open" if is_open else "tab"
+
+
+def level_tabs(letter: Optional[str], expanded: Optional[str], app_level: Optional[str]) -> list:
+    """The open model's generations as small tabs in GENERATIONS' fixed order, the oldest first, each clickable
+    (its generation in `data-level`; assets/panel_rows.js sends it), the open one marked, the one the app runs
+    with the "app" mark; none without an open tab."""
+    tabs = []
+    for level in GENERATIONS.get(letter, ()):
         is_open = level == expanded
-        rows.append(html.Div(
-            [html.Span("▾" if is_open else "▸", className="level-mark"), html.Span(GENERATION_NAMES[level])],
-            className="level-row open" if is_open else "level-row", title=None if is_open else LEVEL_HINT, **{"data-level": level},
-        ))
-        if is_open:
-            rows.append(section)
-    return rows
+        children = [html.Span(GENERATION_NAMES[level], className="level-name")]
+        if level == app_level:
+            children.append(html.Span(APP_MARK, className="app-mark", title="The generation the app runs"))
+        tabs.append(html.Div(children, className="level-tab open" if is_open else "level-tab", title=None if is_open else LEVEL_HINT,
+                             **{"data-level": level}))
+    return tabs
+
+
+def number_block(headline: Headline) -> html.Div:
+    """One of the section's two numbers: the value large, its label, the contrast (the floor's value, or the gain
+    over the generation before), the sentence, the verdict and its explanation in words."""
+    contrast = []
+    if headline.contrast is not None:
+        contrast.append(html.Span(f"against {headline.contrast_shown}", className="number-contrast"))
+    if headline.gain:
+        contrast.append(html.Span(headline.gain, className="number-gain"))
+    if headline.of:
+        contrast.insert(0, html.Span(headline.of, className="number-of"))
+    verdict = [html.Span(headline.verdict, className="verdict-word")]
+    if headline.explanation:
+        verdict.append(html.Span(f": {headline.explanation}", className="verdict-words"))
+    return html.Div(
+        [
+            html.Div(headline.shown, className="number-value"),
+            html.Div(headline.label, className="number-label"),
+            html.Div(contrast, className="number-contrast-line"),
+            html.P(headline.sentence, className="number-sentence"),
+            html.Div(verdict, className="number-verdict"),
+        ],
+        className="number-block",
+    )
+
+
+def section_head(level: str, numbers: Optional[Sequence[Headline]], variant: str, hint: str, scope: str) -> list:
+    """The section's head: the headline (what the model does, and the scope), the two numbers, the chosen variant
+    in plain words; without numbers the hint (no file, or no rows of the generation)."""
+    head = [html.Div([html.Span(WHAT[level], className="headline-text"), html.Span(scope, className="headline-scope")], className="headline")]
+    if not numbers:
+        return head + [html.P(hint, className="empty-state")]
+    head.append(html.Div([number_block(headline) for headline in numbers], className="numbers"))
+    if variant:
+        head.append(html.Div([html.Span("Variant: ", className="variant-label"), html.Span(plain_words(variant))], className="variant"))
+    return head
+
+
+def no_tab_line() -> list:
+    """The section with no tab open: one line on what the five models are."""
+    return [html.Div(NO_TAB, className="section-none")]
+
+
+def live_line(text: str) -> list:
+    """What stays on top for the live demo: T's line of the view next to the course."""
+    return [html.Div(text, className="live-line")]
+
+
+def details_class(is_open: bool, shown: bool) -> str:
+    """The Details button's class: open, closed, or hidden with no tab open."""
+    if not shown:
+        return "details-toggle hidden"
+    return "details-toggle open" if is_open else "details-toggle"
 
 
 def prompt_box() -> html.Div:
-    """The P panel's request box: the text input (Enter submits) and Go, in the layout from the start."""
+    """P's request box: the text input (Enter submits) and Go, in the layout from the start; shown with P's tab open
+    (its class), disabled where P1 does not function."""
     return html.Div(
         [
             dcc.Input(id="prompt-text", type="text", value="", n_submit=0, placeholder=PROMPT_PLACEHOLDER, className="prompt-input",
                       autoComplete="off"),
             html.Button("Go", id="prompt-go", n_clicks=0, className="top-button prompt-go"),
         ],
-        className="prompt-box",
+        id="prompt-box", className=prompt_class(False),
     )
 
 
-def prompt_answer(request: str, decision: str, entries) -> list:
-    """P1's answer in the P panel, by ids: the request, the decision line, then the three nearest topics, each a row
-    with its label (and its nearest card) and every route's score, a click going to it
-    (`data-target`: the deck id, the topic id and the card where one is shown)."""
+def prompt_class(shown: bool) -> str:
+    return "prompt-box" if shown else "prompt-box hidden"
+
+
+def prompt_answer(request: str, decision: str, entries, scores: bool = False) -> list:
+    """P1's answer by ids: the request, the decision line, then the three nearest topics, each a row with its label
+    (and its nearest card) and, in Details, every route's score, a click going to it (`data-target`: the deck id,
+    the topic id and the card where one is shown)."""
     rows = [html.Div(f"“{request}”", className="prompt-request"), html.Div(decision, className="prompt-decision")]
-    for target, label, scores in entries:
-        rows.append(html.Div([html.Span(label, className="prompt-label"), html.Span(scores, className="prompt-scores")],
-                             className="prompt-target", title=TARGET_HINT, **{"data-target": target}))
+    for target, label, route_scores in entries:
+        parts = [html.Span(label, className="prompt-label")]
+        if scores:
+            parts.append(html.Span(route_scores, className="prompt-scores"))
+        rows.append(html.Div(parts, className="prompt-target", title=TARGET_HINT, **{"data-target": target}))
     return [html.Div(rows, className="prompt-answer")]
 
 
-def model_panel_boxes() -> list[html.Div]:
-    """The five panels, collapsed: the row with the letter and the name (a click expands), the close box, and the
-    content the callback fills (`content-S`), P's request box between them; the callback sets each box's class."""
-    boxes = []
-    for letter, name in PANEL_NAMES.items():
-        head = html.Div(
-            [
-                html.Button(f"{letter} – {name}", id=f"panel-{letter}", n_clicks=0, className="panel-row"),
-                html.Button("×", id=f"close-{letter}", n_clicks=0, className="panel-close", title="Collapse"),
-            ],
-            className="panel-head",
-        )
-        parts = [head] + ([prompt_box()] if letter == "P" else []) + [html.Div(id=f"content-{letter}", className="panel-content")]
-        boxes.append(html.Div(parts, id=f"box-{letter}", className=box_class(False)))
-    return boxes
+def topic_counts_of(topic, card_by_id) -> list[tuple[str, int]]:
+    """A topic's size and mix of cards under the membership: (what, how many)."""
+    cards = [card_by_id[card_id] for card_id in topic.ids if card_id in card_by_id]
+    quizzes = sum(card.stack in QUIZ_STACKS for card in cards)
+    rated = sum(card.difficulty is not None for card in cards)
+    return [("cards", len(cards)), ("flashcards", len(cards) - quizzes), ("quizzes", quizzes), ("rated", rated)]
 
 
-def box_class(expanded: bool) -> str:
-    return f"model-panel {'expanded' if expanded else 'collapsed'}"
+def tag_strip_body(title: str, tags: Sequence[tuple[str, str]]) -> list:
+    """The tag strip's content: the large title ("Card 418001") and a few tags, each (text, class): a plain tag,
+    a level's coloured tag ("easy", "predicted"), a layer's ("s", "t")."""
+    return [
+        html.Div(title, className="tag-title"),
+        html.Div([html.Span(text, className=f"tag {kind}".strip()) for text, kind in tags], className="tags"),
+    ]
+
+
+def tag_class(shown: bool, can_open: bool) -> str:
+    """The tag strip's class: hidden with nothing selected; without Open for a card."""
+    if not shown:
+        return "tag-strip hidden"
+    return "tag-strip" if can_open else "tag-strip no-open"
 
 
 # --- the page ---------------------------------------------------------------------------------------------------
 
 
 def page_layout(home: dict, viewer_url: Optional[str] = None) -> html.Main:
-    """The page; the callback fills the map, window A, window B and the panels at load. The hidden
-    input `row-click` carries a click on a generation's or a measure's row (assets/panel_rows.js) to the callback.
-    With `viewer_url` the top bar holds the Sputnik link next to Back and Open, opening the viewer in a new tab."""
+    """The page; the callback fills the map, the check boxes' labels, the breadcrumb, the tabs, the generation
+    tabs, the section, the tag strip and the figure slot at load. The hidden input `row-click` carries a click on a
+    generation's tab, a measure's row or one of P1's targets (assets/panel_rows.js) to the callback. With
+    `viewer_url` the top bar holds the Sputnik link next to Back and Open, opening the viewer in a new tab."""
     actions = [
         html.Button("Back", id="back", className="top-button", n_clicks=0, disabled=True),
         html.Button("Open", id="open", className="top-button", n_clicks=0, disabled=True),
@@ -789,18 +772,38 @@ def page_layout(home: dict, viewer_url: Optional[str] = None) -> html.Main:
                 ],
                 className="topbar",
             ),
-            html.Section([html.Div(id="where", className="card-count")], className="toolbar"),
+            html.Section([html.Div(id="where", className="breadcrumb")], className="toolbar"),
             html.Section(
                 [
                     html.Div(
-                        dcc.Graph(id="map", config={"displayModeBar": False, "scrollZoom": True}, responsive=True),
+                        [
+                            dcc.Graph(id="map", config={"displayModeBar": False, "scrollZoom": True}, responsive=True),
+                            dcc.Checklist(id="layers", options=layer_options({}), value=[], className="layers", inputClassName="layer-box",
+                                          labelClassName="layer-label"),
+                        ],
                         className="map-frame",
                     ),
                     html.Div(
-                        [html.Div(id="dot-panel", n_clicks=0, className="window-a"), html.Div(id="graph-window", className=window_class(False))],
-                        className="windows",
+                        [
+                            tab_bar(),
+                            html.Div(id="levels", className="level-tabs"),
+                            html.Div(
+                                [
+                                    html.Div(id="section-head", className="section-head"),
+                                    prompt_box(),
+                                    html.Div(id="section-live", className="section-live"),
+                                    html.Button(DETAILS, id="details-toggle", n_clicks=0, className=details_class(False, False)),
+                                ],
+                                id="section", className="section",
+                            ),
+                            html.Div(
+                                [html.Div(id="tag-body", className="tag-body"), html.Button("Open", id="tag-open", n_clicks=0, className="top-button tag-open")],
+                                id="tag-strip", className=tag_class(False, False),
+                            ),
+                            html.Div(id="figure-slot", className="figure-slot"),
+                        ],
+                        className="right-column",
                     ),
-                    html.Div(model_panel_boxes(), id="model-panels", className="model-panels"),
                 ],
                 className="workspace",
             ),
