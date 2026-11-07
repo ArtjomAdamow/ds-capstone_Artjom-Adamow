@@ -11,7 +11,7 @@ folder, app.launch.data_dir: data/ next to this file, or in the folder above it 
 nothing of the viewer; the random positions of B0 and the random layouts are the
 models' own draw (app.models.evaluation.random_directions, uniform on the sphere).
 
-What it measures (docs/draft/models/, each model's file):
+What it measures (docs/models/, each model's file):
   * B0, the random floor: the same-deck precision@5 of the 5 nearest cards at random positions on the sphere, over
     several seeds;
   * S1, the vectoriser variants (each a factory of anything with fit_transform): same-deck precision@5 (empty slots
@@ -1230,7 +1230,7 @@ def write_hand_labels_form(cards, labels: dict[str, dict], today: str, note: str
         "from one rule. Hard is analyse: several steps or concepts held together, nested or chained code, a "
         "calculation over a given table, a scenario whose condition flips the answer, or a distractor that is right "
         "in a nearby case. The count and the length of the options are not the criterion, the demand per option is. "
-        "The rule in full: docs/draft/models/difficulty.md, \"The hand-labelled sample\". Later runs keep the "
+        "The rule in full: docs/models/difficulty.md, \"The hand-labelled sample\". Later runs keep the "
         "marks in hand_labels.csv and score D1's predictions on the judged quizzes.",
         "",
         f"## The unrated quizzes ({len(unrated)})",

@@ -56,7 +56,7 @@ class SplitAndFeaturesTest(unittest.TestCase):
         self.assertEqual({card.stack for card in rated}, {3})
         self.assertEqual(len(unrated), 6)
         self.assertEqual({card.stack for card in unrated}, {2})
-        # The flashcards are in neither: the lecture notebooks' (stack 1) and the quiz file's (stack 4) alike
+        # The flashcards are in neither: Q_and_A.json's (stack 1) and the quiz file's (stack 4) alike
         flashcards = {card.id for card in self.cards if card.stack in (1, 4)}
         self.assertEqual(len(flashcards), 12)
         self.assertEqual({card.stack for card in self.cards if card.id in flashcards}, {1, 4})

@@ -1,9 +1,9 @@
 """The topic model T1 (no Dash, no state, nothing of the viewer): nearest centroid on the similarity index, seeded by
-the scripted topics of the course file (docs/draft/models/topic.md).
+the scripted topics of the course file (docs/models/topic.md).
 
-The topics of the course file are scripted (scripts/topics.py groups the cards by the headings and sources of the
-lectures), so they are the model's input, not the truth: the model takes them in and decides every card's topic for
-the state. The raw scripted topics stay in the course file, so nothing is ever removed.
+The topics of the course file are scripted (scripts/generate_topics.py groups the cards by the headings and sources
+of the lectures), so they are the model's input, not the truth: the model takes them in and decides every card's topic
+for the state. The raw scripted topics stay in the course file, so nothing is ever removed.
 
     unit rows of the cards (models.similar) ─────┐   per deck: a centroid per scripted topic (the mean of its cards'
                                                  ├→  unit rows, normalised) → every card's cosine to the deck's centroids,

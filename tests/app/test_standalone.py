@@ -44,7 +44,7 @@ from app.standalone.app import (
 from app.standalone.layout import (
     BETWEEN, CROSS_SYMBOL, DISAGREE, DOT_SIZE, EMPTIED, EMPTIED_SYMBOL, GENERATIONS, GREY, GROWN, LEGEND_STRIP, LEGEND_TITLES,
     LEVEL_COLORS, MOVED_IN, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, NEIGHBOUR_PAIRS, NOT_RATED,
-    PREDICTED, PREDICTED_SYMBOL, PROMPT_HINT, PROMPT_OFF, PROMPT_PLACEHOLDER, SELECTED_LINE, SELECTED_PAIRS, SELECTED_SIZE, TARGET,
+    PREDICTED, PROMPT_HINT, PROMPT_OFF, PROMPT_PLACEHOLDER, SELECTED_LINE, SELECTED_PAIRS, SELECTED_SIZE, TARGET,
     details_class, faded, layer_options, margin_color, page_layout, prompt_class, tab_class, tag_class,
 )
 from app.standalone.results import NO_FOLDER, Results, course_note, glossary_entry, read_glossary
@@ -1253,10 +1253,10 @@ class MeasuredMetricsTest(unittest.TestCase):
         self.assertEqual(rings["101001"], "rgba(0, 0, 0, 0)")  # a flashcard: no ring
         self.assertEqual(set(cards.marker.color), {GREY})  # the fill is T's
         self.assertEqual(dict(zip(cards.customdata, cards.text))["201002"], "201002 · D1: hard")  # its level on the hover
-        self.assertEqual(PREDICTED_SYMBOL, "cross")
         self.assertEqual([trace.name for trace in figure.data if trace.showlegend], [PREDICTED, NOT_RATED])  # no ring without D2
         legend = next(trace for trace in figure.data if trace.name == PREDICTED)
         self.assertEqual((legend.marker.color, legend.marker.line.color), (GREY, PREDICTED_COLOR))  # drawn as the dot is
+        self.assertEqual(legend.marker.symbol, "circle")  # a circle with the amber ring, as the dot, no cross
         self.assertEqual(PREDICTED_COLOR, "#c98500")  # the viewer's predicted group's colour too (test_difficulty_groups.py)
 
     def test_a_quiz_the_two_generations_put_at_different_levels_gets_a_ring_and_the_tag_strip_names_both(self):

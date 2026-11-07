@@ -6,12 +6,12 @@ the card panel through its `card_section` hook (project.services.actions.ModuleS
   this deck, or another deck by name. A neighbour in a checked deck is a target the viewer navigates to on a click
   (its topic entered, the card selected); a neighbour in an unchecked deck is listed without a click, its note says
   so. The cards view shows about 44 % of the neighbours; the list is where the other 56 % show
-  (docs/draft/models/similarity.md, "The hand check", point 8).
+  (docs/models/similarity.md, "The hand check", point 8).
 * The next card: the first entry, marked, the neighbour the learner should take next by the learner's confidence
   (rank_by_confidence): unread cards first, then the read ones by their confidence, the lowest ("review") first
   (CardConfidence.confidence, 1 to 100; the course's easy, medium and hard play no part). Among the unread cards the
   quizzes D1 predicted take their places in D1's order, the easiest first (its score, the cold-start order of the
-  extra quizzes, docs/draft/models/difficulty.md, "Conclusion"); the other unread cards keep the neighbour
+  extra quizzes, docs/models/difficulty.md, "Conclusion"); the other unread cards keep the neighbour
   order, the cold-start order of the flashcards until a prior exists. A neighbour without a target is never the next
   card. The next card is listed again among the neighbours, in its place.
 

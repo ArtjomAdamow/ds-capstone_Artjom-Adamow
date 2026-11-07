@@ -58,7 +58,6 @@ GREY = "#7c8b99"  # the viewer's colour of a dot in no group: a flashcard, the c
 LEVEL_COLORS = {"easy": "#4f7fcf", "medium": "#b8956a", "hard": "#ff5349"}  # blue, beige-brown, red-orange
 # The quizzes D1 predicted: the viewer's "Quiz difficulty: predicted" group (glue.difficulty_groups, the oldest group,
 # so its colour decides there too) and the predicted series of the shares figure share this amber
-PREDICTED_SYMBOL = "cross"
 DISAGREE = "D1 and D2 disagree"  # the ring behind a predicted quiz the two generations put at different levels
 DISAGREE_SYMBOL = "circle-open"
 DISAGREE_SIZE = 24
@@ -92,17 +91,18 @@ MAP_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 18}  # the leg
 HOVER_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 16}
 LEGEND_STRIP = 0.16  # the share of the map's height under the sphere for the legend's strip
 BAR_WIDTH = 0.1  # the share of the map's width at the right edge for the colour bar
-# The classes of the cards view with D, in legend order: (name, colour, symbol); a ring in the class's colour
+# The classes of the cards view with D, in legend order: (name, colour, symbol); a ring in the class's colour around
+# a circle, as the dots are drawn (a predicted quiz too: its amber ring, no symbol of its own)
 LEGEND = (
     ("easy", LEVEL_COLORS["easy"], "circle"), ("medium", LEVEL_COLORS["medium"], "circle"), ("hard", LEVEL_COLORS["hard"], "circle"),
-    (PREDICTED, PREDICTED_COLOR, PREDICTED_SYMBOL), (NOT_RATED, GREY, "circle"),
+    (PREDICTED, PREDICTED_COLOR, "circle"), (NOT_RATED, GREY, "circle"),
 )
 BETWEEN, MOVED_IN, MOVED_OUT = "between two topics", "moved in", "moved out"
 EMPTIED, GROWN = "emptied topic", "larger = more<br>uncertain cards"  # two lines in the strip
 T_TOPIC_LEGEND = ((EMPTIED, TOPIC_COLOR, EMPTIED_SYMBOL), (GROWN, TOPIC_COLOR, "circle"))
 LEGEND_TITLES = {"S": "Similar cards", "T": "Topic fit", "D": "Difficulty", "P": "Prompt"}  # plain, per layer
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
-STACK_NAMES = {STACK_PLAIN: "lecture flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
+STACK_NAMES = {STACK_PLAIN: "Q&A flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
 PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty", "P": "Prompt"}
 PANEL_LETTERS = tuple(PANEL_NAMES)
 # The model generations of each tab, in their tabs' fixed order, the oldest first; the newest is open when its tab opens

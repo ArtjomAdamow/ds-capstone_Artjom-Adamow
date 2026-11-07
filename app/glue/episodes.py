@@ -21,7 +21,7 @@ The header is written once, with the first row of a new file. A row that cannot 
 in a spreadsheet, say) is lost with one printed line: a log never stops the viewer's callback. A log, not state: rows are appended, never rewritten,
 and survive a fresh card state, which forgets model_state.json; runtime data of the launcher's folder, never tracked
 and never carried by a train. Its readers come later: the online measure of the related cards and of the dialog, and
-the D2 upgrade's signal from the trail (docs/draft/models/difficulty.md, "Later: the D2 upgrade"), which caps
+the D2 upgrade's signal from the trail (docs/models/difficulty.md, "Later: the D2 upgrade"), which caps
 the seconds of a learner away from the keyboard.
 """
 

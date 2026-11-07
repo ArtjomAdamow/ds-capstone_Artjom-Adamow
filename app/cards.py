@@ -4,7 +4,7 @@ ones), which the viewer's parser keeps apart from the card (its Quiz). The glue 
 cards with their quiz (glue.course.load_course), the course table carries the options in three columns
 (course_table), so the models read one record in both modes and need no import of the viewer.
 
-The stacks are the parser's: 1 a flashcard of the lecture notebooks, 2 an unrated quiz, 3 a rated quiz (with a
+The stacks are the parser's: 1 a flashcard of Q_and_A.json, 2 an unrated quiz, 3 a rated quiz (with a
 difficulty), 4 a flashcard of the quiz file. The id is the comb_id: the stack, the deck id and the card id.
 """
 

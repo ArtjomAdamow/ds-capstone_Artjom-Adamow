@@ -1,6 +1,6 @@
 """The navigation prompt P1 (no Dash, no state, nothing of the viewer): a request typed by the learner, scored
 against the topics by three routes over the index's vectors and answered with a target or "no match"
-(docs/draft/models/prompt.md, "P1: the navigation prompt").
+(docs/models/prompt.md, "P1: the navigation prompt").
 
     request ──→ the index's vectoriser (SimilarityIndex.queries, one transform) ──→ one unit row
                 │
