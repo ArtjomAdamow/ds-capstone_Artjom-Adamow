@@ -96,7 +96,7 @@ from .layout import (
 from .results import LEVEL_FILES, Results, course_note, read_glossary
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
-RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"  # next to evaluate.py: modules/helper/ here, the capstone's root
+RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"  # next to evaluate.py: the capstone's root
 TITLE = "Guided learning: the models"
 DECK_PART = 5  # the decks view's preset: parts of at most five decks (as the viewer's Helper presets them)
 CARD_PART = 4  # a topic's preset: parts of at most four cards

@@ -1,4 +1,4 @@
-"""The two files of the helper's own next to the viewer's state file (the launcher's temp/):
+"""The two files of the helper's own next to the viewer's state file (data/state/ by start.py):
 
 * The derived course file (DERIVED_NAME, write_derived_course): the raw course file written again with the cards'
   "topic" set by the topic model for the decks the Helper button has given the model's topics, the same decks,
@@ -29,8 +29,8 @@ from project.content.parser import card_stack, comb_id
 
 from ..models.topic_model import MODEL_NAME
 
-DERIVED_NAME = "helper_topics.json"  # the model's topics as a course file for the viewer (temp/)
-MODEL_STATE_NAME = "model_state.json"  # one entry per model (temp/, next to the derived file and the state file)
+DERIVED_NAME = "helper_topics.json"  # the model's topics as a course file for the viewer
+MODEL_STATE_NAME = "model_state.json"  # one entry per model (next to the derived file and the state file)
 MODEL_STATE_VERSION = 1
 TOPIC_MODEL = "topic_model"  # the model state's entry of T1: the decks with the model's topics
 DIFFICULTY_MODEL = "difficulty_model"  # the entry of D1: its generated groups

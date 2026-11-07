@@ -1,13 +1,16 @@
-"""Start the guided learning app: the capstone's launcher. It is developed with the package app/ in the flashcards
-workspace (modules/helper/start.py) and exported next to it into the capstone's root, where only the export changes
-it (tools/export/export.md). It needs no arguments: the folders and the commands are written below.
-From the capstone's root:
+"""Start the guided learning app: the launcher of the capstone and of the flashcards workspace. It is developed with
+the package app/ in the flashcards workspace and exported next to it into the capstone's root, where only the export
+changes it. It needs no arguments: the folders and the commands are written below. From the capstone's root:
 
     uv run start.py
 
 It searches for sputnik, the viewer (the capstone's `viewer` extra, imported as `project`). Found, it asks "Launch
 Sputnik? (y/n)": y, or no input, starts the full app, n the standalone page. Not found, it starts the standalone page
-without asking and prints the command that installs the viewer. `--mode full|standalone` skips the question.
+without asking and prints the command that installs the viewer. In the flashcards workspace the viewer is the
+workspace's own package (no sputnik), and the full app starts without the question. `--mode full|standalone` skips
+the question. Before the full app it asks the backup question (app.launch.prepare_state): with a state file in
+data/state/, y backs up user_state.json and model_state.json (_01.bak, _02.bak, ...) and starts fresh, n or no
+input keeps them; the episodes' log stays.
 
     standalone  the models on a page of their own (app.standalone), on the course table in data/course/
                 (cards.csv, decks.csv, topics.csv); nothing is stored; `--port` names its port
@@ -23,8 +26,9 @@ Both modes run the app's vectoriser (app.models.embeddings.app_vectoriser): S2's
 embeddings cached in data/cache/embeddings/ where sentence-transformers is installed (the embeddings extra), TF-IDF
 otherwise, with one line that says so.
 
-data/ is git-ignored: the course data comes from the flashcards workspace with the helper's migration (its
-tools/train.py), as the package and this file do. A missing library, a missing
+data/ lies next to this file, or, in the flashcards workspace, in the folder above it (app.launch.data_dir). In the
+capstone it is git-ignored: the course data comes from the flashcards workspace with a train, as the package and this
+file do. A missing library, a missing
 data file or a sputnik older than app.launch.VIEWER_RELEASE stops the start with the command that fixes it. Until
 then it imports only the standard library and app.launch, so it starts on any interpreter.
 
@@ -44,18 +48,19 @@ from pathlib import Path
 from typing import Callable, MutableMapping, Optional, Sequence
 
 from app.launch import (
-    MODE_VARIABLE, MODELS_URL, STANDALONE, VIEWER_RELEASE, VIEWER_URL, choose_mode, mode_of_child, requested_port,
-    standalone_url, start_standalone, stop_standalone, viewer_available,
+    CACHE_FOLDER, FULL, MODE_VARIABLE, MODELS_URL, STANDALONE, STATE_FOLDER, VIEWER_DISTRIBUTION, VIEWER_RELEASE,
+    VIEWER_URL, choose_mode, data_dir, mode_of_child, prepare_state, requested_port, standalone_url, start_standalone,
+    stop_standalone, viewer_available, viewer_here,
 )
 
-ROOT = Path(__file__).resolve().parent  # the capstone's root: start.py sits next to the package
-DATA_DIR = ROOT / "data"
+ROOT = Path(__file__).resolve().parent  # start.py sits next to the package: the capstone's root
+DATA_DIR = data_dir(ROOT)  # data/ next to it, or in the folder above it (the flashcards workspace's root)
 COURSE_FILE = DATA_DIR / "topics.json"  # the course file, version 3: the full app's input
 TABLE_DIR = DATA_DIR / "course"  # the course table: the standalone page's input
 RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the standalone page's panels read them
-STATE_FILE = DATA_DIR / "state" / "user_state.json"  # the viewer's state file; the derived course file, the
+STATE_FILE = DATA_DIR / STATE_FOLDER / "user_state.json"  # the viewer's state file; the derived course file, the
 # model state and the episodes' log go next to it (app.glue.composition)
-CACHE_DIR = DATA_DIR / "cache"  # the embeddings' cache of S2 (app.models.embeddings), a derived file, no state
+CACHE_DIR = DATA_DIR / CACHE_FOLDER  # the embeddings' cache of S2 (app.models.embeddings), a derived file, no state
 RELOADER = True  # the full app restarts on code changes; the reloader's child fits the models and serves
 
 # The commands it prints
@@ -63,12 +68,10 @@ INSTALL = "uv sync --all-groups"
 INSTALL_VIEWER = "uv sync --all-groups --extra viewer"
 START = "uv run start.py"
 DATA_HINT = (
-    "The course data is not in the repository: it comes into data/ with the helper's migration from the flashcards "
-    "workspace (tools/train.py there)."
+    "The course data is not in the repository: it comes into data/ with a train from the flashcards workspace."
 )
 
 LIBRARIES = ("numpy", "scipy", "sklearn", "dash", "plotly")  # what the models and the page import
-VIEWER_DISTRIBUTION = "sputnik"  # the viewer's installed name (here the flashcards package has another one)
 
 
 def missing_libraries(find_spec: Callable = importlib.util.find_spec) -> list[str]:
@@ -114,14 +117,14 @@ def run_standalone(table_dir: Path = TABLE_DIR, cache_dir: Path = CACHE_DIR, por
 
 
 def run_full(
-    root: Path = ROOT, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE, cache_dir: Path = CACHE_DIR,
-    environ: MutableMapping[str, str] = os.environ,
+    root: Path = DATA_DIR.parent, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE,
+    cache_dir: Path = CACHE_DIR, environ: MutableMapping[str, str] = os.environ,
 ) -> None:
-    """Sputnik's app with the Helper button, served with the debug reloader. The reloader's parent composes the
-    viewer's app on the raw course file without the models and stores nothing (its random positions would read as
-    stored ones); the child fits the models, writes the derived course file and saves the state at the start. The
-    Models button links the page's URL where the environment names it (MODELS_URL, set by main) and the viewer's
-    top bar takes links."""
+    """Sputnik's app with the Helper button, served with the debug reloader, on `root`, the data folder's parent (the
+    images under data/images/). The reloader's parent composes the viewer's app on the raw course file without the
+    models and stores nothing (its random positions would read as stored ones); the child fits the models, writes the
+    derived course file and saves the state at the start. The Models button links the page's URL where the
+    environment names it (MODELS_URL, set by main) and the viewer's top bar takes links."""
     if not course_file.is_file():
         raise SystemExit(f"No course file at {course_file}. {DATA_HINT}")
     too_old = viewer_too_old()
@@ -146,8 +149,9 @@ def run_full(
 
 def main(ask: Callable = input, environ: MutableMapping[str, str] = os.environ, arguments: Optional[Sequence[str]] = None) -> None:
     """The start: the mode (the question, or `--mode` among `arguments`, sys.argv's by default), then the page alone
-    or the full app with the page as a process of its own next to it (the reloader's child starts no second page;
-    the page's own process runs this file with `--mode standalone --port`)."""
+    or, after the backup question, the full app with the page as a process of its own next to it (the reloader's
+    child asks nothing and starts no second page; the page's own process runs this file with `--mode standalone
+    --port`)."""
     arguments = list(sys.argv[1:] if arguments is None else arguments)
     missing = missing_libraries()
     if missing:
@@ -162,8 +166,10 @@ def main(ask: Callable = input, environ: MutableMapping[str, str] = os.environ, 
     else:
         if not found:
             print(f"Sputnik not found: starting the standalone page. For the full app: {INSTALL_VIEWER}")
-        mode = choose_mode(found, ask, arguments)
+        mode = choose_mode(found, ask, arguments, here=viewer_here())
         environ[MODE_VARIABLE] = mode  # the reloader's child runs the same mode
+        if mode == FULL:
+            prepare_state(STATE_FILE.parent, ask)
     if mode == STANDALONE:
         run_standalone(port=requested_port(arguments), viewer_url=environ.get(VIEWER_URL) or None)
         return

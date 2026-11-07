@@ -8,22 +8,21 @@ test_course_model, test_difficulty_model) import this file only, so they run in 
 import sys
 from pathlib import Path
 
-# The folder that holds the package app/ and start.py: modules/helper/ here, the root in the capstone, where these
-# files are exported to tests/app/ (tools/export/export.md); the nearest one above this file
+# The folder that holds the package app/ and start.py, the root in the capstone, where these files are exported to
+# tests/app/; the nearest one above this file
 MODULE_DIR = next(folder for folder in Path(__file__).resolve().parents if (folder / "app" / "__init__.py").is_file())
-# The real course table (git-ignored data, the tests that read it skip without it): the capstone's data/ next to the
-# package, or this workspace's at the repository root
-COURSE_TABLE_DIR = next(
-    (folder for folder in (MODULE_DIR / "data" / "course", MODULE_DIR.parents[1] / "data" / "course") if folder.is_dir()),
-    MODULE_DIR / "data" / "course",
-)
 sys.dont_write_bytecode = True
 if not any(Path(entry or ".").resolve() == MODULE_DIR for entry in sys.path):
     sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
 
 from app.cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE, CardRecord  # noqa: E402
+from app.launch import data_dir  # noqa: E402
 from app.models.course_model import CourseModel  # noqa: E402
 from app.models.topic_model import TopicSeed  # noqa: E402
+
+# The real course table (git-ignored data, the tests that read it skip without it), in the launchers' data folder:
+# data/ next to the package (the capstone), or in the folder above it (the flashcards workspace)
+COURSE_TABLE_DIR = data_dir(MODULE_DIR) / "course"
 
 # Three small decks with real words, so the TF-IDF baseline (terms in at least two cards) has something to match.
 # The ids are comb_ids: stack + deck id + card id (stack 1 plain, 2 quiz, 3 quiz with difficulty, 4 a flashcard of

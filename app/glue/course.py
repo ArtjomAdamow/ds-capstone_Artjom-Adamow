@@ -5,7 +5,7 @@ and sources the parser does not keep, read from the course file with the json mo
 course file is version 3 (data/topics.json); the parser refuses anything else.
 
 The capstone's standalone page reads the course table instead (app.course_table), written by the same parser
-version through modules/helper/export_course.py, so the ids and the records agree with the viewer's.
+version through the flashcards workspace's export, so the ids and the records agree with the viewer's.
 """
 
 from dataclasses import dataclass

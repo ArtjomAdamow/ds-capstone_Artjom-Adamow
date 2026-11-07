@@ -11,14 +11,14 @@
   the sphere's surface and arcs, the dendrogram over scipy's coordinates); plotly only, no Dash, nothing of the
   viewer, and out of `models`, so the model tests need no plotly.
 * `course_table`: the course table (cards.csv, decks.csv, topics.csv), the models' input without the viewer's
-  parser, read with the csv module; modules/helper/export_course.py writes it with the parser.
-* `launch`: the launcher's mode question, full (the viewer with the Helper button) or standalone, and the standalone
-  page as a process next to the viewer, shared by both launchers.
+  parser, read with the csv module; the flashcards workspace's export writes it with the parser.
+* `launch`: the launcher's mode question, full (the viewer with the Helper button) or standalone, the standalone
+  page as a process next to the viewer, the data folder and the backup question, shared by the launchers.
 * `standalone`: the models on a page of their own, without the viewer: the course table in,
   the three views, the dendrogram and D1's metrics in the viewer's theme; nothing stored.
 
 The viewer part of the helper (the navigation rules, the groups apart, the topic reload) was never in here: it was
-kept in modules/helper/delta/ as the project features it is and is merged into the viewer
-(sputnik v0.2), where the glue uses it through the viewer's hooks. The launcher
-(modules/helper/helper.py) runs the package on the viewer and the standalone page.
+kept in the flashcards workspace as the project features it is and is merged into the viewer
+(sputnik v0.2), where the glue uses it through the viewer's hooks. The launcher start.py runs the package on the
+viewer and the standalone page.
 """

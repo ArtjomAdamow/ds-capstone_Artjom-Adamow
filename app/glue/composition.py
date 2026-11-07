@@ -1,5 +1,5 @@
-"""The composition (glue): the models behind the Helper button on the viewer's app (used by the launcher's
-composition root, modules/helper/delta/cards.py, and the tests).
+"""The composition (glue): the models behind the Helper button on the viewer's app (used by start.py, by the
+composition root of the flashcards workspace's module launcher, and by the tests).
 
 A fresh start is the viewer's own: every deck and topic checked, the course file's scripted topics, random
 positions, no connections and no generated groups. The models are fitted in the serving process at every start
@@ -131,8 +131,8 @@ def serving_process(reloader: bool = True, environ: Mapping[str, str] = os.envir
 
 
 def is_fresh(state_path: Path) -> bool:
-    """Whether the state file holds no card state yet. Asked through the viewer's document, not the path: the
-    launcher redirects the document by the requested file name to its temp/ folder, where the file may not exist
+    """Whether the state file holds no card state yet. Asked through the viewer's document, not the path: a module
+    launcher redirects the document by the requested file name to its own folder, where the file may not exist
     even though the requested path (data/user_state.json of the main project) does."""
     return state_store.StateDocument(state_path).section(state_store.CARDS_SECTION).read() is None
 
@@ -170,8 +170,8 @@ def compose_model(
     and Display's check where those connections are. With fit=False and no
     model, the app is the viewer's on the raw course file (no Helper button), and
     nothing is written. D1 is fitted with the model unless given. `state_path` is the viewer's one state file;
-    `derived_path` is where the derived course file and the model state go (the launcher's cards.py passes its
-    temp/); by default next to the requested state file. `links` are the viewer's TopBarLinks for its top bar
+    `derived_path` is where the derived course file and the model state go (a module launcher's composition root
+    passes its own folder); by default next to the requested state file. `links` are the viewer's TopBarLinks for its top bar
     (the launcher's link to the models' page), passed where the viewer's compose takes them. `vectoriser` and
     `min_score` are the index's when the model is fitted here (the app's vectoriser from the launchers, at its own
     minimum; TF-IDF at the fixed minimum by default). The episodes' log goes next to the model state."""

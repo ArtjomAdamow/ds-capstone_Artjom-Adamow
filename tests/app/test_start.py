@@ -1,10 +1,13 @@
-"""The capstone's launcher (start.py, exported next to the package): it searches for sputnik and asks only when it
-finds it, the reloader's child asks nothing, and a missing library, a missing data file or an older sputnik stops the
-start with the command that fixes it; it loads and stops without the models' libraries (a subprocess with them
-blocked). The two runs are mocked, so nothing is served and nothing of the viewer is imported."""
+"""The launcher (start.py, exported next to the package): it searches for sputnik and asks only when it finds it (on
+the flashcards workspace's own viewer the full app starts without the question), asks the backup question before the
+full app, the reloader's child asks nothing, and a missing library, a missing data file or an older sputnik stops the
+start with the command that fixes it; its folders follow the data folder's rule; it loads and stops without the
+models' libraries (a subprocess with them blocked). The two runs and the backup question are mocked, so nothing is
+served, no state is touched and nothing of the viewer is imported."""
 
 import model_support  # noqa: F401  (the package and start.py on the path)
 
+import inspect
 import subprocess
 import sys
 import tempfile
@@ -18,13 +21,16 @@ from app import launch
 
 
 class StartModeTest(unittest.TestCase):
-    def start(self, found, answer=None, environ=None, arguments=()):
-        """main with the viewer found or not and the runs mocked: (the mode that ran, the ask mock, the environ)."""
+    def start(self, found, answer=None, environ=None, arguments=(), here=False):
+        """main with the viewer found or not (the workspace's own with `here`) and the runs and the backup question
+        mocked: (the mode that ran, the ask mock, the environ)."""
         ask = mock.Mock(side_effect=EOFError) if answer is None else mock.Mock(return_value=answer)
         environ = {} if environ is None else environ
         with (
             mock.patch.object(start, "missing_libraries", return_value=[]),
             mock.patch.object(start, "viewer_available", return_value=found),
+            mock.patch.object(start, "viewer_here", return_value=here),
+            mock.patch.object(start, "prepare_state") as prepare_state,
             mock.patch.object(start, "run_standalone") as standalone,
             mock.patch.object(start, "run_full") as full,
             mock.patch.object(start, "start_standalone", return_value="page") as page,
@@ -33,7 +39,7 @@ class StartModeTest(unittest.TestCase):
         ):
             start.main(ask, environ, list(arguments))
         self.assertEqual(standalone.call_count + full.call_count, 1)
-        self.page, self.stop, self.standalone = page, stop, standalone
+        self.page, self.stop, self.standalone, self.prepare_state = page, stop, standalone, prepare_state
         return (launch.STANDALONE if standalone.called else launch.FULL), ask, environ
 
     def test_the_full_app_starts_the_page_next_to_it_and_stops_it_after(self):
@@ -53,6 +59,7 @@ class StartModeTest(unittest.TestCase):
         with (
             mock.patch.object(start, "missing_libraries", return_value=[]),
             mock.patch.object(start, "viewer_available", return_value=True),
+            mock.patch.object(start, "prepare_state"),
             mock.patch.object(start, "run_full", side_effect=RuntimeError("the viewer")),
             mock.patch.object(start, "start_standalone", return_value="page"),
             mock.patch.object(start, "stop_standalone") as stop,
@@ -86,6 +93,26 @@ class StartModeTest(unittest.TestCase):
 
     def test_with_sputnik_and_no_input_the_full_app_starts(self):
         self.assertEqual(self.start(True)[0], launch.FULL)
+
+    def test_on_the_workspaces_own_viewer_the_full_app_starts_without_the_mode_question(self):
+        ran, ask, environ = self.start(True, "n", here=True)
+        self.assertEqual(ran, launch.FULL)
+        self.assertNotIn(mock.call(launch.LAUNCH_QUESTION), ask.call_args_list)
+        self.assertEqual(environ[launch.MODE_VARIABLE], launch.FULL)
+        self.page.assert_called_once()  # the page next to the viewer, as with sputnik
+        ran, _ask, _environ = self.start(True, "y", arguments=["--mode", "standalone"], here=True)
+        self.assertEqual(ran, launch.STANDALONE)
+
+    def test_the_backup_question_comes_before_the_full_app_in_the_first_process_only(self):
+        ran, ask, _environ = self.start(True, "y")
+        self.assertEqual(ran, launch.FULL)
+        self.prepare_state.assert_called_once_with(start.STATE_FILE.parent, ask)  # data/state/, with the same input
+        self.start(True, "n")  # the standalone page stores nothing: no question
+        self.prepare_state.assert_not_called()
+        self.start(True, "y", {"WERKZEUG_RUN_MAIN": "true", launch.MODE_VARIABLE: launch.FULL})  # the reloader's child
+        self.prepare_state.assert_not_called()
+        self.start(True, "n", here=True)  # the workspace's own viewer: no mode question, the backup question
+        self.prepare_state.assert_called_once()
 
     def test_the_reloaders_child_asks_nothing_and_runs_its_parents_mode(self):
         environ = {"WERKZEUG_RUN_MAIN": "true", launch.MODE_VARIABLE: launch.STANDALONE}
@@ -158,11 +185,16 @@ class StartDataTest(unittest.TestCase):
         self.assertIsNone(start.viewer_too_old(installed("0.10.0")))
         self.assertIsNone(start.viewer_too_old(mock.Mock(side_effect=metadata.PackageNotFoundError)))
 
-    def test_the_folders_are_the_capstones_data_next_to_the_package(self):
+    def test_the_folders_follow_the_data_folders_rule(self):
         self.assertTrue((start.ROOT / "app" / "__init__.py").is_file())
-        self.assertEqual(start.COURSE_FILE, start.ROOT / "data" / "topics.json")
-        self.assertEqual(start.TABLE_DIR, start.ROOT / "data" / "course")
-        self.assertEqual(start.STATE_FILE.parent, start.ROOT / "data" / "state")
+        self.assertEqual(start.DATA_DIR, launch.data_dir(start.ROOT))  # data/ next to the package, or above it
+        self.assertEqual(start.COURSE_FILE, start.DATA_DIR / "topics.json")
+        self.assertEqual(start.TABLE_DIR, start.DATA_DIR / "course")
+        self.assertEqual(start.STATE_FILE, start.DATA_DIR / "state" / "user_state.json")
+        self.assertEqual(start.CACHE_DIR, start.DATA_DIR / "cache")
+        self.assertEqual(start.RESULTS_DIR, start.ROOT / "results")  # next to evaluate.py
+        # compose's root is the data folder's parent: the images under data/images/
+        self.assertEqual(inspect.signature(start.run_full).parameters["root"].default, start.DATA_DIR.parent)
 
 
 # A process without the models' libraries and the viewer: start.py loads (the standard library and app.launch only)

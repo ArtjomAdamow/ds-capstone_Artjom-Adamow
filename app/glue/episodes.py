@@ -1,5 +1,5 @@
 """The episodes' log (glue): every ended episode of the Ask dialog or the card section as one row of `episodes.csv`
-next to the model state (temp/ here, data/state/ in the capstone), through the viewer's `after_episode` hook
+next to the model state (data/state/ by start.py), through the viewer's `after_episode` hook
 (project.services.episode; step 26 of the helper).
 
 The viewer grades what the learner did after a navigation and hands over the record: the source (`prompt` or

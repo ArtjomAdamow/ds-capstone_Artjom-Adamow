@@ -46,7 +46,7 @@ VECTORISERS = (TFIDF,) + tuple(ENCODERS) + tuple(f"hybrid-{name}" for name in EN
 # interval that excludes zero, the first neighbour kept, deck 18 not reversing it
 APP_VECTORISER = "hybrid-minilm"
 BATCH_SIZE = 64
-CACHE_FOLDER = "embeddings"  # the cache's folder name under the launcher's derived folder (temp/, data/cache/)
+CACHE_FOLDER = "embeddings"  # the cache's folder name under the launchers' cache folder (data/cache/)
 LIBRARY = "sentence_transformers"
 FETCH_COMMAND = 'python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer({name!r})"'
 # The device of S2's encoder and D2's model (gen3.md): "auto", the GPU where torch sees one (the embeddings-gpu

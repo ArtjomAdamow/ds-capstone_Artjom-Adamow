@@ -1,15 +1,14 @@
 """Offline evaluation of the helper's models (app.models) on the course table. It is developed with the package app/
-in the flashcards workspace (modules/helper/evaluate.py) and exported next to it into the capstone's root, where only
-the export changes it (tools/export/export.md). From the capstone's root:
+in the flashcards workspace and exported next to it into the capstone's root, where only the export changes it. From
+the capstone's root:
 
     uv run evaluate.py [--part <part>] [--table data/course] [--results results]
 
-and in the flashcards workspace, from the repository root:
+and in the flashcards workspace the same way on the modules' env.
 
-    modules/helper/.venv/Scripts/python.exe modules/helper/evaluate.py [--part <part>]
-
-It reads the course table (app.course_table: cards.csv, decks.csv and topics.csv, by default in data/ next to this
-file or at the repository root) and nothing of the viewer; the random positions of B0 and the random layouts are the
+It reads the course table (app.course_table: cards.csv, decks.csv and topics.csv, by default in the launchers' data
+folder, app.launch.data_dir: data/ next to this file, or in the folder above it in the flashcards workspace) and
+nothing of the viewer; the random positions of B0 and the random layouts are the
 models' own draw (app.models.evaluation.random_directions, uniform on the sphere).
 
 What it measures (docs/draft/models/, each model's file):
@@ -92,11 +91,12 @@ import numpy as np
 
 sys.dont_write_bytecode = True  # as in the launcher: no __pycache__ next to the module's sources
 
-MODULE_DIR = Path(__file__).resolve().parent  # the folder of the package app/: modules/helper/ here, the capstone's root
+MODULE_DIR = Path(__file__).resolve().parent  # the folder of the package app/: the capstone's root
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
 
 from app import course_table  # noqa: E402
+from app.launch import CACHE_FOLDER, data_dir  # noqa: E402
 from app.models import embeddings, evaluation, layout, similar, zero_shot  # noqa: E402
 from app.models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel  # noqa: E402
 from app.models.difficulty_model import (  # noqa: E402
@@ -109,10 +109,6 @@ from app.models.topic_model import FOCUS_MARGIN, TopicModel  # noqa: E402
 from sklearn.feature_extraction.text import TfidfVectorizer  # noqa: E402
 
 RESULTS_DIR = MODULE_DIR / "results"
-# The course table: the capstone's data/ next to the package, or the flashcards workspace's at the repository root
-TABLE_DIRS = (MODULE_DIR / "data" / "course",) + tuple(
-    parent / "data" / "course" for parent in MODULE_DIR.parents[1:2]
-)
 SEEDS = (42, 1, 2, 3, 4)
 FIXED_K = (2, 3)  # the fixed small k of the card layouts' overlap
 # The hand check's sample, deck -> every n-th card: every card of the two NLP decks and of the transfer deck 18
@@ -121,8 +117,6 @@ TRANSFER_DECK = "AI Agents & RAG Systems"  # judged with the others, read once a
 # The tags of the marks' note column (similarity.md, "S2", "How it is judged"): three on an irrelevant candidate,
 # two on a relevant one; the evaluation counts per variant how many tagged pairs it lists
 TAGS = ("lexical trap", "shared dataset", "generic term", "paraphrase", "code name")
-# The embeddings' cache: the launchers' folder, data/cache/ next to the package (the capstone) or temp/ (here)
-CACHE_DIRS = (MODULE_DIR / "data" / "cache", MODULE_DIR / "temp")
 COLUMNS = [
     "date", "run", "model", "variant", "params", "seed", "precision_at_5", "kept_precision", "coverage", "distinct", "min_score",
     "hand_precision", "hand_p1", "hand_p3", "hand_diff", "hand_diff_low", "hand_diff_high", "judged_cards",
@@ -198,13 +192,13 @@ def result_files(folder: Path = RESULTS_DIR) -> ResultFiles:
 
 
 def default_table_dir() -> Path:
-    """The first course table folder of TABLE_DIRS that exists (the first one when none does)."""
-    return next((folder for folder in TABLE_DIRS if folder.is_dir()), TABLE_DIRS[0])
+    """The course table in the launchers' data folder (app.launch.data_dir): data/course/."""
+    return data_dir(MODULE_DIR) / "course"
 
 
 def default_cache_dir() -> Path:
-    """The embeddings' cache folder: the first of CACHE_DIRS whose parent (data/, the module folder) exists."""
-    return next((folder for folder in CACHE_DIRS if folder.parent.is_dir()), CACHE_DIRS[0])
+    """The embeddings' cache, the launchers' folder in their data folder (app.launch.data_dir): data/cache/."""
+    return data_dir(MODULE_DIR) / CACHE_FOLDER
 
 
 # --- the variants -----------------------------------------------------------------------

@@ -663,13 +663,18 @@ class TagsTest(unittest.TestCase):
         self.assertEqual(evaluate.HAND_CHECK_DECKS, {"NLP Fundamentals": 1, "LLM Foundations & Embeddings": 1, "AI Agents & RAG Systems": 1})
         self.assertEqual(evaluate.TRANSFER_DECK, "AI Agents & RAG Systems")
 
-    def test_the_default_cache_folder_is_data_cache_next_to_the_package_or_temp(self):
+    def test_the_default_folders_are_in_the_launchers_data_folder(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            with mock.patch.object(evaluate, "CACHE_DIRS", (root / "data" / "cache", root / "temp")):
-                self.assertEqual(evaluate.default_cache_dir(), root / "temp")  # no data/: the module's temp/
-                (root / "data").mkdir()
-                self.assertEqual(evaluate.default_cache_dir(), root / "data" / "cache")
+            module_dir = Path(folder) / "root" / "package"
+            module_dir.mkdir(parents=True)
+            (module_dir.parent / "data").mkdir()
+            with mock.patch.object(evaluate, "MODULE_DIR", module_dir):
+                # data/ in the folder above the package's (the flashcards workspace)
+                self.assertEqual(evaluate.default_cache_dir(), module_dir.parent / "data" / "cache")
+                self.assertEqual(evaluate.default_table_dir(), module_dir.parent / "data" / "course")
+                (module_dir / "data").mkdir()  # data/ next to the package (the capstone) comes first
+                self.assertEqual(evaluate.default_cache_dir(), module_dir / "data" / "cache")
+                self.assertEqual(evaluate.default_table_dir(), module_dir / "data" / "course")
 
 
 REQUESTS = (
