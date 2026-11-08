@@ -91,6 +91,7 @@ MAP_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 18}  # the leg
 HOVER_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 16}
 LEGEND_STRIP = 0.16  # the share of the map's height under the sphere for the legend's strip
 BAR_WIDTH = 0.1  # the share of the map's width at the right edge for the colour bar
+LABEL_BACKING = "rgba(7, 24, 39, 0.95)"  # a label on the plot over a line: the line hidden behind it
 # The classes of the cards view with D, in legend order: (name, colour, symbol); a ring in the class's colour around
 # a circle, as the dots are drawn (a predicted quiz too: its amber ring, no symbol of its own)
 LEGEND = (
@@ -497,16 +498,23 @@ def empty_slot(text: str) -> html.Div:
     return html.Div(html.P(text, className="empty-state"), className="slot-note")
 
 
-def margin_histogram(margins: Sequence[float], threshold: float) -> go.Figure:
+def margin_histogram(margins: Sequence[float], threshold: float, focus: Optional[float] = None, focus_share: float = 0.25) -> go.Figure:
     """The view's margins in bins, the threshold as a dashed line labelled on the plot: below it a card is
-    between two topics."""
+    between two topics; with `focus` (the dashboard's) a second line where the `focus_share` most confident begin,
+    labelled lower on the plot."""
     figure = go.Figure(go.Histogram(x=list(margins), nbinsx=20, marker={"color": margin_color(1.0, 1.0)}, hoverinfo="skip"))
     figure.add_vline(x=threshold, line={"color": CUT_COLOR, "dash": "dash", "width": 2},
                      annotation={"text": f"between two topics below {threshold:.2f}", "font": {**FONT, "color": CUT_COLOR}},
                      annotation_position="top right")
+    if focus is not None:  # its label lower down, both on a dark backing where the lines cross a label
+        figure.add_vline(x=focus, line={"color": GOLD, "dash": "dot", "width": 2},
+                         annotation={"text": f"the {focus_share * 100:.0f} % most confident above {focus:.2f}", "font": {**FONT, "color": GOLD},
+                                     "y": 0.75, "yanchor": "top", "bgcolor": LABEL_BACKING},
+                         annotation_position="top right")
+        figure.layout.annotations[0].bgcolor = LABEL_BACKING
     figure.update_layout(plain_layout(
         margin={"l": 70, "r": 10, "t": 30, "b": 60},
-        xaxis={"title": {"text": "margin: the best centroid's cosine minus the second best's", "font": LABEL_FONT}, "tickfont": FONT,
+        xaxis={"title": {"text": "margin: best centroid's cosine − second best's", "font": LABEL_FONT}, "tickfont": FONT,
                "gridcolor": GRID, "zeroline": False, "fixedrange": True},
         yaxis={"title": {"text": "cards", "font": LABEL_FONT}, "tickfont": FONT, "gridcolor": GRID, "zeroline": False, "fixedrange": True},
         bargap=0.05,

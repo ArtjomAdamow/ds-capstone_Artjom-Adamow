@@ -7,13 +7,16 @@ place; Back on the trail, disabled on an empty one; a request's answer showing t
 entries and a click on one closing the answer, an empty request; the diagram's names, highlights, its explored set
 and its empty start, a click on a deck, a topic or a card; the five tiles on the results fixtures and the line
 without a file, a tile opening its panel, a second tile replacing it, the open tile closing it, Enter doing nothing
-while it is open; the layout's regions and the stylesheet; the state file; the judgement's functions; and that
+while it is open; each panel's figure of the whole course (S where the related cards lie, C the decks with the shown
+card's deck gold and in front, T the margins with the threshold and the most confident quarter, D the matrix, P's grid
+from the counts of the newest run and its line without them); the layout's regions and the stylesheet; the state file; the judgement's functions; and that
 nothing of the viewer or the glue is imported (a subprocess with the viewer blocked). The real course's table serves
 a request too (skipped without it)."""
 
 import model_support
 
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -27,14 +30,19 @@ import test_standalone
 from app.course_table import load_table, missing_files
 from app.dashboard import main as dashboard_main
 from app.dashboard import quiz
-from app.dashboard.app import ASSETS_DIR, HOME, INPUT_IDS, INPUTS, OUT, OUTPUT_NAMES, Dashboard, create_app, diagram_click, register_callback
+from app.dashboard.app import (
+    ASSETS_DIR, HOME, INPUT_IDS, INPUTS, NO_OUTCOMES, OUT, OUTPUT_NAMES, Dashboard, create_app, diagram_click, register_callback,
+)
 from app.dashboard.layout import (
     BACK_HINT, BEGIN_HINT, DIAGRAM_INPUT, FLASHCARD_HINT, GO_SLOTS, KEY_INPUT, NEXT_MARK, NO_MATCH, NO_MATCH_NEAREST, PANEL_LETTERS,
     RELATED_SLOTS, THIS_DECK, THIS_TOPIC, page_layout, tile_class,
 )
+from app.dashboard.panel_figures import A_DECK, CURRENT_DECK
 from app.dashboard.state import STATE_NAME, VERSION, DashboardState
+from app.figures import GOLD
 from app.neighbours import rank_by_confidence, shorten
-from app.standalone.headlines import WHAT
+from app.standalone.app import DECK_PART
+from app.standalone.headlines import OUTCOME_COLUMNS, WHAT, outcomes
 from app.standalone.results import course_note
 
 SLICING = "201002"  # Alpha's quiz: how do you slice a list, option 0 correct
@@ -527,6 +535,69 @@ class DashboardTest(Driver):
         self.call("tile-D")
         self.assertEqual(self.enter()[OUT["face_class"]], "card-face back")
 
+    def panel_figure(self, letter):
+        """The open panel's two parts and its figure (None where it shows a line)."""
+        result = self.call(f"tile-{letter}")
+        (body,) = result[OUT["panel"]]
+        text, slot = body.children
+        self.assertEqual((body.className, text.className, slot.className), ("panel-body", "panel-text", "panel-figure"))
+        graph = slot.children
+        self.call(f"tile-{letter}")  # closed again
+        return text, slot, (graph.figure if type(graph).__name__ == "Graph" else None)
+
+    def test_ss_figure_is_where_the_courses_related_cards_lie_one_bar_in_three_parts(self):
+        _text, _slot, figure = self.panel_figure("S")
+        self.assertEqual([trace.name for trace in figure.data], [THIS_TOPIC, THIS_DECK, "another deck"])
+        counts = self.board.place_counts()
+        self.assertEqual(sum(counts.values()), sum(len(self.board.neighbours(card_id)) for card_id in self.board.card_by_id))
+        self.assertAlmostEqual(sum(trace.x[0] for trace in figure.data), 1.0)
+        outside = 1 - counts[THIS_TOPIC] / sum(counts.values())
+        annotations = [annotation.text for annotation in figure.layout.annotations]
+        self.assertIn(f"outside the card's topic: {outside * 100:.0f} %", annotations)
+        self.assertTrue(any(f"of {len(self.board.card_by_id)} cards" in text for text in annotations))
+        self.assertIs(self.board.panel_figure("S"), self.board.panel_figure("S"))  # made once
+
+    def test_cs_figure_is_the_decks_on_the_sphere_with_the_shown_cards_deck_in_gold_and_in_front(self):
+        _text, _slot, figure = self.panel_figure("C")
+        names = [trace.name for trace in figure.data]
+        self.assertNotIn(CURRENT_DECK, names)  # no card shown: no deck marked
+        self.assertIn(A_DECK, names)
+        self.assertIn(f"connections: groups of ≤ {DECK_PART} decks", names)
+        decks = next(trace for trace in figure.data if trace.name == A_DECK)
+        self.assertEqual(len(decks.x), len(self.board.model.deck_points))
+        self.show(COMMIT)
+        _text, _slot, figure = self.panel_figure("C")
+        deck = self.board.model.deck_of[COMMIT]
+        current = next(trace for trace in figure.data if trace.name == CURRENT_DECK)
+        self.assertEqual(current.marker.color, GOLD)
+        self.assertTrue(current.text[0].startswith(f"{deck} · "))  # named by its id and its name on hover
+        self.assertNotIn(deck, [text.split(" · ")[0] for text in next(trace for trace in figure.data if trace.name == A_DECK).text])
+        eye = figure.layout.scene.camera.eye
+        point = self.board.model.deck_points[deck]
+        self.assertGreater(eye.x * point[0] + eye.y * point[1] + eye.z * point[2], 0.99 * math.dist((0, 0, 0), (eye.x, eye.y, eye.z)))  # in front
+        self.assertEqual(figure.layout.uirevision, f"deck-sphere:{deck}")
+
+    def test_ts_figure_is_the_courses_margins_with_the_threshold_and_the_most_confident_quarter(self):
+        _text, _slot, figure = self.panel_figure("T")
+        topics = self.board.model.topic_model
+        self.assertEqual(len(figure.data[0].x), len(topics.margin_of))
+        lines = sorted(shape.x0 for shape in figure.layout.shapes)
+        self.assertEqual(lines, sorted([topics.margin, topics.threshold_for_share(0.25)]))
+        texts_on_plot = [annotation.text for annotation in figure.layout.annotations]
+        self.assertIn(f"between two topics below {topics.margin:.2f}", texts_on_plot)
+        self.assertIn(f"the 25 % most confident above {topics.threshold_for_share(0.25):.2f}", texts_on_plot)
+
+    def test_ds_figure_is_d1s_confusion_matrix_and_ps_says_how_to_get_its_counts(self):
+        _text, slot, figure = self.panel_figure("D")
+        if self.board.difficulty.measured:
+            self.assertEqual(figure.data[0].type, "heatmap")
+        else:
+            self.assertIsNone(figure)
+        text, slot, figure = self.panel_figure("P")
+        self.assertIsNone(figure)
+        self.assertIn(NO_OUTCOMES, str(slot))
+        self.assertIn("No prompt.csv in", " ".join(texts(text)))  # the tile's line on the left
+
     def test_the_layout_holds_every_region_and_the_stylesheet_is_landscape_only(self):
         layout = page_layout(HOME, self.board.tiles())
         text = str(layout)
@@ -556,6 +627,9 @@ class DashboardTest(Driver):
         self.assertIn(f'"{DIAGRAM_INPUT}"', clicks)
         self.assertIn('closest(".diagram-item")', clicks)
         self.assertIn(".prompt-box .prompt-input { flex: 1; min-width: 0; height: auto;", css)  # the box at its text's height
+        self.assertIn("container: panel / size;", css)  # the panel's fold, a container query on its height
+        self.assertIn("@container panel (max-height: 600px)", css)
+        self.assertIn("background: var(--navy-deep); border: 1px solid var(--gold);", css)  # the panel opaque over the card
         self.assertNotIn("text-overflow: ellipsis; white-space: nowrap; }\n.related-toggle", css)  # the card's title row wraps
         app = create_app(self.board)
         self.assertEqual(app.title, "Guided learning: the dashboard")
@@ -586,7 +660,7 @@ class ResultsTilesTest(Driver):
     def test_the_five_tiles_show_the_two_numbers_with_their_verdict_words_and_the_line_without_a_file(self):
         tiles = {tile.letter: tile for tile in self.board.tiles()}
         self.assertEqual([tile.shown for tile in tiles["S"].numbers], ["60 %", "92 %"])
-        self.assertEqual([tile.label for tile in tiles["S"].numbers], ["same-deck precision@5", "hand precision@1"])
+        self.assertEqual([tile.label for tile in tiles["S"].numbers], ["same-deck precision@5", "judged precision@1"])
         self.assertEqual([tile.shown for tile in tiles["C"].numbers], ["0.90", "0.80"])
         self.assertEqual([tile.shown for tile in tiles["T"].numbers], ["64 %", "89 %"])
         self.assertEqual([tile.shown for tile in tiles["D"].numbers], ["75 %", "0.41"])
@@ -610,10 +684,58 @@ class ResultsTilesTest(Driver):
         for part in (headline.shown, headline.label, f"against {headline.contrast_shown}", headline.sentence, headline.verdict, f": {headline.explanation}"):
             self.assertIn(part, shown, part)
         self.assertEqual(headline.contrast_shown, "random positions 30 %")
-        blocks = [child for child in result[OUT["panel"]][2].children]
+        blocks = [child for child in result[OUT["panel"]][0].children[0].children[2].children]
         self.assertEqual([block.className for block in blocks], ["number-block large", "number-block large"])
         result = self.call("tile-P")
         self.assertIn("No prompt.csv in", " ".join(texts(result[OUT["panel"]])))
+
+
+PROMPT_COUNTS = (
+    "date,run,model,variant,hand_right,hand_wrong,hand_missed,hand_course_right,hand_course_wrong,hand_course_missed,"
+    "hand_off_right,hand_off_wrong,judged_requests,notes\n"
+    "2026-11-01,2026-11-01T09:00,P1,TF-IDF: card,0.5,0.3,0.2,,,,,,10,decks 01 to 03\n"
+    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: card,0.6,0.2,0.2,4,1,2,2,1,10,decks 01 to 03\n"
+)
+
+
+class PromptGridTest(Driver):
+    """P's figure: the judged requests on and off the course by where P1 took them, from the counts of its app row in
+    the newest run; a line for a run without them."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        folder = Path(cls._tmp.name)
+        cls.table = load_table(write_test_table(folder))
+        (folder / "results").mkdir()
+        cls.results = folder / "results" / "prompt.csv"
+        cls.results.write_text(PROMPT_COUNTS, encoding="utf-8")
+        cls.board = Dashboard(cls.table, results_dir=folder / "results")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_the_grid_counts_the_requests_on_and_off_the_course_with_their_outcome(self):
+        self.assertEqual(outcomes(self.board.results), dict(zip(OUTCOME_COLUMNS, (4, 1, 2, 2, 1))))
+        result = self.call("tile-P")
+        _text, slot = result[OUT["panel"]][0].children
+        figure = slot.children.figure
+        heatmap = figure.data[0]
+        self.assertEqual(list(heatmap.y), ["on the course<br>(7)", "off the course<br>(3)"])
+        self.assertEqual(list(heatmap.x), ["into an acceptable topic", "into another topic", "no match"])
+        self.assertEqual([list(row) for row in heatmap.z], [[0.0, 0.5, 1.0], [None, 0.5, 0.0]])  # right, wrong, missed; wrong, right
+        shown = [annotation.text for annotation in figure.layout.annotations]
+        self.assertEqual(shown, ["4", "right", "1", "wrong", "2", "missed", "–", "1", "wrong", "2", "right"])
+        self.assertIn("3 off-course requests: no match, as no deck teaches it, right", " ".join(text for row in heatmap.text for text in row))
+
+    def test_a_run_without_the_counts_says_how_to_get_them(self):
+        self.results.write_text(test_standalone.PROMPT_ROWS, encoding="utf-8")
+        board = Dashboard(self.table, results_dir=self.results.parent)
+        self.assertIsNone(outcomes(board.results))
+        self.assertTrue(board.tile("P").numbers)  # the numbers stand, the grid waits for its counts
+        self.assertIn(NO_OUTCOMES, str(board.panel_figure("P")))
+        self.results.write_text(PROMPT_COUNTS, encoding="utf-8")
 
 
 class StateFileTest(unittest.TestCase):

@@ -44,7 +44,8 @@ What it measures (docs/models/, each model's file):
     TF-IDF and on the app's vectoriser, and the card route on character n-grams, every one on T1's membership of the
     app's vectoriser: over the self set (every card's question with the card held out) the topic@1 and @3 and the
     share navigated, the floors; over the judged requests of decks 17 and 24 the share served right,
-    wrong and missed, the ranking's topic@1, @3 and card@1, and the paired difference of the share right to the
+    wrong and missed, their counts on and off the course (the dashboard's grid), the ranking's topic@1, @3 and
+    card@1, and the paired difference of the share right to the
     vectoriser's card route (the character n-grams' to S1's) with its bootstrap interval; the time of a request.
 
 Every run appends one row per model and variant to the results folder (`--results`, by default results/ next to
@@ -156,6 +157,7 @@ NOT_JUDGED = "not judged yet"  # the tag of a candidate without a row in the mar
 PROMPT_COLUMNS = [
     "date", "run", "model", "variant", "params", "self_topic_at1", "self_topic_at3", "self_navigated",
     "min_card", "min_centroid", "min_text", "hand_right", "hand_wrong", "hand_missed",
+    "hand_course_right", "hand_course_wrong", "hand_course_missed", "hand_off_right", "hand_off_wrong",
     "hand_topic_at1", "hand_topic_at3", "hand_card_at1", "hand_diff", "hand_diff_low", "hand_diff_high", "judged_requests",
     "ms_per_request", "seconds", "notes",
 ]
@@ -772,6 +774,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
     requests = [request_of(row, by_id, deck_name, t1.topic_of) for row in request_rows]
     counted = [number for number, request in enumerate(requests) if request.judged and not request.transfer]
     in_course = [number for number in counted if not requests[number].off_course]
+    off_course = [number for number in counted if requests[number].off_course]
     with_card = [number for number in in_course if requests[number].card]
     app_family = family_of(app_index.vectoriser)
     families = [("TF-IDF", app_index if app_family == "TF-IDF" else similar.SimilarityIndex.fit(cards), tuple(ROUTES))]
@@ -816,6 +819,12 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
                     hand_right=fmt(share_of(outcomes[number][0] for number in counted)),
                     hand_wrong=fmt(share_of(outcomes[number][1] for number in counted)),
                     hand_missed=fmt(share_of(outcomes[number][2] for number in counted)),
+                    # the same outcomes counted on and off the course: an off-course request is never missed
+                    hand_course_right=sum(outcomes[number][0] for number in in_course),
+                    hand_course_wrong=sum(outcomes[number][1] for number in in_course),
+                    hand_course_missed=sum(outcomes[number][2] for number in in_course),
+                    hand_off_right=sum(outcomes[number][0] for number in off_course),
+                    hand_off_wrong=sum(outcomes[number][1] for number in off_course),
                     hand_topic_at1=fmt(share_of(given[number].ranking[0].key in requests[number].topics for number in in_course)),
                     hand_topic_at3=fmt(share_of(any(target.key in requests[number].topics for target in given[number].targets)
                                                 for number in in_course)),

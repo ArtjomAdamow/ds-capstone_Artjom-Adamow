@@ -34,6 +34,11 @@ model's topics as the full app gives every deck from the start; the topics keep 
   (standalone.headlines, the same numbers and words as the models view), one line where a results file is missing;
   nothing live. A click on a tile opens the model's panel over the two columns, the tiles staying visible; another
   tile shows that model in its place, a second click on the open tile closes it; Enter does nothing while it is open.
+  The panel holds the numbers on its left and the model's figure on its right (panel_figure), the whole course's
+  whatever card is shown: S where the related cards lie (this topic, this deck, another deck), C the decks on the
+  sphere with the connections below the preset and the shown card's deck in gold, T the margins with the threshold
+  and the most confident quarter, D D1's confusion matrix on the rated quizzes, P P1's judged requests on and off the
+  course by where it took them (the counts evaluate.py writes).
 * The state: the read and explored flags, the shown card and the trail in the dashboard's own state file
   (state.DashboardState, saved at every change); the flip, Related drawn, the last request, the open tile and the
   diagram's open deck and topic in the `view` store (HOME's keys), runtime only. The closed start: a fresh start shows nothing, a restart shows the
@@ -46,19 +51,23 @@ the page's callback's state, not its input.
 """
 
 import json
+import math
 from pathlib import Path
 from typing import Optional, Sequence
 
 from dash import Dash, Input, Output, State
 
 from ..course_table import CourseTable, DeckRow
-from ..models import embeddings, similar
+from ..figures import ELSEWHERE, HERE, confusion_figure
+from ..figures import THIS_DECK as SAME_DECK
+from ..models import clustering, embeddings, similar
 from ..models.course_model import CourseModel, TopicLayout
 from ..models.difficulty_model import DifficultyReport, fit_difficulty
 from ..models.prompt_model import PromptModel, variant_label
 from ..neighbours import rank_by_confidence, shorten
-from ..standalone.app import d2_label, s2_label
-from ..standalone.headlines import WHAT, headlines
+from ..standalone.app import DECK_PART, d2_label, s2_label
+from ..standalone.headlines import WHAT, headlines, outcomes
+from ..standalone.layout import CUT_LABELS, DECKS_VIEW, empty_slot, graph, margin_histogram
 from ..standalone.results import LEVEL_FILES, Results, course_note
 from . import quiz
 from .layout import (
@@ -66,6 +75,7 @@ from .layout import (
     card_face, card_where,
     diagram, go_slots, model_panel, page_layout, prompt_answer, quiz_control_class, quiz_options, related_slots, related_toggle, tile_class,
 )
+from .panel_figures import deck_sphere, outcome_grid, places_figure
 from .state import DashboardState
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
@@ -98,6 +108,11 @@ INPUT_IDS = (
 )
 INPUTS = len(INPUT_IDS)
 VALUE_INPUTS = (KEY_INPUT, DIAGRAM_INPUT)  # the hidden inputs, read by their value
+FOCUS_SHARE = 0.25  # T's figure: the most confident quarter, the share its tile's second number is over
+NO_RELATED = "No related card above the minimum score."
+NO_MARGINS = "No card with a margin."
+NO_OUTCOMES = ("No outcome counts in the newest run of prompt.csv yet. The offline evaluation writes them, next to app/: "
+               "uv run evaluate.py --part prompt")
 
 
 def slot_of(trigger, prefix: str) -> Optional[int]:
@@ -143,6 +158,7 @@ class Dashboard:
         self.topic_by_card: dict[str, TopicLayout] = {
             card_id: placed for placed in self.model.topics.values() for card_id in placed.ids
         }
+        self._figures: dict = {}  # the panels' figures that never change (all but C's), made at the first opening
         index = self.model.index
         encoded = isinstance(index.vectoriser, (embeddings.HybridVectoriser, embeddings.SentenceEncoder))
         self.levels = {"S": "S2" if encoded else "S1", "C": "C1", "T": "T1", "D": "D1", "P": "P1"}  # the generation the app runs
@@ -304,6 +320,61 @@ class Dashboard:
     def tiles(self) -> list[Tile]:
         return [self.tile(letter) for letter in PANEL_LETTERS]
 
+    # --- the panels' figures -----------------------------------------------------------------------------------
+
+    def place_counts(self) -> dict[str, int]:
+        """Where the course's related cards lie, seen from their card (as Related places them): this topic, this deck,
+        another deck, counted over every card's related cards."""
+        counts = dict.fromkeys((HERE, SAME_DECK, ELSEWHERE), 0)
+        kinds = {THIS_TOPIC: HERE, THIS_DECK: SAME_DECK}
+        for card_id in self.card_by_id:
+            for other in self.neighbours(card_id):
+                counts[kinds.get(self.place(card_id, other), ELSEWHERE)] += 1
+        return counts
+
+    def deck_links(self) -> list[tuple[str, str]]:
+        """The deck connections below the preset, as the models view draws them: the first merges, until a part would
+        hold more than DECK_PART decks."""
+        return list(self.model.deck_links[: clustering.preset_rank(self.model.deck_links, DECK_PART)])
+
+    def deck_figure(self):
+        """C's figure: the decks on the sphere with their connections, the shown card's deck gold and in front."""
+        names = {deck_id: deck.name for deck_id, deck in self.deck_by_id.items()}
+        shown = self.state.shown if self.state.shown in self.card_by_id else None
+        current = self.model.deck_of.get(shown) if shown else None
+        figure = deck_sphere(self.model.deck_points, names, self.deck_links(), current, CUT_LABELS[DECKS_VIEW].format(size=DECK_PART))
+        return graph(figure, "panel-graph")
+
+    def static_figure(self, letter: str):
+        """S's, T's, D's or P's figure, the same at every opening, or the line that says why there is none."""
+        if letter == "S":
+            counts = self.place_counts()
+            if not sum(counts.values()):
+                return empty_slot(NO_RELATED)
+            return graph(places_figure(counts, len(self.card_by_id)), "panel-graph")
+        if letter == "T":
+            topics = self.model.topic_model
+            margins = [margin for margin in topics.margin_of.values() if not math.isnan(margin)]
+            if not margins:
+                return empty_slot(NO_MARGINS)
+            return graph(margin_histogram(margins, topics.margin, topics.threshold_for_share(FOCUS_SHARE), FOCUS_SHARE), "panel-graph")
+        if letter == "D":
+            if not self.difficulty.measured:
+                return empty_slot(self.difficulty.note or "No difficulty model.")
+            return graph(confusion_figure(self.difficulty), "panel-graph")
+        counts = outcomes(self.results)
+        return graph(outcome_grid(counts), "panel-graph") if counts is not None else empty_slot(NO_OUTCOMES)
+
+    def panel_figure(self, letter: str):
+        """The open model's figure, the whole course's whatever card is shown (C marks the shown card's deck): S where
+        the related cards lie, C the decks on the sphere, T the margins with the threshold and the most confident
+        quarter, D D1's confusion matrix, P P1's judged requests on and off the course; a line where there is none."""
+        if letter == "C":
+            return self.deck_figure()
+        if letter not in self._figures:
+            self._figures[letter] = self.static_figure(letter)
+        return self._figures[letter]
+
     # --- the moves ---------------------------------------------------------------------------------------------
 
     def step(self, view: Optional[dict], trigger, value=None, request: Optional[str] = None, clicked=None) -> tuple[dict, list]:
@@ -416,7 +487,7 @@ class Dashboard:
             diagram(decks, topics, cards),
             not self.state.can_go_back,
             *[tile_class(letter == view["panel"]) for letter in PANEL_LETTERS],
-            *model_panel(tile),
+            *model_panel(tile, self.panel_figure(tile.letter) if tile is not None else None),
         )
 
 
@@ -473,6 +544,7 @@ def create_app(board: Dashboard) -> Dash:
     """The Dash app of the dashboard, in the one theme (assets/style.css), with its callback; the tiles' content is
     built once at the layout."""
     app = Dash(__name__, assets_folder=str(ASSETS_DIR), title=TITLE)
+    app.index_string = app.index_string.replace("<html>", '<html lang="en">', 1)  # the stylesheet's hyphens need the language
     app.layout = page_layout(HOME, board.tiles())
     register_callback(app, board)
     return app

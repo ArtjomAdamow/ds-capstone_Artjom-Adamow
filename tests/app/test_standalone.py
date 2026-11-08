@@ -1027,7 +1027,7 @@ class ResultsTest(PageDriver):
         self.assertEqual((precision.label, precision.shown, precision.contrast_shown), ("same-deck precision@5", "60 %", "random positions 30 %"))
         self.assertEqual(precision.verdict, "above the floor by generic criteria")  # (0.6 − 0.3) / 0.7 = 0.43
         self.assertEqual(precision.explanation, "about half of the way from random positions (30 %) to all five nearest in the card's deck")  # 0.43: nearer half
-        self.assertEqual((p1.label, p1.shown, p1.contrast, p1.verdict), ("hand precision@1", "92 %", None, "very good by generic criteria"))
+        self.assertEqual((p1.label, p1.shown, p1.contrast, p1.verdict), ("judged precision@1", "92 %", None, "very good by generic criteria"))
         self.assertEqual(hl.chosen_label(self.page.results, "S1"), "chosen: uni+bigrams")
 
     def test_c1s_numbers_are_the_two_trustworthinesses_against_the_random_layout(self):
@@ -1064,6 +1064,16 @@ class ResultsTest(PageDriver):
         self.assertEqual((kappa.shown, kappa.contrast_shown, kappa.gain, kappa.verdict), ("0.02", "D1 0.41", "−0.39", "slight"))
         self.assertEqual(hl.chosen_label(self.page.results, "D2"), d2_label())
         self.assertEqual(d2_label(), "criterion, large")  # the app's D2: the criterion template on the large model
+
+    def test_claude_is_the_judge_never_a_hand(self):
+        """The slide brief's rule: the relevance marks, the quizzes' levels and the requests were judged by Claude."""
+        for level in ("S1", "S2", "C1", "T1", "D1", "D2", "P1"):
+            for headline in hl.headlines(self.page.results, level) or []:
+                for words in (headline.label, headline.sentence, headline.explanation):
+                    self.assertNotIn("hand", words.lower(), (level, words))
+                    self.assertNotIn("authored", words.lower(), (level, words))
+        self.assertEqual(hl.headlines(self.page.results, "D1")[0].label, "within-deck order on Claude's levels")
+        self.assertFalse(any("hand" in words for words in hl.PLAIN.values()))
 
     def test_the_app_pick_is_marked_in_d2s_table_next_to_the_reference(self):
         (tags,) = self.page.results.tables("D2")
@@ -1130,7 +1140,7 @@ class ResultsTest(PageDriver):
         result = self.generation("S1")
         numbers = numbers_of(result[OUT["head"]])
         self.assertEqual([block["number-value"] for block in numbers], ["60 %", "92 %"])
-        self.assertEqual([block["number-label"] for block in numbers], ["same-deck precision@5", "hand precision@1"])
+        self.assertEqual([block["number-label"] for block in numbers], ["same-deck precision@5", "judged precision@1"])
         self.assertEqual(numbers[0]["number-contrast-line"][0].children, "against random positions 30 %")
         self.assertEqual(numbers[0]["number-verdict"][0].children, "above the floor by generic criteria")
         self.assertIn("half of the way", numbers[0]["number-verdict"][1].children)
@@ -1720,7 +1730,7 @@ class EmbeddingsPanelTest(unittest.TestCase):
         self.assertEqual(s2.chosen, [True, False, True])  # the reference and the app's pick
         self.assertEqual(dict(s2.rows)["precision_at_5"], ["0.6", "0.7", "0.8"])
         precision, p1 = hl.headlines(self.page.results, "S2")
-        self.assertEqual((precision.label, precision.shown, precision.contrast_shown, precision.gain), ("hand precision@5", "73 %", "S1 68 %", "+5.4 points (+1.8 to +9.3)"))
+        self.assertEqual((precision.label, precision.shown, precision.contrast_shown, precision.gain), ("judged precision@5", "73 %", "S1 68 %", "+5.4 points (+1.8 to +9.3)"))
         self.assertEqual(precision.verdict, "better")
         self.assertEqual((p1.shown, p1.contrast_shown, p1.gain, p1.verdict), ("96 %", "S1 92 %", "+3.5 points", "very good by generic criteria"))
         self.assertEqual(hl.chosen_label(self.page.results, "S2"), "hybrid: chosen + MiniLM")

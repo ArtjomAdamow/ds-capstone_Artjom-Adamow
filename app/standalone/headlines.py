@@ -3,7 +3,9 @@ numbers from the results rows of its newest run, each with its contrast (the ran
 generation before), one plain sentence on what it measures, and a verdict with its explanation in words.
 
 * `headlines(results, level)`: the generation's two `Headline`s from the same newest run as its tables
-  (results.Results.run); None without the file or the rows, the section then saying so.
+  (results.Results.run); None without the file or the rows, the section then saying so. `outcomes(results)`: P1's
+  outcomes counted on and off the course in its app row, the dashboard's grid.
+* The judged measures name Claude as the judge ("judged precision@5", "Claude's levels"), never a hand.
 * The verdict comes from a rule, never a hand-written word, by the number's kind (`Headline.verdict`):
   - INTERVAL: a paired difference by whether its interval holds 0: "better", "within noise", "worse";
   - KAPPA: Landis and Koch's words: slight, fair, moderate from 0.41, substantial, almost perfect (poor below 0);
@@ -11,7 +13,7 @@ generation before), one plain sentence on what it measures, and a verdict with i
     1 at the measure's top: below 0 "below the floor", below 0.25 "near the floor", 0.25 to 0.5 "above the floor",
     0.5 to 0.75 "well above the floor", from 0.75 "far above the floor"; the words say how far, not how good, since
     for same-deck precision and T1's agreement 1 is not the goal;
-  - RATE: a hand-judged share without a floor, by generic criteria on the share itself: below 50 % "weak", 50 to
+  - RATE: a judged share without a floor, by generic criteria on the share itself: below 50 % "weak", 50 to
     75 % "fair", 75 to 90 % "good", from 90 % "very good"; RATE_LOW, a share where lower is better, mirrored:
     up to 10 % "very good", up to 25 % "good", up to 50 % "fair", above it "weak".
   A generic verdict names its criteria: "well above the floor by generic criteria".
@@ -25,11 +27,11 @@ generation before), one plain sentence on what it measures, and a verdict with i
   without them shows as it is (`plain_words`).
 
 The sources, per generation: S1's chosen row of results.csv (same-deck precision@5 against B0's mean, the floor;
-hand precision@1, a hit rate); S2's app row (hand precision@5 with its paired difference to S1's chosen row, an
-interval; hand precision@1 against S1's, a hit rate); C1's model row (the trustworthiness of the card layouts and of
+judged precision@1, a hit rate); S2's app row (judged precision@5 with its paired difference to S1's chosen row, an
+interval; judged precision@1 against S1's, a hit rate); C1's model row (the trustworthiness of the card layouts and of
 the decks against the random row, floors); T1's row of scope all in topics.csv (agreement against chance, the floor,
 1-NN beside it) and its row of the 25 % most confident (against all cards, in the floor's place); D1's chosen row
-of difficulty.csv by the deck shares (the within-deck order on the hand labels against a coin, the floor; weighted
+of difficulty.csv by the deck shares (the within-deck order on Claude's levels against a coin, the floor; weighted
 kappa against the baseline always easy); D2's app row (both against D1's chosen row: an interval and a kappa);
 P1's app row of prompt.csv (the share served right, a hit rate, and the share landed wrong, lower better, against
 the TF-IDF card route; none where the page runs on TF-IDF).
@@ -46,6 +48,11 @@ NO_CONTRAST = "no contrast in this run"
 COIN = 0.5  # the floor of the within-deck order: a coin
 FOCUS_25 = f"{FOCUS_SCOPE}25 %"  # T1's row of the 25 % most confident cards
 TFIDF_CARD = "TF-IDF: card"  # P1's card route on S1's vectors, the app row's contrast (prompt_model.variant_label)
+# The judged measures' words: Claude is the judge of the relevance marks, the quizzes' levels and the requests
+JUDGED_P1 = "How often the nearest card is related, as Claude judged it."
+ORDER_LABEL = "within-deck order on Claude's levels"
+# P1's outcomes counted on and off the course (evaluate.py's columns), the dashboard's grid
+OUTCOME_COLUMNS = ("hand_course_right", "hand_course_wrong", "hand_course_missed", "hand_off_right", "hand_off_wrong")
 # The floor's bands: the distance above it, (number − floor) / (1 − floor), and the words
 FLOOR_BANDS = ((0.0, "below the floor"), (0.25, "near the floor"), (0.5, "above the floor"), (0.75, "well above the floor"))
 FAR = "far above the floor"
@@ -83,8 +90,8 @@ PLAIN = {
     "model": "the fitted layout",
     "T1": "the nearest topic centroid, leave-one-out",
     "text (chosen)": "the question's text statistics, labelled by the deck shares",
-    "criterion, large": "the hand criterion's three demands, read by the large model",
-    "criterion, base": "the hand criterion's three demands, read by the base model",
+    "criterion, large": "the written criterion's three demands, read by the large model",
+    "criterion, base": "the written criterion's three demands, read by the base model",
     "level names, large": "the level names, read by the large model",
     "level names, base": "the level names, read by the base model",
     "hybrid-minilm: card": "the nearest card on the encoder's vectors",
@@ -279,7 +286,7 @@ def _s1(run, chosen) -> list[Headline]:
         ))
     p1 = _number(row, "hand_p1")
     if p1 is not None:
-        found.append(Headline("hand precision@1", p1, RATE, "How often the nearest card is a related card by the hand check.", columns=("hand_p1",)))
+        found.append(Headline("judged precision@1", p1, RATE, JUDGED_P1, columns=("hand_p1",)))
     return found
 
 
@@ -291,12 +298,12 @@ def _s2(run, chosen) -> list[Headline]:
     if precision is not None:
         diff, low, high = _interval(row)
         found.append(Headline(
-            "hand precision@5", precision, INTERVAL, "Of the five nearest, the share the hand check calls related; its gain over S1, paired over the judged cards.",
+            "judged precision@5", precision, INTERVAL, "Of the five nearest, the share Claude judged related; its gain over S1, paired over the judged cards.",
             "S1", _number(reference, "hand_precision"), diff, low, high, columns=("hand_precision", "hand_diff", "hand_diff_low", "hand_diff_high"),
         ))
     p1 = _number(row, "hand_p1")
     if p1 is not None:
-        found.append(Headline("hand precision@1", p1, RATE, "How often the nearest card is a related card by the hand check.", "S1", _number(reference, "hand_p1"), columns=("hand_p1",)))
+        found.append(Headline("judged precision@1", p1, RATE, JUDGED_P1, "S1", _number(reference, "hand_p1"), columns=("hand_p1",)))
     return found
 
 
@@ -361,15 +368,15 @@ def _d1(run, chosen) -> list[Headline]:
     if order is not None:
         pairs = _number(row, "hand_within_pairs")
         found.append(Headline(
-            "within-deck order on the hand labels", order, FLOOR,
-            "Of the hand-labelled pairs of quizzes in a deck, the share D1 puts in the right order.", "a coin", COIN,
+            ORDER_LABEL, order, FLOOR,
+            "Of the pairs of quizzes in a deck that Claude put at different levels, the share D1 puts in the same order.", "a coin", COIN,
             floor_name="a coin", top_name="every pair in order", count=int(pairs) if pairs else None,
             columns=("hand_within_deck", "hand_within_pairs"),
         ))
     kappa = _number(row, "kappa")
     if kappa is not None:
         found.append(Headline(
-            "weighted kappa", kappa, KAPPA, "Agreement with the authored levels beyond chance, a near miss counted half; never accuracy, which always easy beats.",
+            "weighted kappa", kappa, KAPPA, "Agreement with the levels the rated quizzes came with, beyond chance, a near miss counted half; never accuracy, which always easy beats.",
             "always easy", _number(easy, "kappa"), percent=False, columns=("kappa",),
         ))
     return found
@@ -385,15 +392,15 @@ def _d2(run, chosen) -> list[Headline]:
         diff, low, high = _interval(row)
         pairs = _number(row, "hand_within_pairs")
         found.append(Headline(
-            "within-deck order on the hand labels", order, INTERVAL,
-            "The share of hand-labelled pairs in the right order; its gain over D1, paired over the pairs.", "D1",
+            ORDER_LABEL, order, INTERVAL,
+            "The share of the pairs Claude put at different levels in the same order; its gain over D1, paired over the pairs.", "D1",
             _number(reference, "hand_within_deck"), diff, low, high, count=int(pairs) if pairs else None,
             columns=("hand_within_deck", "hand_within_pairs", "hand_diff", "hand_diff_low", "hand_diff_high"),
         ))
     kappa = _number(row, "kappa")
     if kappa is not None:
         found.append(Headline(
-            "weighted kappa on the rated quizzes", kappa, KAPPA, "Agreement with the authored levels beyond chance, next to D1's.",
+            "weighted kappa on the rated quizzes", kappa, KAPPA, "Agreement with the levels the rated quizzes came with, beyond chance, next to D1's.",
             "D1", _number(reference, "kappa"), percent=False, columns=("kappa",),
         ))
     return found
@@ -430,6 +437,16 @@ def headlines(results, level: str) -> Optional[list[Headline]]:
     if not run:
         return None
     return MAKERS[level](run, results.chosen)
+
+
+def outcomes(results) -> Optional[dict[str, int]]:
+    """P1's outcomes counted on and off the course (OUTCOME_COLUMNS) in its app row of the newest run; None without
+    the row or without the counts (a run before evaluate.py wrote them)."""
+    row = _first(results.run("P1") or [], lambda row: row.get("model") == "P1" and row.get("variant") == results.chosen.get("P1"))
+    counts = {column: _number(row, column) for column in OUTCOME_COLUMNS}
+    if any(value is None for value in counts.values()):
+        return None
+    return {column: int(value) for column, value in counts.items()}
 
 
 def chosen_label(results, level: str) -> str:

@@ -15,7 +15,8 @@ row, the slide row along the bottom at the full width, a model's panel over the 
   list, RELATED_SLOTS fixed buttons (`related-<n>`), the next card first and marked, hidden while unused;
 * the slide row (`tile-S` to `tile-P`): one tile per model with its headline and its two numbers with their verdict
   words, or one line where the results file is missing; a click opens the model's panel (`model-panel`) over the two
-  columns, the tiles staying visible under it;
+  columns, the tiles staying visible under it: the numbers on its left (`panel-text`), the model's figure on its
+  right (`panel-figure`);
 * the hidden inputs `key-enter`, written by assets/keys.js on Enter outside the request box and the buttons, and
   `diagram-click`, written by assets/diagram.js on a click in the diagram; the `view` store (app.HOME's keys) with
   what is not saved: the flip, Related drawn, the last request, the open tile, the diagram's open deck and topic.
@@ -279,18 +280,24 @@ def tile_class(is_open: bool) -> str:
     return "tile open" if is_open else "tile"
 
 
-def model_panel(tile: Optional[Tile]) -> tuple[list, str]:
-    """The open model's panel over the two columns, or hidden: the letter and the name, the headline at the heading
-    size, the two numbers at the models view's sizes with their parts, and how to close it."""
+def model_panel(tile: Optional[Tile], figure=None) -> tuple[list, str]:
+    """The open model's panel over the two columns, or hidden; its body on the left the letter and the name, the
+    headline at the heading size, the two numbers one under the other at the models view's sizes with their parts,
+    and how to close it; on the right the model's figure (app.Dashboard.panel_figure) at the panel's full height."""
     if tile is None:
         return [], "model-panel hidden"
-    return [
-        html.Div([html.Span(tile.letter, className="tile-letter"), html.Span(tile.name, className="panel-name"),
-                  html.Span(tile.level, className="panel-level")], className="panel-head"),
-        html.Div(tile.what, className="panel-what"),
-        tile_numbers(tile, large=True),
-        html.Div(PANEL_HINT, className="card-hint panel-hint"),
-    ], "model-panel"
+    text = html.Div(
+        [
+            html.Div([html.Span(tile.letter, className="tile-letter"), html.Span(tile.name, className="panel-name"),
+                      html.Span(tile.level, className="panel-level")], className="panel-head"),
+            html.Div(tile.what, className="panel-what"),
+            tile_numbers(tile, large=True),
+            html.Div(PANEL_HINT, className="card-hint panel-hint"),
+        ],
+        className="panel-text",
+    )
+    figure_part = html.Div(figure if figure is not None else [], className="panel-figure")
+    return [html.Div([text, figure_part], className="panel-body")], "model-panel"
 
 
 # --- the page ----------------------------------------------------------------------------------------------------

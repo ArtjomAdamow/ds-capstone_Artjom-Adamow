@@ -789,6 +789,13 @@ class PromptPartTest(unittest.TestCase):
             self.assertGreaterEqual(float(row["hand_diff_high"]), float(row["hand_diff"]))
             shares = [float(row[column]) for column in ("hand_right", "hand_wrong", "hand_missed")]
             self.assertAlmostEqual(sum(shares), 1.0, places=2)
+            # the same outcomes counted on and off the course: three in-course requests, one off-course, never missed
+            course = [int(row[f"hand_course_{outcome}"]) for outcome in ("right", "wrong", "missed")]
+            off = [int(row[f"hand_off_{outcome}"]) for outcome in ("right", "wrong")]
+            self.assertEqual((sum(course), sum(off)), (3, 1))
+            self.assertAlmostEqual((course[0] + off[0]) / 4, shares[0], places=2)
+            self.assertAlmostEqual((course[1] + off[1]) / 4, shares[1], places=2)
+            self.assertAlmostEqual(course[2] / 4, shares[2], places=2)
         char_line = next(line for line in output.splitlines() if line.strip().startswith(f"{evaluate.CHAR_NGRAMS}: card"))
         self.assertIn("against TF-IDF: card", char_line)  # the character n-grams against S1's card route
         self.assertIn("hand_right by kind", output)

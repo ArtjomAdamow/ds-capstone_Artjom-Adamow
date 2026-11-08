@@ -8,7 +8,10 @@ glue.
   callback (the card's turn and a quiz's judgement, Related and its entries, Back, the request box and its entries,
   the tiles, the diagram's clicks) and Confirm's.
 * `layout`: the regions: the top bar with the request box and Back, the diagram, the card with its options and its
-  Related list, the slide row and the model's panel.
+  Related list, the slide row and the model's panel, its numbers on the left and its figure on the right.
+* `panel_figures`: the panels' figures drawn here, each the whole course's: where the related cards lie (S), the
+  decks on the sphere with the shown card's deck in gold (C), P1's judged requests on and off the course (P); T's
+  histogram and D's matrix are the models view's.
 * `state`: the state file `dashboard_state.json`: the read and explored flags, the shown card, the trail.
 * `quiz`: a quiz's judgement as plain functions.
 * `assets/style.css`: the theme's tokens and the type scale, written anew; `assets/keys.js`: Enter into the hidden
