@@ -73,15 +73,15 @@ def cuda_available() -> bool:
     return bool(torch.cuda.is_available())
 
 
-def resolve_device(setting: Optional[str] = None, cuda: Callable[[], bool] = cuda_available) -> str:
+def resolve_device(setting: Optional[str] = None, cuda: Optional[Callable[[], bool]] = None) -> str:
     """The device the models run on: `setting`, else APP_DEVICE, else "auto"; auto, and "cuda" without a GPU, is the
-    CPU unless `cuda()` says a GPU is there."""
+    CPU unless `cuda()` (cuda_available, looked up at the call) says a GPU is there."""
     setting = (setting or os.environ.get(DEVICE_VARIABLE) or "auto").strip().lower()
     if setting not in DEVICES:
         raise ValueError(f"unknown device {setting!r} in {DEVICE_VARIABLE}; one of {', '.join(DEVICES)}")
     if setting == "cpu":
         return "cpu"
-    return "cuda" if cuda() else "cpu"
+    return "cuda" if (cuda or cuda_available)() else "cpu"
 
 
 def slug(model_name: str) -> str:
