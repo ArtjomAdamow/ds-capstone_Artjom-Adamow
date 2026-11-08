@@ -1,0 +1,7 @@
+deck_id,topic_id,name,rest,headings,sources
+00,01,Start here,false,Start here | The two columns | The closed start | The request box | Demo and End demo,
+00,02,Asking,false,Asking | A request in your own words | Go and Enter | No match | The nearest topics,
+00,03,Studying a card,false,Studying a card | The title row | Turning a card | Quizzes and Confirm | Correct answer and Wrong answer,
+00,04,Moving on,false,Moving on | Related | The next card | Where a card lies | Back,
+00,05,The diagram,false,"The diagram | Decks, topics and cards | What you explored | The gold highlights | A click in the diagram",
+00,06,The models,false,"The models | The slide row | The five tiles | A model's panel | Similarity, course model, topics, difficulty and prompt",
