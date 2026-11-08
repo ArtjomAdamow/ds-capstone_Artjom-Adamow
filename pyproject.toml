@@ -37,7 +37,7 @@ package = false
 conflicts = [[{ extra = "embeddings" }, { extra = "embeddings-gpu" }]]
 
 [tool.uv.sources]
-sputnik = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git", tag = "v0.9.0" }
+sputnik = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git", tag = "v0.10.0" }
 torch = [
   { index = "pytorch-cpu", extra = "embeddings", marker = "sys_platform == 'linux'" },
   { index = "pytorch-cu132", extra = "embeddings-gpu", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
