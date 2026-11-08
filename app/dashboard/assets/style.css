@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* The dashboard (app.dashboard): the one theme, its tokens written anew here (no file of the viewer is copied), by
+   the space rule: the top bar, under it two columns at the screen's height less the slide row (the diagram left, the
+   card right), the slide row along the bottom at the full width, a model's panel over the two columns while a tile is
+   open; no scroll bar at the top level, one inside the card's frame for a quiz too tall for it; nothing shrinks. The
+   type scale is the models view's: the panel's numbers --size-number, the headings and the tiles' numbers
+   --size-heading, the body --size-body, the labels 1rem; the card's text --size-card; nothing below 16 px. Under
+   1400 px (a projector's 1280 x 720) the scale is a step smaller. Landscape only: no stacked layout. */
+
+:root {
+  --ink: #f7f2e8;
+  --muted: #9fb3c8;
+  --navy: #102a43;
+  --navy-deep: #071827;
+  --gold: #f5b942;
+  --coral: #e76f51;
+  --right: #69c6a5;
+  --hover: rgba(247, 242, 232, 0.08);
+  --line: rgba(247, 242, 232, 0.16);
+  --size-number: 3rem;
+  --size-heading: 1.5rem;
+  --size-body: 1.25rem;
+  --size-card: clamp(1.35rem, 2.2vw, 2rem);
+  --gap: 20px;
+  --dot: 26px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--navy-deep); color: var(--ink); font-family: 'Space Grotesk', sans-serif; font-size: var(--size-body); line-height: 1.35; }
+.app-shell { height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 14px 32px 20px; overflow: hidden; background: radial-gradient(circle at 78% 18%, rgba(245, 185, 66, 0.12), transparent 28%), linear-gradient(135deg, var(--navy-deep), var(--navy)); }
+
+/* The top bar: the title, the request box with its answer hanging under it, Back */
+.topbar { flex: 0 0 auto; height: 72px; display: flex; align-items: center; gap: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.topbar-title { flex: 0 0 auto; }
+.eyebrow, .card-label, .diagram-label { color: var(--gold); font-family: 'DM Mono', monospace; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.eyebrow { margin: 0; }
+h1 { margin: 2px 0 0; font-size: clamp(1.5rem, 2.6vw, 2.4rem); line-height: 1; font-weight: 600; white-space: nowrap; }
+.top-button { border: 1px solid var(--gold); background: transparent; color: var(--gold); padding: 10px 18px; font: 600 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.top-button:hover { background: var(--hover); }
+.top-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.topbar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.prompt-box { position: relative; flex: 1 1 auto; min-width: 0; max-width: 760px; display: flex; gap: 10px; }
+.prompt-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 8px 12px; font: var(--size-body) 'Space Grotesk', sans-serif; }
+.prompt-input:focus { outline: none; border-color: var(--gold); }
+.prompt-go { padding: 8px 18px; }
+.prompt-answer { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 6; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(7, 24, 39, 0.97); border: 1px solid var(--gold); }
+.prompt-answer.hidden { display: none; }
+.prompt-message-text { color: var(--ink); font-size: var(--size-body); }
+/* The hidden input Enter writes (keys.js); never shown */
+.hidden-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* The workspace: the diagram left, the card right, both at the height left under the top bar and above the slide row */
+.workspace { position: relative; flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--gap); }
+
+/* The diagram: three rows, decks, topics, cards, each a label and its dots; no click */
+.diagram { min-height: 0; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.diagram-row { min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); }
+.diagram-dots { flex: 1 1 auto; min-height: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 10px; overflow: hidden; }
+.dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--muted); opacity: 0.85; }
+.dot.current { background: var(--gold); opacity: 1; box-shadow: 0 0 0 4px rgba(245, 185, 66, 0.3); }
+
+/* The card: its title row with Related, the frame with the face and a quiz's options, the Related list under it */
+.card-column { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.card-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 42px; }
+.card-where { color: var(--muted); font: 1.25rem 'DM Mono', monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.related-toggle { border: 1px solid var(--line); background: transparent; color: var(--muted); padding: 8px 16px; font: 600 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.related-toggle:hover { background: var(--hover); color: var(--ink); }
+.related-toggle.open { border-color: var(--gold); color: var(--gold); }
+.related-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.card-frame { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 18px 22px; border: 1px solid var(--line); border-left: 3px solid var(--gold); background: rgba(7, 24, 39, 0.7); overflow-y: auto; }
+.card-face { display: flex; flex-direction: column; gap: 12px; }
+.card-face.front, .card-face.back { cursor: pointer; }
+.card-face.quiz { cursor: default; }
+.card-content { font-size: var(--size-card); line-height: 1.25; }
+.card-content p, .quiz-option-text p, .quiz-feedback-option p, .quiz-feedback-answer p { margin: 0; }
+.card-content p + p { margin-top: 0.5em; }
+.card-content pre, .card-content code { font-family: 'DM Mono', monospace; font-size: 0.85em; }
+.card-hint, .empty-state { margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.4; }
+.card-face.empty .empty-state { font-size: var(--size-body); }
+.quiz-control { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.quiz-control.hidden { display: none; }
+.quiz-divider { border-top: 1px solid var(--line); }
+.quiz-options { display: flex; flex-direction: column; gap: 0.4em; font-size: var(--size-card); line-height: 1.2; }
+/* Dash's checklist: label.dash-options-list-option > span.dash-options-list-option-wrapper > input.quiz-checkbox, then span.quiz-option */
+.quiz-options .dash-options-list-option { display: flex; align-items: flex-start; gap: 0.45em; margin: 0; padding: 0; color: var(--ink); cursor: pointer; }
+.quiz-options .dash-options-list-option-wrapper { flex: 0 0 auto; display: flex; align-items: center; height: 1.2em; }
+.quiz-checkbox { font-size: inherit; width: 0.7em; height: 0.7em; margin: 0; accent-color: var(--gold); outline-color: var(--gold); }
+.quiz-option { min-width: 0; color: var(--ink); }
+.quiz-confirm-row { display: flex; justify-content: flex-end; }
+.quiz-feedback { display: flex; flex-direction: column; gap: 0.5em; font-size: var(--size-card); line-height: 1.25; }
+.quiz-feedback-block { padding: 0.1em 0 0.1em 0.5em; border-left: 3px solid var(--coral); }
+.quiz-feedback-correct { border-left-color: var(--right); }
+.quiz-feedback-option { font-weight: 600; }
+.quiz-feedback-answer { margin-top: 0.2em; color: var(--muted); }
+.related-list { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; }
+.related-entry, .go-entry { display: flex; align-items: baseline; gap: 12px; padding: 6px 12px; border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); color: var(--ink); text-align: left; font: 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.related-entry:hover, .go-entry:hover { background: var(--hover); }
+.related-entry.marked { border-color: var(--gold); }
+.related-entry.hidden, .go-entry.hidden { display: none; }
+.entry-mark { flex: 0 0 auto; padding: 0 8px; border: 1px solid var(--gold); color: var(--gold); font: 1rem 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.entry-label { flex: 1 1 auto; min-width: 0; }
+.entry-place { flex: 0 0 auto; color: var(--muted); font: 1rem 'DM Mono', monospace; white-space: nowrap; }
+
+/* The slide row: five tiles, the models' buttons */
+.slide-row { flex: 0 0 auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.tile { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; border: 1px solid var(--line); background: rgba(7, 24, 39, 0.58); color: var(--ink); text-align: left; font-family: 'Space Grotesk', sans-serif; cursor: pointer; }
+.tile:hover { background: var(--hover); }
+.tile.open { border-color: var(--gold); }
+.tile-head, .panel-head { display: flex; align-items: baseline; gap: 10px; }
+.tile-letter { font: 600 var(--size-heading) 'DM Mono', monospace; color: var(--gold); }
+.tile-name { font-size: 1rem; color: var(--muted); }
+.tile-what { font-size: 1rem; color: var(--ink); line-height: 1.3; }
+.tile-line { font-size: 1rem; color: var(--muted); line-height: 1.3; }
+.numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; }
+.number-block { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.number-value { font: 600 var(--size-heading) 'DM Mono', monospace; line-height: 1; color: var(--ink); }
+.number-label { font-size: 1rem; color: var(--gold); }
+.number-verdict { font-size: 1rem; line-height: 1.3; }
+.verdict-word { color: var(--ink); font-weight: 600; }
+.verdict-words { color: var(--muted); }
+
+/* A model's panel over the two columns, the tiles under it: the headline, the two numbers at the models view's sizes */
+.model-panel { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; gap: 16px; padding: 24px 32px; background: rgba(7, 24, 39, 0.97); border: 1px solid var(--gold); overflow: hidden; }
+.model-panel.hidden { display: none; }
+.panel-name { font-size: var(--size-heading); color: var(--ink); }
+.panel-level { font: 1rem 'DM Mono', monospace; color: var(--muted); letter-spacing: 0.04em; }
+.panel-what { font-size: var(--size-heading); font-weight: 600; line-height: 1.2; }
+.model-panel .numbers { gap: 12px 32px; }
+.number-block.large .number-value { font-size: var(--size-number); }
+.number-block.large .number-label, .number-block.large .number-verdict { font-size: var(--size-body); }
+.number-contrast-line { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font: var(--size-body) 'DM Mono', monospace; }
+.number-contrast-line:empty { display: none; }
+.number-gain { color: var(--ink); }
+.number-sentence { margin: 2px 0 0; color: var(--muted); font-size: var(--size-body); line-height: 1.3; }
+.panel-hint { margin-top: auto; }
+
+/* A projector's 1280 x 720 and other windows under 1400 px: the type scale a step smaller (nothing below 16 px), the
+   paddings tighter */
+@media (max-width: 1400px) {
+  :root { --size-number: 2.25rem; --size-heading: 1.25rem; --size-body: 1rem; --size-card: clamp(1.15rem, 2vw, 1.6rem); --gap: 14px; --dot: 20px; }
+  .app-shell { gap: 10px; padding: 10px 20px 14px; }
+  .topbar { height: 64px; padding-bottom: 8px; }
+  .card-frame { padding: 12px 16px; }
+  .diagram-row { padding: 8px 12px; gap: 6px; }
+  .tile { padding: 6px 10px; gap: 2px; }
+  .tile-what { display: none; }
+  .model-panel { padding: 16px 24px; gap: 10px; }
+  .related-entry, .go-entry { padding: 4px 10px; }
+}

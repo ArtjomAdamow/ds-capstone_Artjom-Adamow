@@ -8,47 +8,28 @@ the card panel through its `card_section` hook (project.services.actions.ModuleS
   so. The cards view shows about 44 % of the neighbours; the list is where the other 56 % show
   (docs/models/similarity.md, "The hand check", point 8).
 * The next card: the first entry, marked, the neighbour the learner should take next by the learner's confidence
-  (rank_by_confidence): unread cards first, then the read ones by their confidence, the lowest ("review") first
-  (CardConfidence.confidence, 1 to 100; the course's easy, medium and hard play no part). Among the unread cards the
-  quizzes D1 predicted take their places in D1's order, the easiest first (its score, the cold-start order of the
-  extra quizzes, docs/models/difficulty.md, "Conclusion"); the other unread cards keep the neighbour
-  order, the cold-start order of the flashcards until a prior exists. A neighbour without a target is never the next
-  card. The next card is listed again among the neighbours, in its place.
+  (app.neighbours.rank_by_confidence, shared with the dashboard, which has no confidence): unread cards first, then
+  the read ones by their confidence, the lowest ("review") first (CardConfidence.confidence, 1 to 100; the course's
+  easy, medium and hard play no part). Among the unread cards the quizzes D1 predicted take their places in D1's
+  order, the easiest first (its score, the cold-start order of the extra quizzes, docs/models/difficulty.md,
+  "Conclusion"); the other unread cards keep the neighbour order, the cold-start order of the flashcards until a
+  prior exists. A neighbour without a target is never the next card. The next card is listed again among the
+  neighbours, in its place.
 
-The entries' labels are the cards' questions, shortened; a card the router does not hold (an unchecked deck) is named
-by its deck. Nothing here is stored: the entries are made for every draw of the panel.
+The entries' labels are the cards' questions, shortened (app.neighbours.shorten); a card the router does not hold (an
+unchecked deck) is named by its deck. Nothing here is stored: the entries are made for every draw of the panel.
 """
 
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Optional
 
 from project.services.views import CARDS
 
+from ..neighbours import rank_by_confidence, shorten
+
 SECTION_TITLE = "Related cards"
-LABEL_LENGTH = 90
 THIS_TOPIC = "this topic"
 THIS_DECK = "this deck"
 UNCHECKED = "deck unchecked"
-
-
-def rank_by_confidence(
-    ids: Sequence[str], read: Mapping[str, bool], confidence: Mapping[str, int], scores: Optional[Mapping[str, float]] = None,
-) -> list[str]:
-    """The cards in the order the learner should take them: the unread ones first (`read` by card id, False
-    without an entry), then the read ones by their confidence ascending (`confidence` by card id, the lowest, "review",
-    first; a card without one counts as 1), ties in the given order. Among the unread cards the ones with a score
-    (`scores`: D1's, the lower the easier) take their places in score order; the others keep the given order."""
-    scores = scores or {}
-    unread = [card_id for card_id in ids if not read.get(card_id, False)]
-    scored = sorted((card_id for card_id in unread if card_id in scores), key=lambda card_id: (scores[card_id], unread.index(card_id)))
-    scored_places = iter(scored)
-    ordered = [next(scored_places) if card_id in scores else card_id for card_id in unread]
-    done = sorted((card_id for card_id in ids if read.get(card_id, False)), key=lambda card_id: (confidence.get(card_id, 1), ids.index(card_id)))
-    return ordered + done
-
-
-def shorten(text: str, length: int = LABEL_LENGTH) -> str:
-    text = " ".join(text.replace("`", "").replace("**", "").split())
-    return text if len(text) <= length else text[: length - 1] + "…"
 
 
 def helper_section(model, questions: Mapping[str, str], scores: Optional[Mapping[str, float]] = None):

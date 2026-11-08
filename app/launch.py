@@ -1,15 +1,17 @@
 """The launcher's mode question, in the package: start.py, the launcher exported with the package, asks which of
-the two modes starts; the module launcher of the flashcards workspace asks nothing and takes the modes' names from
-here.
+the two modes starts, full or standalone; the third, the dashboard, is started by `--mode dashboard` alone. The
+module launcher of the flashcards workspace asks nothing and takes the modes' names from here.
 
 * full (FULL): the viewer with the Helper button (the flashcards package, sputnik in the capstone);
-* standalone (STANDALONE): the models on their own page (app.standalone), without the viewer.
+* standalone (STANDALONE): the models on their own page (app.standalone), without the viewer;
+* dashboard (DASHBOARD): the dashboard (app.dashboard), one card at a time without the viewer, on its own state file
+  next to the viewer's; the question never names it.
 
 The viewer is there when its package imports (viewer_available: `project`, its import name in both places). Without
 it the mode is standalone and nothing is asked; with sputnik the launcher asks LAUNCH_QUESTION: n starts standalone,
 anything else the full app. Without input (a scripted start, the tests) the mode is the full app. With the flashcards
 workspace's own viewer (viewer_here: its distribution, no sputnik) the full app starts without the question.
-`--mode full` or `--mode standalone` among the arguments skips the question; `--mode full` without the viewer stops
+`--mode full`, `--mode standalone` or `--mode dashboard` among the arguments skips the question; `--mode full` without the viewer stops
 with the hint to install the viewer extra. The launcher passes the chosen mode on to the debug reloader's child in the
 environment (MODE_VARIABLE), which asks nothing (mode_of_child). start.py passes no arguments.
 
@@ -17,10 +19,10 @@ The folders (data_dir): the data folder lies next to the launcher (the capstone)
 flashcards workspace's root): the course file, the course table and the images, the state in data/state/ and the
 embeddings' cache in data/cache/.
 
-The backup question (prepare_state), asked before the full app by the launcher's first process, not by the reloader's
-child: with a state file in data/state/, y backs up the viewer's state file and the model state (STATE_NAMES;
-backup_path: user_state.json_01.bak, _02.bak, ...) and starts fresh, n or no input keeps them. The episodes' log is
-never touched.
+The backup question (prepare_state), asked before the full app and before the dashboard by the launcher's first
+process, not by the reloader's child: with a state file in data/state/, y backs up the viewer's state file, the model
+state and the dashboard's state file (STATE_NAMES; backup_path: user_state.json_01.bak, _02.bak, ...) and starts
+fresh, n or no input keeps them. The episodes' log is never touched.
 
 VIEWER_RELEASE is the sputnik release whose hooks the glue uses: an export names it, the capstone pins its tag, and
 start.py refuses the full app on an older sputnik.
@@ -42,7 +44,8 @@ from typing import Callable, Mapping, Optional, Sequence
 
 FULL = "full"
 STANDALONE = "standalone"
-MODES = (FULL, STANDALONE)
+DASHBOARD = "dashboard"
+MODES = (FULL, STANDALONE, DASHBOARD)
 VIEWER_PACKAGE = "project"  # the viewer's import name: sputnik in the capstone, the flashcards package in the workspace
 VIEWER_DISTRIBUTION = "sputnik"  # the viewer's installed name in the capstone
 WORKSPACE_DISTRIBUTION = "spatial-flashcards"  # the viewer's installed name in the flashcards workspace (editable)
@@ -81,7 +84,7 @@ def requested_mode(arguments: Sequence[str]) -> Optional[str]:
         elif argument.startswith(MODE_OPTION + "="):
             value = argument.split("=", 1)[1]
     if value is not None and value not in MODES:
-        raise SystemExit(f"{MODE_OPTION} takes {' or '.join(MODES)}, not {value!r}")
+        raise SystemExit(f"{MODE_OPTION} takes {', '.join(MODES[:-1])} or {MODES[-1]}, not {value!r}")
     return value
 
 
@@ -100,9 +103,9 @@ def viewer_here(version: Callable = metadata.version) -> bool:
 
 
 def choose_mode(found: bool, ask: Callable[[str], str] = input, arguments: Sequence[str] = (), here: bool = False) -> str:
-    """FULL or STANDALONE (the module docstring). `found` says whether the viewer is there (viewer_available), `here`
-    whether it is the workspace's own (viewer_here); `ask` is asked the question only when sputnik is found and no
-    mode is requested."""
+    """FULL, STANDALONE or DASHBOARD (the module docstring). `found` says whether the viewer is there (viewer_available),
+    `here` whether it is the workspace's own (viewer_here); `ask` is asked the question only when sputnik is found and
+    no mode is requested; DASHBOARD comes by the argument alone."""
     requested = requested_mode(arguments)
     if requested == FULL and not found:
         raise SystemExit(VIEWER_MISSING)
@@ -189,8 +192,9 @@ def stop_standalone(process, grace: float = STANDALONE_GRACE) -> int:
 DATA_FOLDER = "data"
 STATE_FOLDER = "state"  # in the data folder: the state files, the derived course file and the episodes' log
 CACHE_FOLDER = "cache"  # in the data folder: the embeddings' cache (app.models.embeddings), a derived file, no state
-# What the backup question backs up: the viewer's state file and the model state (app.glue.derived), not the log
-STATE_NAMES = ("user_state.json", "model_state.json")
+# What the backup question backs up: the viewer's state file, the model state (app.glue.derived) and the dashboard's
+# state file (app.dashboard.state), not the log
+STATE_NAMES = ("user_state.json", "model_state.json", "dashboard_state.json")
 
 
 def data_dir(folder: Path) -> Path:

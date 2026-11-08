@@ -24,7 +24,7 @@ to 90 characters where a card is given. No score: a cosine says nothing to a lea
 from typing import NamedTuple, Optional
 
 from ..models.prompt_model import NEAREST
-from .related import shorten
+from ..neighbours import shorten
 
 ASK_LABEL = "Ask"
 ASK_TITLE = "Ask the course"

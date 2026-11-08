@@ -44,12 +44,22 @@ class ModeQuestionTest(unittest.TestCase):
                 ask.assert_not_called()
         self.assertEqual(self.choose(False, None, ["--mode", "standalone"])[0], launch.STANDALONE)
 
+    def test_mode_dashboard_starts_the_dashboard_by_the_argument_alone_with_or_without_the_viewer(self):
+        for found in (True, False):
+            mode, ask = self.choose(found, "n", ["--mode", "dashboard"])
+            self.assertEqual(mode, launch.DASHBOARD)
+            ask.assert_not_called()
+        self.assertEqual(launch.choose_mode(True, mock.Mock(return_value="n"), ["--mode=dashboard"], here=True), launch.DASHBOARD)
+        self.assertEqual(launch.MODES, ("full", "standalone", "dashboard"))
+        self.assertEqual(self.choose(True, "y")[0], launch.FULL)  # the question never names it
+
     def test_full_without_the_viewer_and_an_unknown_mode_stop(self):
         with self.assertRaises(SystemExit) as stop:
             self.choose(False, None, ["--mode", "full"])
         self.assertIn("viewer extra", str(stop.exception.code))
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit) as stop:
             self.choose(True, None, ["--mode", "both"])
+        self.assertIn("full, standalone or dashboard", str(stop.exception.code))
 
     def test_the_viewer_is_found_by_its_import_name_without_importing_it(self):
         find_spec = mock.Mock(return_value=object())
@@ -191,8 +201,8 @@ class BackupQuestionTest(TempDirTest):
         ask = mock.Mock(side_effect=EOFError) if answer is None else mock.Mock(return_value=answer)
         return launch.prepare_state(self.tmp, ask, self.messages.append, names), ask
 
-    def test_the_state_files_are_the_viewers_and_the_model_state(self):
-        self.assertEqual(launch.STATE_NAMES, ("user_state.json", "model_state.json"))
+    def test_the_state_files_are_the_viewers_the_model_state_and_the_dashboards(self):
+        self.assertEqual(launch.STATE_NAMES, ("user_state.json", "model_state.json", "dashboard_state.json"))
 
     def test_backup_names_count_up(self):
         self.assertEqual(launch.backup_path(self.state).name, "user_state.json_01.bak")
@@ -226,6 +236,14 @@ class BackupQuestionTest(TempDirTest):
         self.assertEqual(backups, [])
         ask.assert_not_called()
         self.assertTrue(self.log.exists())
+
+    def test_the_dashboards_state_file_is_backed_up_with_the_viewers(self):
+        dashboard = self.tmp / "dashboard_state.json"
+        dashboard.write_text("{}", encoding="utf-8")
+        backups, ask = self.prepare("y")
+        self.assertEqual([path.name for path in backups], ["user_state.json_01.bak", "model_state.json_01.bak", "dashboard_state.json_01.bak"])
+        self.assertFalse(dashboard.exists())
+        self.assertEqual(ask.call_args[0][0], "Backup existing user_state.json, model_state.json, dashboard_state.json? (y/n): ")
 
     def test_one_state_file_alone_is_backed_up_alone(self):
         self.model_state.unlink()

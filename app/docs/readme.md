@@ -1,6 +1,6 @@
 # app: guided learning
 
-The capstone's main app: the `models/`, the course table they read, the standalone page that shows them, the glue that puts them behind the optional viewer's Sputnik **Helper** button (`glue/`, the only part that imports the viewer), the launcher's mode question, the launcher `start.py` and their tests.
+The capstone's main app: the `models/`, the course table they read, the standalone page that shows them, the dashboard that shows one card at a time with what a learner sees of them, the glue that puts them behind the optional viewer's Sputnik **Helper** button (`glue/`, the only part that imports the viewer), the launcher's modes, the launcher `start.py` and their tests.
 
 Development arrives in trains: `app/`, `start.py`, `tests/app/` and the course data in `data/` are replaced with each train, so they are never edited here; a fix comes with a later train. The course data is git-ignored and never presented online: the standalone page shows ids only (below).
 
@@ -15,7 +15,8 @@ Run the commands below from the capstone's root.
 │   ├── cards.py               # the card record the models read: the seven fields of Flashcard and a quiz's answer options, the stacks
 │   ├── course_table.py        # the course table: cards.csv, decks.csv, topics.csv, read with the csv module
 │   ├── figures.py             # the plotly figures the page and the glue's card panel share (plotly only)
-│   ├── launch.py              # the mode question: full (with the viewer) or standalone; the page's process next to the viewer
+│   ├── launch.py              # the modes: full (with the viewer), standalone or dashboard; the page's process next to the viewer; the backup question
+│   ├── neighbours.py          # the related cards' order (the next card) and labels, the glue's and the dashboard's
 │   ├── models/                # nothing of the viewer: numpy, scipy, scikit-learn; sentence-transformers and transformers where installed (S2, D2)
 │   │   ├── similar.py              # card text, vectoriser, unit vectors, the own minimum, neighbours, deck vectors
 │   │   ├── embeddings.py           # S2: the sentence encoder, the embeddings' cache, the hybrid with TF-IDF, the app's vectoriser
@@ -33,11 +34,18 @@ Run the commands below from the capstone's root.
 │   │   ├── layout.py               # the map figure, the dendrogram's window and the model panels with their generations
 │   │   ├── results.py              # the results files read for the panels: each generation's newest run, the tables, the glossary
 │   │   └── assets/                 # style.css: the viewer's theme tokens, written anew; map_side.js: the map's side; panel_rows.js: a generation's or a results row's click
+│   ├── dashboard/             # the dashboard: one card at a time, nothing of the viewer or the glue
+│   │   ├── __init__.py             # main(course_dir, results_dir, state_dir): the dashboard on the course table, the results and its state file
+│   │   ├── app.py                  # Dashboard (the fitted models, the state, what the regions show), the app and its one callback
+│   │   ├── layout.py               # the top bar with the request box, the diagram, the card with its options and its Related list, the tiles and the model's panel
+│   │   ├── state.py                # the state file dashboard_state.json: the read and explored flags, the shown card, the trail
+│   │   ├── quiz.py                 # a quiz's judgement as plain functions
+│   │   └── assets/                 # style.css: the theme's tokens and the type scale, written anew; keys.js: Enter into the hidden input
 │   ├── glue/                  # the models on sputnik's map, over its public API: the Helper button and its dialog, the related cards, the margin slider, the Ask dialog
 │   └── docs/                  # this readme and columns.md, what the results' columns mean
 ├── tests/app/                 # the model tests, the page's, the launchers' and the evaluation's tests on model_support.py
 ├── results/                   # hand_marks.csv, hand_labels.csv and prompt_requests.csv come with the trains; evaluate.py writes results.csv, difficulty.csv, topics.csv, prompt.csv
-└── data/                      # git-ignored: topics.json, course/, images/, jupyter/, the app's state in state/, S2's embeddings and D2's tags in cache/
+└── data/                      # git-ignored: topics.json, course/, images/, jupyter/, the app's and the dashboard's state in state/, S2's embeddings and D2's tags in cache/
 ```
 
 ## The models
@@ -73,6 +81,24 @@ The models on a page of their own, without the viewer, in its theme, in a slides
 
 Start it with the launcher: answer `n` at "Launch Sputnik? (y/n)"; without sputnik installed it starts without asking.
 
+## The dashboard
+
+The learner's page without the viewer: one card at a time with what a learner sees of the models, in the same theme and slides look as the standalone page, landscape only, in plain HTML without a figure. It fits the course model with T1, D1 and P1 on the course table at the start, as the standalone page does, reads the results files next to `evaluate.py`, and keeps its own state file. It imports nothing of the viewer and nothing of the glue.
+
+```bash
+uv run start.py --mode dashboard
+```
+
+- **The card,** the right column, as the viewer shows it: the front the question, a click on the card or Enter turns it to the answer; a quiz's front the question with its options and Confirm under it, Confirm disabled while nothing is checked; its back "Correct answer" with the card's feedback, or "Wrong answer" with every checked option's own feedback (right only when exactly the correct options are checked); Enter on the back turns it to the front with the checks cleared. The turn marks the card read, a quiz once judged. A quiz too tall for the card's frame scrolls inside it, the page's one scroll bar. The title row names the deck and the topic; nothing of the models stands on the card: no level, no margin, no score. With no card shown the card's place says how to begin.
+- **The request box,** in the top bar at all times, the one way in: a request in the learner's words, Go or Enter; P1's answer shows the topic's card where it navigates (the selected card, else the topic's nearest), or "No match in the course." with up to three entries under the box, the nearest topics' cards named by the deck, the topic and the question, each a click that shows the card; an empty request does nothing.
+- **Related,** a button in the card's title row, lists the shown card's five related cards of the index, the next card first and marked, and again in its place; each the card's question shortened and where it lies (this topic, this deck, another deck by name); every entry a click that shows the card. The next card is the viewer's rule without the confidence: the unread cards first, the quizzes D1 predicted in D1's order among them, the other unread ones in the neighbours' order, the read ones after them. Nothing is explored when the list is drawn.
+- **Back,** in the top bar, returns to the card shown before (the trail of the cards shown), disabled on an empty trail.
+- **The diagram,** the left column: decks → topics → cards, three rows of dots in plain HTML: the explored decks, the shown card's deck's topics that hold an explored card, that topic's explored cards; the shown card's deck, topic and card highlighted; each dot named on hover (the deck's name, the topic's name, the question shortened); nothing unexplored, no click. A fresh start shows it empty, and it fills as the learner explores.
+- **The slide row,** along the bottom: five tiles, S, C, T, D and P, each the model's headline and its two numbers with their verdict words from the results files, the same numbers and words as the standalone page's section, for the generation the app runs (S2 with the encoder, else S1; C1, T1, D1, P1); one line where a results file is missing. A click on a tile opens the model's panel over the two columns, the tiles staying visible under it: the headline and the two numbers at the standalone page's sizes, each with its label, its contrast, its sentence, its verdict word and its explanation; another tile shows that model in its place, a second click on the open tile closes it; Enter does nothing while it is open.
+- **What explores a card:** a selection in any way, Go's answer that shows a card, a click on a Related entry or on one of Go's entries, Back; nothing else and nothing ahead. Where a card lies is T1's topic, the model's, as the full app gives every deck from the start.
+- **The state file** `data/state/dashboard_state.json`: the read and explored flags per card, the shown card and the trail, saved at every change; the closed start: a fresh start shows nothing, a restart shows the explored cards and the shown card again. The flip, Related drawn, the last request and the open tile live in the browser alone. The backup question covers the file with the viewer's; a file of another version is refused, and y at the question starts fresh. No episodes' log.
+- **Large type:** the panel's numbers 3rem, headings and the tiles' numbers 1.5rem, the card's text between 1.35 and 2rem, nothing below 16 px; under 1400 px (a projector) a step smaller. Landscape only, no stacked layout.
+
 ## The launcher: start.py
 
 It takes no arguments; the folders and the commands are written in it:
@@ -81,8 +107,9 @@ It takes no arguments; the folders and the commands are written in it:
 uv run start.py
 ```
 
-- **It searches for sputnik** (the viewer extra, imported as `project`). Found, it asks "Launch Sputnik? (y/n)": `y`, or no input, starts the full app, sputnik's map with the Helper button; `n` the standalone page. Not found, it starts the standalone page without asking and prints the command that installs the viewer (`uv sync --all-groups --extra viewer`). The question is `launch.py`'s (`choose_mode`); `--mode full|standalone` skips it. In the flashcards workspace, where the viewer is the workspace's own package and no sputnik is installed (`launch.viewer_here`), it starts the full app without the question.
-- **The backup question,** before the full app: with a state file in `data/state/`, it asks whether to back up `user_state.json` and `model_state.json` (`user_state.json_01.bak`, `_02.bak`, …) and start fresh; `n` or no input keeps them. The debug reloader's child asks nothing, the standalone page alone asks nothing, and the episodes' log `episodes.csv` is never touched (`launch.prepare_state`).
+- **It searches for sputnik** (the viewer extra, imported as `project`). Found, it asks "Launch Sputnik? (y/n)": `y`, or no input, starts the full app, sputnik's map with the Helper button; `n` the standalone page. Not found, it starts the standalone page without asking and prints the command that installs the viewer (`uv sync --all-groups --extra viewer`). The question is `launch.py`'s (`choose_mode`); `--mode full|standalone|dashboard` skips it, and the dashboard starts by the argument alone (`uv run start.py --mode dashboard`), with or without sputnik. In the flashcards workspace, where the viewer is the workspace's own package and no sputnik is installed (`launch.viewer_here`), it starts the full app without the question.
+- **The backup question,** before the full app and before the dashboard: with a state file in `data/state/`, it asks whether to back up `user_state.json`, `model_state.json` and `dashboard_state.json` (`user_state.json_01.bak`, `_02.bak`, …) and start fresh; `n` or no input keeps them. The debug reloader's child asks nothing, the standalone page alone asks nothing, and the episodes' log `episodes.csv` is never touched (`launch.prepare_state`).
+- **The dashboard** runs on the course table in `data/course/`, the results next to `evaluate.py` and its state file in `data/state/`, on Dash's default port, without the reloader and with no process next to it (`run_dashboard`); `--port` names its port.
 - **The data folder** is `data/` next to `start.py`; in the flashcards workspace, where `start.py` lies one level below the repository root, the root's (`launch.data_dir`). `evaluate.py` and `model_support.py` take it by the same rule.
 - **The full app runs the standalone page next to it** as a process of its own on port 8051 (`start.py --mode standalone --port 8051`, started by the reloader's parent and stopped once the viewer has; `launch.start_standalone`): the viewer's top bar has the Models button, a link that opens the page in a new tab, where its sputnik takes links (0.4.0 or newer; none on 0.3.0), and the page a Sputnik link back to the viewer. Ctrl+C stops both.
 - **The standalone page** reads the course table in `data/course/` and stores nothing.
@@ -107,7 +134,9 @@ The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `tes
 
 The page's tests (`test_figures.py`, `test_standalone.py`) import `model_support.py` too, and nothing of the viewer: `test_standalone.py` writes the test course as a course table, drives the three views through the page's callback, runs the page in a process where the viewer cannot be imported (and checks that nothing of it or of the glue is loaded), and, when `data/course/` is there, serves the real course table.
 
-The launchers' tests import `model_support.py` too: `test_launch.py` the mode question (`launch.py`) with the viewer passed in or faked, the page's process next to the viewer (its command, environment and stop), the data folder and the backup question on a temporary folder, `test_start.py` the launcher with its runs and the backup question mocked (the question only with sputnik found, none on the workspace's own viewer, the backup question before the full app only, the folders by the data folder's rule, the reloader's child, the page started and stopped in full mode, `--mode standalone --port` for the page's own process, the stops with their commands, and a process without the models' libraries in which it loads and stops).
+The dashboard's tests (`test_dashboard.py`) do the same for the dashboard: the closed start and a restart from its state file, what explores a card, the card's two sides and a quiz's judgement, Related's order and places, Back on the trail, a request's answer and "no match" with its entries, the diagram, the tiles on the results fixtures and their panel, the layout's regions, the judgement's functions, a process with the viewer blocked, and a request on the real course table when it is there.
+
+The launchers' tests import `model_support.py` too: `test_launch.py` the mode question (`launch.py`) with the viewer passed in or faked, the third mode by its argument alone, the page's process next to the viewer (its command, environment and stop), the data folder and the backup question on a temporary folder with the three state files, `test_start.py` the launcher with its runs and the backup question mocked (the question only with sputnik found, none on the workspace's own viewer, the backup question before the full app and the dashboard only, the folders by the data folder's rule, the reloader's child, the page started and stopped in full mode, `--mode standalone --port` for the page's own process, `--mode dashboard` with no page next to it, the stops with their commands, and a process without the models' libraries in which it loads and stops).
 
 The evaluation's tests (`test_evaluate.py`) import `model_support.py` and `evaluate.py` next to the package: the results files, the hand marks and labels with their forms on the fixtures, the measures on a hand-made layout, the rows of the similarity part, D2's rows per model and template with their deck rows with the fake pipeline, and a run on the test course's table, with and without the hand files, in a process where the viewer cannot be imported.
 

@@ -1,6 +1,6 @@
 """The launcher (start.py, exported next to the package): it searches for sputnik and asks only when it finds it (on
 the flashcards workspace's own viewer the full app starts without the question), asks the backup question before the
-full app, the reloader's child asks nothing, and a missing library, a missing data file or an older sputnik stops the
+full app and before the dashboard (`--mode dashboard`, the third mode, by the argument alone), the reloader's child asks nothing, and a missing library, a missing data file or an older sputnik stops the
 start with the command that fixes it; its folders follow the data folder's rule; it loads and stops without the
 models' libraries (a subprocess with them blocked). The two runs and the backup question are mocked, so nothing is
 served, no state is touched and nothing of the viewer is imported."""
@@ -33,14 +33,16 @@ class StartModeTest(unittest.TestCase):
             mock.patch.object(start, "prepare_state") as prepare_state,
             mock.patch.object(start, "run_standalone") as standalone,
             mock.patch.object(start, "run_full") as full,
+            mock.patch.object(start, "run_dashboard") as dashboard,
             mock.patch.object(start, "start_standalone", return_value="page") as page,
             mock.patch.object(start, "stop_standalone") as stop,
             mock.patch("builtins.print"),
         ):
             start.main(ask, environ, list(arguments))
-        self.assertEqual(standalone.call_count + full.call_count, 1)
-        self.page, self.stop, self.standalone, self.prepare_state = page, stop, standalone, prepare_state
-        return (launch.STANDALONE if standalone.called else launch.FULL), ask, environ
+        self.assertEqual(standalone.call_count + full.call_count + dashboard.call_count, 1)
+        self.page, self.stop, self.standalone, self.dashboard, self.prepare_state = page, stop, standalone, dashboard, prepare_state
+        ran = launch.STANDALONE if standalone.called else (launch.DASHBOARD if dashboard.called else launch.FULL)
+        return ran, ask, environ
 
     def test_the_full_app_starts_the_page_next_to_it_and_stops_it_after(self):
         ran, _ask, environ = self.start(True, "y")
@@ -76,6 +78,21 @@ class StartModeTest(unittest.TestCase):
         self.page.assert_not_called()
         ran, _ask, _environ = self.start(False)
         self.standalone.assert_called_once_with(port=None, viewer_url=None)  # a start without the viewer: no link
+
+    def test_mode_dashboard_runs_the_dashboard_after_the_backup_question_with_no_page_next_to_it(self):
+        for found in (True, False):
+            with self.subTest(found=found):
+                ran, ask, environ = self.start(found, "n", arguments=["--mode", "dashboard", "--port", "8053"])
+                self.assertEqual(ran, launch.DASHBOARD)
+                self.assertNotIn(mock.call(launch.LAUNCH_QUESTION), ask.call_args_list)  # the argument alone starts it
+                self.dashboard.assert_called_once_with(port=8053)
+                self.prepare_state.assert_called_once_with(start.STATE_FILE.parent, ask)  # the backup question, as before the full app
+                self.page.assert_not_called()  # no page next to it
+                self.stop.assert_not_called()
+                self.assertEqual(environ[launch.MODE_VARIABLE], launch.DASHBOARD)
+        ran, _ask, _environ = self.start(True, "y", arguments=["--mode=dashboard"], here=True)
+        self.assertEqual(ran, launch.DASHBOARD)
+        self.dashboard.assert_called_once_with(port=None)
 
     def test_without_sputnik_the_standalone_page_starts_and_nothing_is_asked(self):
         ran, ask, environ = self.start(False, "y")
@@ -148,6 +165,19 @@ class StartDataTest(unittest.TestCase):
         message = str(stop.exception.code)
         self.assertIn("cards.csv", message)
         self.assertIn(start.DATA_HINT, message)
+
+    def test_the_dashboard_without_the_course_table_stops_with_the_data_hint_and_passes_its_folders(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaises(SystemExit) as stop:
+                start.run_dashboard(Path(folder) / "course")
+            message = str(stop.exception.code)
+            self.assertIn("cards.csv", message)
+            self.assertIn(start.DATA_HINT, message)
+            with mock.patch("app.dashboard.main") as dashboard_main:
+                table = model_support.write_test_table(Path(folder) / "course")
+                start.run_dashboard(table, Path(folder) / "results", Path(folder) / "state", Path(folder) / "cache", port=8053)
+            dashboard_main.assert_called_once_with(table, Path(folder) / "results", Path(folder) / "state", cache_dir=Path(folder) / "cache", port=8053)
+        self.assertEqual(inspect.signature(start.run_dashboard).parameters["state_dir"].default, start.STATE_FILE.parent)  # next to the viewer's state
 
     def test_standalone_passes_the_port_and_the_viewers_url_to_the_page(self):
         with tempfile.TemporaryDirectory() as folder, mock.patch("app.standalone.main") as standalone_main:
