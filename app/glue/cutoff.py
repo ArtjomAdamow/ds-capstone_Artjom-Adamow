@@ -1,5 +1,5 @@
-"""The cut-off preset (glue; no Dash, no state): where the project's cut-off line starts after the Helper button, so
-that the connected parts below it stay small enough to read.
+"""The cut-off preset (glue; no Dash, no state): where the project's cut-off line stands once the Helper switch shows
+the model's connections, so that the connected parts below it stay small enough to read.
 
 The viewer replays a view's shown connections in their order (project.services.dendrogram, a module's first): a
 connection that joins two separate parts is a merge with its rank (1, 2, 3, ...), and the cut-off line keeps the

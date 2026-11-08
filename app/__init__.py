@@ -4,16 +4,16 @@
 * `models`: the similarity pipeline, the layout step, the clustering, the topic model T1, the course model and the
   difficulty model D1, with the offline measures. They import nothing of the viewer (the flashcards package, import
   name `project`), so they run and are tested without it.
-* `glue`: the Helper button per view, the position sources, the cut-off presets, the difficulty groups, the back of
-  the card panel, the related cards under it, the derived course file and the helper's own
-  state: the models on the viewer, over its public API only.
+* `glue`: the model state for the whole course with the Helper switch, the position sources, the cut-off presets,
+  the difficulty groups, the related cards under the card panel, the derived course file and the model state's file:
+  the models on the viewer, over its public API only.
 * `figures`: the plotly figures the glue's back of the card panel and the standalone page both draw (D1's metrics,
   the sphere's surface and arcs, the dendrogram over scipy's coordinates); plotly only, no Dash, nothing of the
   viewer, and out of `models`, so the model tests need no plotly.
 * `course_table`: the course table (cards.csv, decks.csv, topics.csv), the models' input without the viewer's
   parser, read with the csv module; the flashcards workspace's export writes it with the parser.
-* `launch`: the launcher's mode question, full (the viewer with the Helper button) or standalone, the standalone
-  page as a process next to the viewer, the data folder and the backup question, shared by the launchers.
+* `launch`: the launcher's mode question, full (the viewer with the models on from the start) or standalone, the
+  standalone page as a process next to the viewer, the data folder and the backup question, shared by the launchers.
 * `standalone`: the models on a page of their own, without the viewer: the course table in,
   the three views, the dendrogram and D1's metrics in the viewer's theme; nothing stored.
 

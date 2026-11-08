@@ -5,10 +5,9 @@ any other id (a card of a one-card topic, a card of a deck left out, an id that 
 fitted on) gets the viewer's random position on the surface (project.services.positions.surface_positions), with
 the seed.
 
-* The decks state keeps the viewer's default: the Helper button sets the model's deck positions itself, and the
-  helper passes no `deck_positions` to compose (deck_positions is here for the record and the tests).
-* The card state takes `card_positions`, limited to the decks with the model's topics (Helper.card_positions), so a
-  deck checked again gets the model's positions back and every other deck the viewer's random ones.
+Since roadmap step 33 of the helper the composition passes neither: the model's positions of the decks and the cards
+reach the viewer with the model state (button.Helper.model_state), set over whatever a source placed. The sources stay
+here for the record and the tests.
 """
 
 from typing import Collection, Mapping, Optional, Sequence

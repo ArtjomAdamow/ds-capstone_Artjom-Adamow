@@ -1,22 +1,26 @@
 """The two files of the helper's own next to the viewer's state file (data/state/ by start.py):
 
 * The derived course file (DERIVED_NAME, write_derived_course): the raw course file written again with the cards'
-  "topic" set by the topic model for the decks the Helper button has given the model's topics, the same decks,
-  topic ids and names, cards and ids, in the viewer's format, so its parser, TopicIndex, dialogs and state work
-  unchanged. The viewer's compose reads it as its course file; the raw file is the models' input. Rewritten in the
-  serving process at every start and never backed up.
-* The model state (MODEL_STATE_NAME, read_model_state, write_model_state), one entry per model:
+  "topic" set by the topic model for every deck (since roadmap step 33 of the helper; until then for the decks the
+  Helper button had given the model's topics), the same decks, topic ids and names, cards and ids, in the viewer's
+  format, so its parser, TopicIndex, dialogs and state work unchanged. The viewer's compose reads it as its course
+  file; the raw file is the models' input. Rewritten in the serving process at every start and never backed up.
+* The model state (MODEL_STATE_NAME, write_model_state), the models' results for the whole course, one entry per
+  model (version 2 since step 33):
 
-      {"version": 1, "topic_model": {"decks": [...], "groups": []}, "difficulty_model": {"groups": [...]},
-       "course_model": {"links": {"decks": [[source, target], ...], "cards": [...]}}}
+      {"version": 2,
+       "course_model": {"positions": {"decks": {deck id: [x, y, z]}, "cards": {card id: [x, y, z]}},
+                        "links": {"decks": [[source, target], ...], "topics": {deck id: [[topic id, topic id], ...]},
+                                  "cards": [[source, target], ...]},
+                        "presets": {"decks": share, "topics": [[deck id, topic id, share], ...]}},
+       "difficulty_model": {"levels": {card id: level}}}
 
-  the deck ids with the model's topics, each model's generated groups with their members (CardGroup records; the
-  topic model has none yet), and the course model's connections by state: the decks
-  state's and the card state's, each in the live list's order (merge order per scope). Further models get entries
-  of their own. The generated groups and connections are never in the viewer's state file, which holds the user's
-  groups with their kinds and the user's connections. Read at a start with a stored card state, so a restart
-  rebuilds the same derived file, presets, groups and connections; ignored and overwritten at a fresh card state.
-  Written after every save of the viewer's state and with the derived file.
+  the course model's positions, its connections in merge order (the decks', every deck's topics', every topic's
+  cards') and the presets of the cut-off line; D1's predicted level of every quiz it rated, from which the groups are
+  filled. Further models get entries of their own. Written at every start after the fit, the record of what the
+  viewer got (button.Helper.model_state, the hand-over); read by nothing, holding nothing of the learner's, so it is
+  neither written after a save nor kept by the backup question. The generated groups and connections are never in
+  the viewer's state file, which holds the user's groups with their kinds and the user's connections.
 """
 
 import json
@@ -31,26 +35,9 @@ from ..models.topic_model import MODEL_NAME
 
 DERIVED_NAME = "helper_topics.json"  # the model's topics as a course file for the viewer
 MODEL_STATE_NAME = "model_state.json"  # one entry per model (next to the derived file and the state file)
-MODEL_STATE_VERSION = 1
-TOPIC_MODEL = "topic_model"  # the model state's entry of T1: the decks with the model's topics
-DIFFICULTY_MODEL = "difficulty_model"  # the entry of D1: its generated groups
-COURSE_MODEL = "course_model"  # the entry of the course model: its connections by state
-LINK_STATES = ("decks", "cards")  # the course model's connections: the decks state's, the card state's
-
-
-def stored_links(entry) -> dict[str, list[tuple[str, str]]]:
-    """The course model's connections as stored, by state (LINK_STATES); a state without a readable list has none,
-    and an entry that is not a pair of two ids is dropped."""
-    links = entry.get("links") if isinstance(entry, Mapping) else None
-    links = links if isinstance(links, Mapping) else {}
-    pairs = {}
-    for name in LINK_STATES:
-        items = links.get(name)
-        pairs[name] = [
-            (item[0], item[1]) for item in (items if isinstance(items, list) else [])
-            if isinstance(item, (list, tuple)) and len(item) == 2 and all(isinstance(end, str) for end in item)
-        ]
-    return pairs
+MODEL_STATE_VERSION = 2
+DIFFICULTY_MODEL = "difficulty_model"  # the entry of D1: its predicted levels
+COURSE_MODEL = "course_model"  # the entry of the course model: its positions, connections and presets
 
 
 def _write_atomically(path: Path, text: str) -> None:
@@ -91,18 +78,6 @@ def write_derived_course(
     }
     _write_atomically(target, json.dumps(data, indent=2))
     return target
-
-
-def read_model_state(path: Path) -> dict[str, dict]:
-    """One mapping per model, as stored; none without a readable file of this version (the maker of each entry
-    checks its contents)."""
-    try:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    if not isinstance(payload, dict) or payload.get("version") != MODEL_STATE_VERSION:
-        return {}
-    return {str(name): entry for name, entry in payload.items() if name != "version" and isinstance(entry, dict)}
 
 
 def write_model_state(path: Path, entries: Mapping[str, Mapping]) -> None:

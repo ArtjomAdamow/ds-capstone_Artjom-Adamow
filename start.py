@@ -9,16 +9,16 @@ Sputnik? (y/n)": y, or no input, starts the full app, n the standalone page. Not
 without asking and prints the command that installs the viewer. In the flashcards workspace the viewer is the
 workspace's own package (no sputnik), and the full app starts without the question. `--mode full|standalone|dashboard`
 skips the question; the dashboard starts by the argument alone. Before the full app and before the dashboard it asks
-the backup question (app.launch.prepare_state): with a state file in data/state/, y backs up user_state.json,
-model_state.json and dashboard_state.json (_01.bak, _02.bak, ...) and starts fresh, n or no input keeps them; the
-episodes' log stays.
+the backup question (app.launch.prepare_state): with a state file in data/state/, y backs up user_state.json and
+dashboard_state.json (_01.bak, _02.bak, ...) and starts fresh, n or no input keeps them; the episodes' log and the
+model state, written at every start, stay.
 
     standalone  the models on a page of their own (app.standalone), on the course table in data/course/
                 (cards.csv, decks.csv, topics.csv); nothing is stored; `--port` names its port
-    full        sputnik's map with the models behind the Helper button (app.glue), on the course file
-                data/topics.json with the card images in data/images/; the state goes into data/state/: the
-                viewer's state file user_state.json, the derived course file helper_topics.json, the model
-                state model_state.json and the episodes' log episodes.csv. The standalone page runs next to it as a process of its own on port 8051
+    full        sputnik's map with the models on from the start (app.glue; the Helper's switch shows the model's
+                connections), on the course file data/topics.json with the card images in data/images/; the
+                state goes into data/state/: the viewer's state file user_state.json, the derived course file
+                helper_topics.json, the model state model_state.json and the episodes' log episodes.csv. The standalone page runs next to it as a process of its own on port 8051
                 (this file again with `--mode standalone --port 8051`, app.launch.start_standalone): the viewer's
                 top bar has the Models button, a link that opens the page in a new tab (where sputnik's top bar
                 takes links, since 0.4.0), and the page a Sputnik link back to the viewer; Ctrl+C stops both
@@ -146,7 +146,7 @@ def run_full(
     root: Path = DATA_DIR.parent, course_file: Path = COURSE_FILE, state_file: Path = STATE_FILE,
     cache_dir: Path = CACHE_DIR, environ: MutableMapping[str, str] = os.environ,
 ) -> None:
-    """Sputnik's app with the Helper button, served with the debug reloader, on `root`, the data folder's parent (the
+    """Sputnik's app with the models on from the start, served with the debug reloader, on `root`, the data folder's parent (the
     images under data/images/). The reloader's parent composes the viewer's app on the raw course file without the
     models and stores nothing (its random positions would read as stored ones); the child fits the models, writes the
     derived course file and saves the state at the start. The Models button links the page's URL where the

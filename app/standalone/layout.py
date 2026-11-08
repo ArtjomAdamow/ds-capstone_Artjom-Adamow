@@ -124,7 +124,7 @@ NO_LINKS = {
     CARDS_VIEW: "No connections: the model connects a topic of at least two cards.",
 }
 VIEWER_LINK = "Sputnik"  # the top bar's link to the viewer served next to the page
-VIEWER_LINK_TITLE = "The viewer Sputnik, served next to this page: the map with the Helper button, in a new tab"
+VIEWER_LINK_TITLE = "The viewer Sputnik, served next to this page: the map with the models on from the start, in a new tab"
 OVERVIEW_HINT = {
     DECKS_VIEW: "Select a deck to see its tags; Open enters it.",
     TOPICS_VIEW: "Select a topic to see its tags and its cards' counts; Open enters it. Back goes up to the decks.",

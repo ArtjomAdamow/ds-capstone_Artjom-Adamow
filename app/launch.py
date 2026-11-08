@@ -2,7 +2,7 @@
 the two modes starts, full or standalone; the third, the dashboard, is started by `--mode dashboard` alone. The
 module launcher of the flashcards workspace asks nothing and takes the modes' names from here.
 
-* full (FULL): the viewer with the Helper button (the flashcards package, sputnik in the capstone);
+* full (FULL): the viewer with the models on from the start (the flashcards package, sputnik in the capstone);
 * standalone (STANDALONE): the models on their own page (app.standalone), without the viewer;
 * dashboard (DASHBOARD): the dashboard (app.dashboard), one card at a time without the viewer, on its own state file
   next to the viewer's; the question never names it.
@@ -20,9 +20,10 @@ flashcards workspace's root): the course file, the course table and the images, 
 embeddings' cache in data/cache/.
 
 The backup question (prepare_state), asked before the full app and before the dashboard by the launcher's first
-process, not by the reloader's child: with a state file in data/state/, y backs up the viewer's state file, the model
-state and the dashboard's state file (STATE_NAMES; backup_path: user_state.json_01.bak, _02.bak, ...) and starts
-fresh, n or no input keeps them. The episodes' log is never touched.
+process, not by the reloader's child: with a state file in data/state/, y backs up the viewer's state file and the
+dashboard's state file (STATE_NAMES; backup_path: user_state.json_01.bak, _02.bak, ...) and starts fresh, n or no
+input keeps them. The episodes' log is never touched, nor the model state (since roadmap step 33 of the helper written
+at every start and holding nothing of the learner's).
 
 VIEWER_RELEASE is the sputnik release whose hooks the glue uses: an export names it, the capstone pins its tag, and
 start.py refuses the full app on an older sputnik.
@@ -49,7 +50,7 @@ MODES = (FULL, STANDALONE, DASHBOARD)
 VIEWER_PACKAGE = "project"  # the viewer's import name: sputnik in the capstone, the flashcards package in the workspace
 VIEWER_DISTRIBUTION = "sputnik"  # the viewer's installed name in the capstone
 WORKSPACE_DISTRIBUTION = "spatial-flashcards"  # the viewer's installed name in the flashcards workspace (editable)
-VIEWER_RELEASE = "0.9.0"  # the sputnik release the glue needs (its hooks: the dialog, the links, the window, the card section, the Ask dialog, the episodes; the learner's confidence by that name; step 33's closed start and explored cards, the router's checked topics and cards, its presets and its All decks flag)
+VIEWER_RELEASE = "0.10.0"  # the sputnik release the glue needs (its hooks: the links, the window, the card section, the Ask dialog, the episodes, the model state; the learner's confidence by that name; step 33's closed start and explored cards, the router's checked topics and cards, its presets and its All decks flag, the module's switch and Display's)
 LAUNCH_QUESTION = "The optional interactive viewer Sputnik is available.\n Launch Sputnik? (y/n): "
 MODE_OPTION = "--mode"
 MODE_VARIABLE = "HELPER_MODE"  # the chosen mode, for the debug reloader's child
@@ -192,9 +193,9 @@ def stop_standalone(process, grace: float = STANDALONE_GRACE) -> int:
 DATA_FOLDER = "data"
 STATE_FOLDER = "state"  # in the data folder: the state files, the derived course file and the episodes' log
 CACHE_FOLDER = "cache"  # in the data folder: the embeddings' cache (app.models.embeddings), a derived file, no state
-# What the backup question backs up: the viewer's state file, the model state (app.glue.derived) and the dashboard's
-# state file (app.dashboard.state), not the log
-STATE_NAMES = ("user_state.json", "model_state.json", "dashboard_state.json")
+# What the backup question backs up: the viewer's state file and the dashboard's state file (app.dashboard.state),
+# not the log, nor the model state (app.glue.derived), written at every start
+STATE_NAMES = ("user_state.json", "dashboard_state.json")
 
 
 def data_dir(folder: Path) -> Path:

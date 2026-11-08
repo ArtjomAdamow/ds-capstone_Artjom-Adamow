@@ -1,24 +1,25 @@
-"""The composition (glue): the models behind the Helper button on the viewer's app (used by start.py, by the
-composition root of the flashcards workspace's module launcher, and by the tests).
+"""The composition (glue): the models on the viewer's app from the start (used by start.py, by the composition root of
+the flashcards workspace's module launcher, and by the tests).
 
-A fresh start is the viewer's own: the closed start (nothing checked; roadmap step 33 of the helper), the course
-file's scripted topics, random positions, no connections and no generated groups. The models are fitted in the serving process at every start
-(serving_process), and the Helper button (button.Helper, the viewer's module action left of Random, with its dialog of
-the models) lets them work on the level the user is on. The model state (derived.MODEL_STATE_NAME, next to the
-derived course file) holds which decks have the model's topics, the difficulty groups and the model's connections:
-read at a start with a stored card state, so a restart reads the same topics, the difficulty groups and the model's
-connections come back, and so do the presets and Display's check of the model's connections in the views that hold
-them (both runtime only, like the viewer's cut-off line); forgotten at a fresh card state.
+The models are fitted in the serving process at every start (serving_process), and since roadmap step 33 of the helper
+they are on from the start: the derived course file gives every deck the model's topics, and the model state of the
+whole course (button.Helper.model_state: the decks' and the cards' positions, the model's connections with every
+view's preset, the difficulty groups) goes to the viewer's compose through its `model_state` hook, the one hand-over,
+and into its file next to the derived course file (derived.MODEL_STATE_NAME), written at every start and read by
+nothing. The viewer holds it for every deck, closed ones included; the Helper's switch (the viewer's module action,
+its label alone, in the Connections panel) shows or hides the model's connections in every view, hidden at every
+start. A fresh start is the viewer's closed start all the same (nothing checked, roadmap step 33): the map grows with
+what the learner explores. Until step 33 the Helper button ran the models per view from its dialog, and the model
+state, read back at a restart, held what the runs had written.
 
-The viewer's hooks: compose takes the Helper's refill of its generated groups (refill_groups) and its write of the
-model state (after_save); the groups apart, the read only generated groups and the navigation rules are the
-viewer's own, and the Helper button reloads the viewer's topic index (TopicIndex.reload).
+The groups apart, the read only generated groups and the navigation rules are the viewer's own.
 
 The difficulty model D1 (models.difficulty_model) is fitted with the course model for the Helper's difficulty
 groups and the card section's ranking; its metrics are the standalone page's (the Models button), not the viewer's:
 the card panel has no back here. The viewer's newer hooks are used where the viewer has them (viewer_hooks: the top
-bar links since sputnik 0.4.0, the card section since 0.5.0, the Ask dialog and the episodes' hook since 0.7.0; 0.3.0
-has none; the margin slider of 0.5.0 went with step 33): links are passed where the top bar can take them, and the
+bar links since sputnik 0.4.0, the card section since 0.5.0, the Ask dialog and the episodes' hook since 0.7.0, the
+model state with the Helper's switch since 0.10.0; 0.3.0 has none; the margin slider of 0.5.0 went with step 33): the
+model state and the switch are passed where compose takes the model state, links where the top bar can take them, and the
 card section (glue.related: the selected card's neighbours with the next card first) and the Ask dialog (glue.prompt:
 P1's answer as the viewer's targets) go where the viewer draws them; the episodes' log (glue.episodes: every ended
 episode of the dialog or the card section, a row of episodes.csv next to the model state) where the viewer reports
@@ -49,7 +50,7 @@ from ..models.difficulty_model import DifficultyReport, fit_difficulty
 from ..models.prompt_model import PromptModel
 from .button import Helper
 from .course import load_course
-from .derived import DERIVED_NAME, MODEL_STATE_NAME, read_model_state
+from .derived import DERIVED_NAME, MODEL_STATE_NAME
 from .episodes import EPISODES_NAME, helper_episodes
 from .prompt import helper_prompt
 from .related import helper_section
@@ -58,7 +59,8 @@ LINKS_HOOK = "links"  # compose's top bar links (services.actions.TopBarLink)
 SECTION_HOOK = "card_section"  # compose's card section under the card panel (services.actions.ModuleSection)
 PROMPT_HOOK = "prompt"  # compose's Ask dialog of the top bar (services.actions.ModulePrompt)
 EPISODE_HOOK = "after_episode"  # compose's report of an ended episode (services.episode.Episode)
-NEWER_HOOKS = (LINKS_HOOK, SECTION_HOOK, PROMPT_HOOK, EPISODE_HOOK)
+MODEL_STATE_HOOK = "model_state"  # compose's hand-over of the models' results (services.actions.ModelState)
+NEWER_HOOKS = (LINKS_HOOK, SECTION_HOOK, PROMPT_HOOK, EPISODE_HOOK, MODEL_STATE_HOOK)
 MODELS_URL = "HELPER_MODELS_URL"  # the launchers' variable with the standalone page's URL (app.launch.MODELS_URL)
 MODELS_LABEL = "Models"
 MODELS_TITLE = "The models' page, served next to this viewer: the model panels with the offline results, in a new tab"
@@ -67,7 +69,7 @@ MODELS_TITLE = "The models' page, served next to this viewer: the model panels w
 def viewer_hooks(compose_function: Optional[Callable] = None) -> set[str]:
     """The newer hooks this viewer's compose takes (this module's `compose` unless one is given), among NEWER_HOOKS
     (none on sputnik 0.3.0; the links since 0.4.0, the section since 0.5.0, the prompt and the episodes' hook since
-    0.7.0; the focus slider of 0.5.0 is no longer asked for)."""
+    0.7.0, the model state since 0.10.0; the focus slider of 0.5.0 is no longer asked for)."""
     return set(NEWER_HOOKS) & set(inspect.signature(compose_function or compose).parameters)
 
 
@@ -88,17 +90,15 @@ class ModelComposition:
     composition: Composition
     model: Optional[CourseModel]  # None when the model was not fitted (the reloader's parent process)
     fresh_cards: bool  # the state file held no card state before composing
-    helper: Optional[Helper] = None  # the Helper button's models, with the model
+    helper: Optional[Helper] = None  # the models' results for the viewer, with the model
     difficulty: Optional[DifficultyReport] = None  # D1's metrics and predictions, with the model
     derived_path: Optional[Path] = None  # the derived course file compose read (None without the model)
     links: tuple = ()  # the top bar links passed to compose (none where the viewer has no hook)
     card_section: Optional[object] = None  # the card section passed to compose (the related cards), where the viewer has the hook
     prompt: Optional[object] = None  # the Ask dialog passed to compose, where the viewer has the hook
     after_episode: Optional[Callable] = None  # the episodes' log passed to compose, where the viewer has the hook
-
-    @property
-    def action(self) -> Optional[ModuleAction]:
-        return self.helper.action if self.helper is not None else None
+    model_state: Optional[object] = None  # the models' results passed to compose (ModelState), where the viewer has the hook
+    action: Optional[ModuleAction] = None  # the Helper's switch passed with them
 
     @property
     def user_state(self):
@@ -161,12 +161,10 @@ def compose_model(
     vectoriser=None,
     min_score: Optional[float] = similar.MIN_SCORE,
 ) -> ModelComposition:
-    """Compose the viewer's app on the derived course file with the Helper button. A fresh card state starts as
-    the viewer's (closed, the scripted topics, random positions, nothing generated); a stored one reads the model's
-    topics of the decks that had them, the difficulty groups and the model's connections, with the cut-off presets
-    and Display's check where those connections are. With fit=False and no
-    model, the app is the viewer's on the raw course file (no Helper button), and
-    nothing is written. D1 is fitted with the model unless given. `state_path` is the viewer's one state file;
+    """Compose the viewer's app on the derived course file (the model's topics for every deck) with the model state of
+    the whole course and the Helper's switch; a fresh card state starts closed all the same, a stored one keeps the
+    learner's state. With fit=False and no model, the app is the viewer's on the raw course file (no switch, no
+    model state), and nothing is written. D1 is fitted with the model unless given. `state_path` is the viewer's one state file;
     `derived_path` is where the derived course file and the model state go (a module launcher's composition root
     passes its own folder); by default next to the requested state file. `links` are the viewer's TopBarLinks for its top bar
     (the launcher's link to the models' page), passed where the viewer's compose takes them. `vectoriser` and
@@ -184,11 +182,14 @@ def compose_model(
         return ModelComposition(composition=composition, model=None, fresh_cards=fresh_cards, links=tuple(extra.get(LINKS_HOOK, ())))
     if difficulty is None:
         difficulty = fit_difficulty(course.cards, model.index)
-    model_state = derived_path.with_name(MODEL_STATE_NAME)
-    helper = Helper(
-        model, difficulty, cards_path, derived_path, model_state, {} if fresh_cards else read_model_state(model_state), course.cards,
-    )
+    helper = Helper(model, difficulty, cards_path, derived_path, derived_path.with_name(MODEL_STATE_NAME), course.cards)
     helper.write_course()
+    model_state = helper.model_state()
+    helper.write_state(model_state)  # the record of the hand-over, at every start
+    action = None
+    if MODEL_STATE_HOOK in hooks:
+        extra[MODEL_STATE_HOOK] = model_state
+        action = helper.action
     section = helper_section(model, helper.questions, difficulty.scores) if SECTION_HOOK in hooks else None
     prompt = helper_prompt(PromptModel(model.index, model.topic_model, course.cards)) if PROMPT_HOOK in hooks else None
     after_episode = helper_episodes(derived_path.with_name(EPISODES_NAME)) if EPISODE_HOOK in hooks else None
@@ -198,18 +199,11 @@ def compose_model(
         extra[PROMPT_HOOK] = prompt
     if after_episode is not None:
         extra[EPISODE_HOOK] = after_episode
-    composition = compose(
-        base_dir, boot_id, derived_path, state_path,
-        card_positions=helper.card_positions, action=helper.action,
-        refill_groups=helper.refill_groups, after_save=helper.write_state, **extra,
-    )
-    router = composition.user_state
-    helper.load_groups(router)  # the stored difficulty groups, the empty ones filled again
-    helper.load_links(router)  # the model's stored connections, cut to the loaded dots
-    helper.preset_cutoffs(router)  # their views' presets and Display's check again
+    composition = compose(base_dir, boot_id, derived_path, state_path, action=action, **extra)
     return ModelComposition(
         composition=composition, model=model, fresh_cards=fresh_cards, helper=helper, difficulty=difficulty,
         derived_path=derived_path, links=tuple(extra.get(LINKS_HOOK, ())),
         card_section=section, prompt=prompt, after_episode=after_episode,
+        model_state=extra.get(MODEL_STATE_HOOK), action=action,
     )
 

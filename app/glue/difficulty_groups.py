@@ -2,7 +2,7 @@
 "Quiz: medium", "Quiz: hard"), and the amber group of the predicted quizzes ("Quiz difficulty: predicted").
 
 Every card with a difficulty is a member of its difficulty's group; unrated cards are in none and keep the grey of
-a card without a group, so in the cards view the flashcards alone are grey once Helper has run. A quiz that the
+a card without a group, so in the cards view the flashcards alone are grey. A quiz that the
 difficulty model D1 rated (models.difficulty_model) gets two memberships: the amber group "Quiz difficulty:
 predicted" (PREDICTED_COLOR, the colour of the predicted series in the shares figure and of a predicted card on the
 standalone page's map, written there anew) and the group of its predicted level, the same groups (and colours) as
@@ -10,20 +10,17 @@ the rated cards. A card can also be in any of the user's groups.
 
 The groups are this module's records (GROUP_IDS, `difficulty-<key>`, apart from the user's "group-<n>"), of the cards
 view's kind and of this maker's origin (ORIGIN): the viewer lists them in the cards view only, keeps them read only
-(no Add, Remove or Delete by hand; Focus still works) and never saves them with the user's state. They live in the
-helper's model state instead (derived.write_model_state, written after every save): stored_groups and
-restore_groups bring them back at a restart, with this maker's kind, origin, names and colours, so the file can't
-smuggle another group in.
+(no Add, Remove or Delete by hand; Focus still works) and never saves them with the user's state. Since roadmap step 33
+of the helper they are filled at every start for the whole course (button.Helper.groups) and handed to the viewer with
+the model state (its `groups`); the model state file keeps D1's predicted levels they are filled from.
 
 They are always the oldest groups: every fill gives them the lowest ranks ("Quiz difficulty: predicted" first, then
-easy, medium and hard) and the first places after the viewer's predefined groups of the topic dots
-(project.content.topic_groups), which keep theirs. A predicted card therefore shows the predicted colour (the oldest
-group's), a rated card its difficulty colour, unless Focus unchecks them; and a group missing from the state comes
-back as the oldest when the Helper button generates it again. A generated group left without members (its decks
-unchecked) is filled again from the loaded cards (refill_empty), so the same set of generated groups stays.
+easy, medium and hard), and the viewer puts the groups it is handed first after its predefined groups of the topic
+dots (project.content.topic_groups), which keep theirs. A predicted card therefore shows the predicted colour (the
+oldest group's), a rated card its difficulty colour, unless Focus unchecks them.
 """
 
-from dataclasses import asdict, fields, replace
+from dataclasses import fields
 from typing import Iterable, Mapping
 
 from project.models import USER_ORIGIN, CardGroup
@@ -111,30 +108,6 @@ def fill_predicted_groups(core, predictions: Mapping[str, str]) -> int:
     return added
 
 
-def generated_members(group_id: str, cards, predictions: Mapping[str, str]) -> list[str]:
-    """The members a generated group has among these cards, in their order: for a level's group the cards rated at
-    that level and the ones predicted at it, for "Quiz difficulty: predicted" every predicted card."""
-    if group_id == GROUP_IDS[PREDICTED]:
-        return [card.id for card in cards if card.id in predictions]
-    level = next((level for level in DIFFICULTY_GROUPS if GROUP_IDS[level] == group_id), None)
-    if level is None:
-        return []
-    return [card.id for card in cards if card.difficulty == level or predictions.get(card.id) == level]
-
-
-def refill_empty(core, cards, predictions: Mapping[str, str]) -> int:
-    """Fill every generated group that exists but holds nothing again with its members among these cards (the
-    loaded ones), so the same set of generated groups stays; one with no members among them stays empty. Ranks and
-    places are kept. Returns the number of memberships added."""
-    added = 0
-    for group in generated_groups(core):
-        if not group.card_ids:
-            members = generated_members(group.id, cards, predictions)
-            group.card_ids.extend(members)
-            added += len(members)
-    return added
-
-
 def make_oldest(core) -> None:
     """The lowest ranks for the generated groups ("Quiz difficulty: predicted", then easy, medium and hard), the user's
     groups after them in their own order; the generated groups also come first in the list, after the other makers'
@@ -148,36 +121,6 @@ def make_oldest(core) -> None:
     core.groups[:] = others + own + users
 
 
-# --- the groups in the helper's model state ------------------------------------------------------------------------
-
-
 def generated_groups(core) -> list[CardGroup]:
     """This maker's groups of the card state, in list order."""
     return [group for group in core.groups if group.origin == ORIGIN and group.id in GENERATED_IDS]
-
-
-def group_records(core) -> list[dict]:
-    """The generated groups as the model state stores them (with their members)."""
-    return [asdict(group) for group in generated_groups(core)]
-
-
-def stored_groups(records) -> list[CardGroup]:
-    """The groups of stored records: the known ids only, each once, with this maker's kind, origin, name and colour;
-    the members as stored."""
-    groups = {}
-    for item in records if isinstance(records, list) else []:
-        key = next((key for key, group_id in GROUP_IDS.items() if isinstance(item, dict) and item.get("id") == group_id), None)
-        members = item.get("card_ids") if key is not None else None
-        if key is not None and key not in groups and isinstance(members, list):
-            groups[key] = _record(key, [str(member) for member in members])
-    return list(groups.values())
-
-
-def restore_groups(core, groups: Iterable[CardGroup], loaded_ids) -> None:
-    """Put the stored generated groups into the card state (instead of any there), their members cut to the loaded
-    cards, then make them the oldest."""
-    loaded = set(loaded_ids)
-    core.groups[:] = [group for group in core.groups if group.origin != ORIGIN]
-    for group in groups:
-        core.groups.append(replace(group, card_ids=[card_id for card_id in group.card_ids if card_id in loaded]))
-    make_oldest(core)

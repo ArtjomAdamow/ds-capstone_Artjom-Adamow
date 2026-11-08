@@ -186,7 +186,8 @@ class DataFolderTest(TempDirTest):
 
 class BackupQuestionTest(TempDirTest):
     """The backup question both launchers ask before the full app (prepare_state), on the viewer's state file and the
-    model state; the episodes' log is never touched."""
+    dashboard's; the episodes' log and the model state (written at every start since roadmap step 33 of the helper)
+    are never touched."""
 
     def setUp(self):
         super().setUp()
@@ -201,54 +202,55 @@ class BackupQuestionTest(TempDirTest):
         ask = mock.Mock(side_effect=EOFError) if answer is None else mock.Mock(return_value=answer)
         return launch.prepare_state(self.tmp, ask, self.messages.append, names), ask
 
-    def test_the_state_files_are_the_viewers_the_model_state_and_the_dashboards(self):
-        self.assertEqual(launch.STATE_NAMES, ("user_state.json", "model_state.json", "dashboard_state.json"))
+    def test_the_state_files_are_the_viewers_and_the_dashboards(self):
+        self.assertEqual(launch.STATE_NAMES, ("user_state.json", "dashboard_state.json"))
 
     def test_backup_names_count_up(self):
         self.assertEqual(launch.backup_path(self.state).name, "user_state.json_01.bak")
         (self.tmp / "user_state.json_01.bak").write_text("{}", encoding="utf-8")
         self.assertEqual(launch.backup_path(self.state).name, "user_state.json_02.bak")
 
-    def test_yes_backs_up_both_and_starts_fresh(self):
+    def test_yes_backs_up_the_state_file_and_starts_fresh_the_model_state_and_the_log_stay(self):
         backups, ask = self.prepare("y")
-        self.assertFalse(self.state.exists() or self.model_state.exists())
-        self.assertEqual([path.name for path in backups], ["user_state.json_01.bak", "model_state.json_01.bak"])
+        self.assertFalse(self.state.exists())
+        self.assertEqual([path.name for path in backups], ["user_state.json_01.bak"])
         self.assertTrue(all(path.exists() for path in backups))
-        self.assertTrue(self.log.exists())  # the episodes' log stays
-        self.assertEqual(ask.call_args[0][0], "Backup existing user_state.json, model_state.json? (y/n): ")
+        self.assertTrue(self.log.exists() and self.model_state.exists())
+        self.assertEqual(ask.call_args[0][0], "Backup existing user_state.json? (y/n): ")
         self.assertEqual(self.messages[-1], "Starting with fresh state files.")
 
     def test_no_keeps_the_state_files(self):
         backups, _ask = self.prepare("n")
         self.assertEqual(backups, [])
-        self.assertTrue(self.state.exists() and self.model_state.exists())
+        self.assertTrue(self.state.exists())
 
     def test_no_input_keeps_the_state_files(self):
         backups, _ask = self.prepare()
         self.assertEqual(backups, [])
-        self.assertTrue(self.state.exists() and self.model_state.exists())
+        self.assertTrue(self.state.exists())
         self.assertIn("No input available", self.messages[-1])
 
     def test_without_a_state_file_nothing_is_asked(self):
         self.state.unlink()
-        self.model_state.unlink()
         backups, ask = self.prepare("y")
         self.assertEqual(backups, [])
         ask.assert_not_called()
-        self.assertTrue(self.log.exists())
+        self.assertTrue(self.log.exists() and self.model_state.exists())
 
     def test_the_dashboards_state_file_is_backed_up_with_the_viewers(self):
         dashboard = self.tmp / "dashboard_state.json"
         dashboard.write_text("{}", encoding="utf-8")
         backups, ask = self.prepare("y")
-        self.assertEqual([path.name for path in backups], ["user_state.json_01.bak", "model_state.json_01.bak", "dashboard_state.json_01.bak"])
+        self.assertEqual([path.name for path in backups], ["user_state.json_01.bak", "dashboard_state.json_01.bak"])
         self.assertFalse(dashboard.exists())
-        self.assertEqual(ask.call_args[0][0], "Backup existing user_state.json, model_state.json, dashboard_state.json? (y/n): ")
+        self.assertEqual(ask.call_args[0][0], "Backup existing user_state.json, dashboard_state.json? (y/n): ")
 
     def test_one_state_file_alone_is_backed_up_alone(self):
-        self.model_state.unlink()
+        dashboard = self.tmp / "dashboard_state.json"
+        dashboard.write_text("{}", encoding="utf-8")
+        self.state.unlink()
         backups, _ask = self.prepare("yes")
-        self.assertEqual([path.name for path in backups], ["user_state.json_01.bak"])
+        self.assertEqual([path.name for path in backups], ["dashboard_state.json_01.bak"])
 
 
 if __name__ == "__main__":

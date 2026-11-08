@@ -1,14 +1,14 @@
 """The course model (no Dash, no state, nothing of the viewer): the pipeline fitted once on all cards, and from it the
-topics, positions and connections the Helper button puts on the viewer's map.
+topics, positions and connections the glue hands to the viewer's map at every start (the model state).
 
 * Decks view: one unit vector per deck (similar.deck_vectors); the layout step (models.layout, k = 3) places all
   decks on the unit sphere at once. The points are keyed by deck id, the dots of the viewer's decks state. The
   clustering of the deck vectors (models.clustering) gives the deck connections.
 * Topics: the topic model T1 (models.topic_model) takes the scripted topics of the course file as its input and
-  decides every card's topic and margin; the glue writes them into the derived course file the viewer reads once
-  the Helper button has given a deck the model's topics (the topic dots stay the viewer's own, at random around the
-  deck's centroid; the model places none). A deck's topic vectors (topic_vectors: per topic the mean of its members'
-  unit rows, normalised, as a deck's vector is made of its cards) and their clustering give the topic connections
+  decides every card's topic and margin; the glue writes them into the derived course file the viewer reads, every
+  deck's (the topic dots stay the viewer's own, at random around the deck's centroid; the model places none). A
+  deck's topic vectors (topic_vectors: per topic the mean of its members' unit rows, normalised, as a deck's vector
+  is made of its cards) and their clustering give the topic connections
   (topic_links: one per merge in merge order, n - 1 for a deck's n topics with cards, none for an emptied topic), for
   the model's membership or any other (a deck with scripted topics); the glue writes them between the viewer's topic
   dots, the standalone page draws the deck's tree from them (step 28).
