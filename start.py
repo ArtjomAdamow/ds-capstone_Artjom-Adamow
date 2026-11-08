@@ -24,7 +24,9 @@ episodes' log stays.
                 takes links, since 0.4.0), and the page a Sputnik link back to the viewer; Ctrl+C stops both
     dashboard   the dashboard (app.dashboard), one card at a time without the viewer, on the course table in
                 data/course/ and the results next to evaluate.py; its state goes into data/state/dashboard_state.json;
-                on Dash's default port, without the reloader and with no process next to it; `--port` names its port
+                its Demo on deck 00's table in data/demo/dashboard/; without the course table it starts empty, with
+                the Demo; on Dash's default port, without the reloader and with no process next to it; `--port`
+                names its port
 
 Both modes run the app's vectoriser (app.models.embeddings.app_vectoriser): S2's sentence encoder with the course's
 embeddings cached in data/cache/embeddings/ where sentence-transformers is installed (the embeddings extra), TF-IDF
@@ -61,6 +63,7 @@ ROOT = Path(__file__).resolve().parent  # start.py sits next to the package: the
 DATA_DIR = data_dir(ROOT)  # data/ next to it, or in the folder above it (the flashcards workspace's root)
 COURSE_FILE = DATA_DIR / "topics.json"  # the course file, version 3: the full app's input
 TABLE_DIR = DATA_DIR / "course"  # the course table: the standalone page's input
+DEMO_TABLE_DIR = DATA_DIR / "demo" / "dashboard"  # deck 00's table, 00-deck-dashboard: the dashboard's Demo
 RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the standalone page's panels read them
 STATE_FILE = DATA_DIR / STATE_FOLDER / "user_state.json"  # the viewer's state file; the derived course file, the
 # model state and the episodes' log go next to it (app.glue.composition)
@@ -121,19 +124,22 @@ def run_standalone(table_dir: Path = TABLE_DIR, cache_dir: Path = CACHE_DIR, por
 
 
 def run_dashboard(table_dir: Path = TABLE_DIR, results_dir: Path = RESULTS_DIR, state_dir: Path = STATE_FILE.parent,
-                  cache_dir: Path = CACHE_DIR, port: Optional[int] = None) -> None:
+                  cache_dir: Path = CACHE_DIR, port: Optional[int] = None, demo_dir: Path = DEMO_TABLE_DIR) -> None:
     """The dashboard on the course table, with the results next to evaluate.py, its state file in the state folder
-    (next to the viewer's), the app's vectoriser and the embeddings' cache, on `port` (Dash's default without one);
-    without the table, stop with the data hint."""
+    (next to the viewer's), the app's vectoriser and the embeddings' cache, and its Demo on deck 00's table, on
+    `port` (Dash's default without one); without the course table it starts empty with the Demo, and without either
+    table it stops with the data hint."""
     from app.course_table import missing_files
 
     missing = missing_files(table_dir)
     if missing:
         names = ", ".join(path.name for path in missing)
-        raise SystemExit(f"No course table in {table_dir} ({names} missing). {DATA_HINT}")
+        if missing_files(demo_dir):
+            raise SystemExit(f"No course table in {table_dir} ({names} missing). {DATA_HINT}")
+        print(f"No course table in {table_dir} ({names} missing): the dashboard starts empty, with its Demo. {DATA_HINT}")
     from app.dashboard import main as dashboard_main
 
-    dashboard_main(table_dir, results_dir, state_dir, cache_dir=cache_dir, port=port)
+    dashboard_main(table_dir, results_dir, state_dir, cache_dir=cache_dir, port=port, demo_dir=demo_dir)
 
 
 def run_full(

@@ -237,6 +237,26 @@ class AppVectoriserTest(unittest.TestCase):
             self.assertIsNone(embeddings.app_vectoriser(name="minilm", loader=model_support.fake_loader).cache)
             self.assertEqual(embeddings.VECTORISERS, ("tfidf", "minilm", "mpnet", "hybrid-minilm", "hybrid-mpnet"))
 
+    def test_the_uncached_copy_is_the_same_kind_unfitted_without_the_cache_on_the_loaded_encoder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            hybrid = embeddings.app_vectoriser(Path(folder), name="hybrid-minilm", loader=model_support.fake_loader)
+            model_support.course_model(vectoriser=hybrid)  # the course's fit
+            copy = embeddings.uncached_copy(hybrid)
+            self.assertIsInstance(copy, embeddings.HybridVectoriser)
+            self.assertEqual((copy.k, copy.percentile, copy.minima), (hybrid.k, hybrid.percentile, (0.0, 0.0)))  # not fitted
+            self.assertIsNone(copy.second.cache)
+            self.assertIsNotNone(hybrid.second.cache)
+            self.assertIs(copy.second.load(), hybrid.second.load())  # the model loaded once
+            self.assertEqual(copy.first.get_params(), hybrid.first.get_params())
+            self.assertFalse(hasattr(copy.first, "vocabulary_"))
+            self.assertTrue(hasattr(hybrid.first, "vocabulary_"))
+            before = sorted(path.name for path in (Path(folder) / embeddings.CACHE_FOLDER).iterdir())
+            model_support.course_model(model_support.CARDS[:5], vectoriser=copy)
+            self.assertEqual(sorted(path.name for path in (Path(folder) / embeddings.CACHE_FOLDER).iterdir()), before)
+        self.assertIsNone(embeddings.uncached_copy(None))
+        tfidf = similar.tfidf_vectoriser()
+        self.assertIsNot(embeddings.uncached_copy(tfidf), tfidf)
+
     def test_the_model_fits_on_the_hybrid_as_on_tfidf(self):
         hybrid = embeddings.app_vectoriser(name="hybrid-minilm", loader=model_support.fake_loader)
         model = model_support.course_model(vectoriser=hybrid)

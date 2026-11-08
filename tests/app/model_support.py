@@ -1,7 +1,7 @@
 """The models' test fixtures, with nothing of the viewer: the helper's package on the path, the test course as a
 table of card records with its deck ids and scripted topics (the same 13 cards the viewer's parser reads from
-helper_support.COURSE; test_course.py checks that the two agree), the moving course, and a course for the
-difficulty model D1. The model tests (test_similar, test_layout, test_clustering, test_topic_model,
+helper_support.COURSE; test_course.py checks that the two agree), the moving course, the demo's deck 00 as a course
+table, and a course for the difficulty model D1. The model tests (test_similar, test_layout, test_clustering, test_topic_model,
 test_course_model, test_difficulty_model) import this file only, so they run in an env without the viewer.
 """
 
@@ -160,6 +160,73 @@ def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
         for (deck_id, topic_id), (name, rest) in TOPIC_NAMES.items()
     ]
     write_table(folder, cards, decks, topics)
+    return folder
+
+
+# --- deck 00, the demo's deck, as a course table -------------------------------------------------------------
+
+DEMO_DECK = ("00", "How to use")
+# (topic id, name, headings) -> the cards in file order: plain cards on stack 1, rated quizzes on stack 3; card 001
+# first, as the Demo shows it
+DEMO_TOPICS = {
+    ("01", "Start here", ("Start here", "The page")): [
+        CardRecord("100001", "How to use", "What does the dashboard page show?",
+                   "The dashboard page shows one card at a time, the diagram of what you explored and the tiles."),
+        CardRecord("100002", "How to use", "Where is the request box on the page?",
+                   "The request box stands in the top bar of the page, the one way in."),
+        CardRecord("300003", "How to use", "Which column of the page shows the card?", "The right column shows the card.",
+                   STACK_DIFFICULTY, "easy", options=("The right column", "The left column"),
+                   answers=("The right column shows the card.", "The left column shows the diagram."), correct=(0,)),
+        CardRecord("100004", "How to use", "What does the Demo button of the page do?",
+                   "The Demo button shows the page's own deck from its first card; End demo brings back the course."),
+    ],
+    ("02", "Asking", ("Asking", "A request in your own words")): [
+        CardRecord("100005", "How to use", "How do you send a request?",
+                   "Type the request into the box, then press Go or Enter to send the request."),
+        CardRecord("100006", "How to use", "What does a request find?",
+                   "A request finds the nearest topic and shows the card nearest to the request."),
+        CardRecord("100007", "How to use", "What does no match mean for a request?",
+                   "No match means the request lies far from every topic; the nearest topics' cards are listed."),
+        CardRecord("300008", "How to use", "Which key sends a request?", "Enter sends a request, as Go does.",
+                   STACK_DIFFICULTY, "medium", options=("Enter", "Escape", "Space"),
+                   answers=("Enter sends a request.", "Escape sends nothing.", "Space types a space."), correct=(0,)),
+    ],
+    ("03", "Studying a card", ("Studying a card", "Turning a card")): [
+        CardRecord("100009", "How to use", "How do you turn a card?",
+                   "Click the card or press Enter to turn the card to its answer."),
+        CardRecord("100010", "How to use", "What does a turned card count as?", "A turned card counts as read."),
+        CardRecord("300011", "How to use", "Which of these turn a quiz card to its back?",
+                   "Confirm and Enter turn a quiz card to its back.", STACK_DIFFICULTY, "hard",
+                   options=("Confirm", "Enter", "Back"), answers=("Confirm judges.", "Enter judges.", "Back shows the card before."),
+                   correct=(0, 1)),
+        CardRecord("100012", "How to use", "What does the back of a quiz card show?",
+                   "The back of a quiz card shows the correct answer, or the wrong answer with the feedback."),
+    ],
+}
+DEMO_CARDS = [card for cards in DEMO_TOPICS.values() for card in cards]
+DEMO_START = "100001"
+
+
+def write_demo_table(folder: Path) -> Path:
+    """Deck 00 of the tests as a course table in `folder`, as export_course.py writes data/demo/dashboard/ from its
+    file: one deck, three topics with headings of their own, twelve cards, card 001 first."""
+    from app.course_table import encode_list, join_texts, write_table
+
+    deck_id, deck = DEMO_DECK
+    cards = [
+        {
+            "comb_id": card.id, "deck_id": deck_id, "deck": deck, "topic_id": topic_id, "topic_name": name, "rest": "false",
+            "stack": card.stack, "difficulty": card.difficulty, "question": card.question, "answer": card.answer,
+            "explain": card.explain, "options": encode_list(card.options), "answers": encode_list(card.answers),
+            "correct": encode_list(card.correct),
+        }
+        for (topic_id, name, _headings), members in DEMO_TOPICS.items() for card in members
+    ]
+    topics = [
+        {"deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": "false", "headings": join_texts(headings), "sources": ""}
+        for topic_id, name, headings in DEMO_TOPICS
+    ]
+    write_table(folder, cards, [{"deck_id": deck_id, "name": deck, "description": "12 cards: 3 quiz cards."}], topics)
     return folder
 
 

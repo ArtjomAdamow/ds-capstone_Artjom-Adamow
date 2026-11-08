@@ -9,7 +9,11 @@ and its empty start, a click on a deck, a topic or a card; the five tiles on the
 without a file, a tile opening its panel, a second tile replacing it, the open tile closing it, Enter doing nothing
 while it is open; each panel's figure of the whole course (S where the related cards lie, C the decks with the shown
 card's deck gold and in front, T the margins with the threshold and the most confident quarter, D the matrix, P's grid
-from the counts of the newest run and its line without them); the layout's regions and the stylesheet; the state file; the judgement's functions; and that
+from the counts of the newest run and its line without them); the Demo beside the course (deck 00 from card 001, End
+demo back to the course's card and trail, Related and the request box answering from deck 00 alone without D1, a
+reload ending the demo, the slide row the course's, the state file and the embeddings' cache the same after it); the
+dashboard without course data ("no data loaded" with the box and Go disabled, the Demo, the tiles from the newest
+runs, main on deck 00 alone reading no state file); the layout's regions and the stylesheet; the state file; the judgement's functions; and that
 nothing of the viewer or the glue is imported (a subprocess with the viewer blocked). The real course's table serves
 a request too (skipped without it)."""
 
@@ -31,11 +35,12 @@ from app.course_table import load_table, missing_files
 from app.dashboard import main as dashboard_main
 from app.dashboard import quiz
 from app.dashboard.app import (
-    ASSETS_DIR, HOME, INPUT_IDS, INPUTS, NO_OUTCOMES, OUT, OUTPUT_NAMES, Dashboard, create_app, diagram_click, register_callback,
+    ASSETS_DIR, HOME, INPUT_IDS, INPUTS, NO_DATA_FIGURE, NO_OUTCOMES, OUT, OUTPUT_NAMES, Boards, Dashboard, DemoBoard, create_app, diagram_click,
+    register_callback,
 )
 from app.dashboard.layout import (
-    BACK_HINT, BEGIN_HINT, DIAGRAM_INPUT, FLASHCARD_HINT, GO_SLOTS, KEY_INPUT, NEXT_MARK, NO_MATCH, NO_MATCH_NEAREST, PANEL_LETTERS,
-    RELATED_SLOTS, THIS_DECK, THIS_TOPIC, page_layout, tile_class,
+    BACK_HINT, BEGIN_HINT, DEMO_BUTTON, DEMO_LABEL, DIAGRAM_INPUT, END_DEMO_LABEL, FLASHCARD_HINT, GO_SLOTS, KEY_INPUT, NEXT_MARK, NO_DATA,
+    NO_DATA_HINT, NO_MATCH, NO_MATCH_NEAREST, PANEL_LETTERS, PLACEHOLDER, RELATED_SLOTS, THIS_DECK, THIS_TOPIC, page_layout, tile_class,
 )
 from app.dashboard.panel_figures import A_DECK, CURRENT_DECK
 from app.dashboard.state import STATE_NAME, VERSION, DashboardState
@@ -198,6 +203,9 @@ class DashboardTest(Driver):
         self.assertTrue(result[OUT["back_disabled"]])
         self.assertEqual([result[OUT[f"tile_{letter}"]] for letter in PANEL_LETTERS], [tile_class(False)] * 5)
         self.assertEqual(result[OUT["panel_class"]], "model-panel hidden")
+        self.assertEqual(result[OUT["demo_label"]], DEMO_LABEL)
+        self.assertTrue(result[OUT["demo_disabled"]])  # no deck 00's table: no Demo
+        self.assertEqual((result[OUT["placeholder"]], result[OUT["box_disabled"]], result[OUT["go_disabled"]]), (PLACEHOLDER, False, False))
         self.assertEqual(len(result), len(OUTPUT_NAMES))
 
     def test_a_request_shows_the_card_it_finds_and_explores_it_alone(self):
@@ -602,7 +610,8 @@ class DashboardTest(Driver):
         layout = page_layout(HOME, self.board.tiles())
         text = str(layout)
         for component_id in (
-            "view", KEY_INPUT, DIAGRAM_INPUT, "prompt-text", "prompt-go", "prompt-answer", "prompt-message", "back", "diagram", "card-where", "related-toggle",
+            "view", KEY_INPUT, DIAGRAM_INPUT, "prompt-text", "prompt-go", "prompt-answer", "prompt-message", "back", DEMO_BUTTON, "diagram",
+            "card-where", "related-toggle",
             "card-face", "quiz-control", "quiz-options", "quiz-confirm", "model-panel",
             *[f"related-{index}" for index in range(RELATED_SLOTS)], *[f"go-{index}" for index in range(GO_SLOTS)],
             *[f"tile-{letter}" for letter in PANEL_LETTERS],
@@ -738,6 +747,234 @@ class PromptGridTest(Driver):
         self.results.write_text(PROMPT_COUNTS, encoding="utf-8")
 
 
+DEMO_IDS = {card.id for card in model_support.DEMO_CARDS}
+
+
+class DemoDriver(Driver):
+    """The callback on the course's board and deck 00's (Boards), the course's state in a file of its own per test."""
+
+    demo: DemoBoard
+    course_board: bool = True
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        folder = Path(cls._tmp.name)
+        cls.table = load_table(write_test_table(folder / "course"))
+        test_standalone.write_results(folder / "results", course_note(cls.table.deck_ids))
+        cls.board = Dashboard(cls.table, results_dir=folder / "results") if cls.course_board else None
+        cls.demo = DemoBoard(load_table(model_support.write_demo_table(folder / "demo")), folder / "results")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def setUp(self):
+        self.path = Path(self._tmp.name) / "state" / STATE_NAME
+        self.path.unlink(missing_ok=True)
+        if self.board is not None:
+            self.board.state = DashboardState(self.path)
+            self.board.changed = False
+        self.demo.end()
+        self.app = CallbackRecorder()
+        self.boards = Boards(self.board, self.demo)
+        self.update = register_callback(self.app, self.boards)
+        self.view = None
+        self.checks = []
+        self.clicks = 0
+
+    def demo_button(self):
+        return self.call(DEMO_BUTTON)
+
+
+class DemoTest(DemoDriver):
+    """The Demo beside the course: deck 00's board in the course's place while the flag is set."""
+
+    def test_demo_shows_deck_00_from_card_001_and_end_demo_brings_back_the_course_as_it_was(self):
+        self.go("how do I slice a list")
+        course_card = self.state.shown
+        self.show(COMMIT)
+        saved = self.path.read_bytes()
+        result = self.demo_button()
+        self.assertTrue(self.view["demo"])
+        self.assertEqual((self.demo.state.shown, self.demo.state.explored_ids), (model_support.DEMO_START, {model_support.DEMO_START}))
+        self.assertEqual(texts(result[OUT["where"]]), ["How to use › Start here"])
+        self.assertIn("What does the dashboard page show?", texts(result[OUT["face"]]))
+        self.assertEqual(dots(result[OUT["diagram"]]), [[("00", True)], [("01", True)], [(model_support.DEMO_START, True)]])  # deck 00 alone
+        self.assertTrue(result[OUT["back_disabled"]])  # the demo's own trail, empty
+        self.assertEqual((result[OUT["demo_label"]], result[OUT["demo_class"]]), (END_DEMO_LABEL, "top-button demo-toggle open"))
+        self.assertFalse(result[OUT["demo_disabled"]])
+        result = self.go("how do I turn a card")
+        self.assertIn(self.demo.state.shown, DEMO_IDS)
+        self.assertEqual(self.demo.state.trail, [model_support.DEMO_START])
+        self.assertFalse(result[OUT["back_disabled"]])
+        self.call("back")
+        self.assertEqual(self.demo.state.shown, model_support.DEMO_START)
+        self.enter()  # the turn marks deck 00's card read, in memory alone
+        self.assertTrue(self.demo.state.is_read(model_support.DEMO_START))
+        self.assertEqual((self.state.shown, self.state.trail), (COMMIT, [course_card]))  # the course's untouched
+        self.assertEqual(self.path.read_bytes(), saved)  # its state file too
+        result = self.demo_button()  # End demo
+        self.assertEqual(self.view, HOME)
+        self.assertTrue(self.demo.state.fresh)  # the demo's state dropped
+        self.assertEqual(texts(result[OUT["where"]]), ["Beta › Commits"])
+        self.assertIn(self.table.cards[5].question, texts(result[OUT["face"]]))
+        self.assertFalse(result[OUT["back_disabled"]])  # the course's trail is back
+        self.assertEqual(result[OUT["demo_label"]], DEMO_LABEL)
+        self.assertNotIn("00", [dot for dot, _current in dots(result[OUT["diagram"]])[0]])
+        self.assertEqual(self.path.read_bytes(), saved)
+        self.call("back")
+        self.assertEqual(self.state.shown, course_card)
+
+    def test_related_and_the_request_box_answer_from_deck_00_alone_ranked_without_d1(self):
+        self.demo_button()
+        self.assertEqual(self.demo.difficulty.scores, {})  # no D1
+        self.assertFalse(self.demo.difficulty.measured)
+        self.assertEqual(self.demo.model.topic_model.moved, 0)  # T1's membership as written
+        result = self.call("related-toggle")
+        listed = entries(result, "related", RELATED_SLOTS)
+        neighbours = self.demo.neighbours(model_support.DEMO_START)
+        self.assertTrue(neighbours)
+        self.assertTrue(set(neighbours) <= DEMO_IDS)
+        self.assertEqual(len(listed), len(neighbours) + 1)
+        self.assertEqual(self.demo.next_card(model_support.DEMO_START), neighbours[0])  # the unread first, in the neighbours' order
+        self.assertTrue(all(text[-1] in (THIS_TOPIC, THIS_DECK) for _class, text in listed))  # nothing in another deck
+        for request in ("what does git commit do", "how do I slice a list", "a confidence interval"):  # the course's words
+            found, nearest = self.demo.find(request)
+            self.assertTrue(found is None or found in DEMO_IDS, request)
+            self.assertTrue(all(entry[0] == "00" for entry in nearest), request)
+        self.assertIn(self.demo.find("how do you send a request")[0], DEMO_IDS)  # P1 on deck 00's own floors
+        self.assertTrue(self.state.fresh)  # the course's state untouched
+        self.assertFalse(self.path.exists())
+
+    def test_a_reload_ends_the_demo_and_drops_its_state(self):
+        self.demo_button()
+        self.go("how do I turn a card")
+        self.view = None  # a reload: the view store starts from HOME
+        result = self.call(None)
+        self.assertFalse(self.view["demo"])
+        self.assertTrue(self.demo.state.fresh)
+        self.assertEqual(result[OUT["face_class"]], "card-face empty")  # the course's closed start
+        self.assertEqual(result[OUT["demo_label"]], DEMO_LABEL)
+        self.demo_button()
+        self.demo.end()  # a restart: deck 00's board fresh while an open page keeps the flag
+        result = self.call(None)
+        self.assertEqual(self.view, HOME)
+        self.assertEqual(result[OUT["demo_label"]], DEMO_LABEL)
+        self.demo_button()  # Demo again shows card 001
+        self.assertEqual(self.demo.state.shown, model_support.DEMO_START)
+
+    def test_the_slide_row_stays_the_courses_in_the_demo(self):
+        self.show(COMMIT)
+        self.demo_button()
+        result = self.call("tile-S")
+        self.assertEqual(self.view["panel"], "S")
+        self.assertTrue(self.view["demo"])
+        self.assertIn(self.board.tile("S").numbers[0].shown, texts(result[OUT["panel"]]))  # the course's numbers
+        self.call("tile-S")
+        result = self.call("tile-C")
+        (body,) = result[OUT["panel"]]
+        figure = body.children[1].children.figure
+        self.assertNotIn(CURRENT_DECK, [trace.name for trace in figure.data])  # deck 00's card marks no deck of the course
+        self.assertEqual(len(next(trace for trace in figure.data if trace.name == A_DECK).x), len(self.board.model.deck_points))
+        result = self.demo_button()  # End demo: the panel closed, the course's card back
+        self.assertIsNone(self.view["panel"])
+        self.assertEqual(self.state.shown, COMMIT)
+
+    def test_the_embeddings_cache_is_the_same_after_the_demo_as_before(self):
+        from app.models.embeddings import EmbeddingCache, SentenceEncoder, uncached_copy
+
+        with tempfile.TemporaryDirectory() as folder:
+            cache = Path(folder) / "embeddings"
+            encoder = SentenceEncoder("fake-encoder", cache=EmbeddingCache(cache), loader=model_support.fake_loader)
+            demo_encoder = uncached_copy(encoder)
+            course = Dashboard(self.table, vectoriser=encoder, min_score=None)
+            before = sorted(path.name for path in cache.iterdir())
+            self.assertEqual(len(before), 1)  # the course's file
+            demo = DemoBoard(load_table(model_support.write_demo_table(Path(folder) / "demo")), vectoriser=demo_encoder, min_score=None)
+            demo.restart()
+            demo.find("how do I turn a card")
+            self.assertEqual(sorted(path.name for path in cache.iterdir()), before)
+            self.assertIsNone(demo_encoder.cache)
+            self.assertIs(demo_encoder.load(), encoder.load())  # the model loaded once
+            self.assertIsNot(demo.model.index.vectoriser, course.model.index.vectoriser)
+
+
+class NoCourseDataTest(DemoDriver):
+    """Without course data: deck 00's board alone, the page empty outside the demo, the Demo working."""
+
+    course_board = False
+
+    def test_the_start_says_no_data_loaded_with_go_disabled_and_the_demo_there(self):
+        result = self.call(None)
+        self.assertEqual((result[OUT["placeholder"]], result[OUT["box_disabled"]], result[OUT["go_disabled"]]), (NO_DATA, True, True))
+        self.assertIn(NO_DATA_HINT, texts(result[OUT["face"]]))
+        self.assertEqual(dots(result[OUT["diagram"]]), [[], [], []])
+        self.assertTrue(result[OUT["related_disabled"]])
+        self.assertTrue(result[OUT["back_disabled"]])
+        self.assertFalse(result[OUT["demo_disabled"]])
+        result = self.go("how do I turn a card")  # Go does nothing outside the demo
+        self.assertTrue(self.demo.state.fresh)
+        self.assertEqual(result[OUT["answer_class"]], "prompt-answer hidden")
+        self.enter()
+        self.assertTrue(self.demo.state.fresh)
+
+    def test_demo_and_end_demo_without_course_data(self):
+        result = self.demo_button()
+        self.assertEqual(self.demo.state.shown, model_support.DEMO_START)
+        self.assertEqual((result[OUT["placeholder"]], result[OUT["box_disabled"]], result[OUT["go_disabled"]]), (PLACEHOLDER, False, False))
+        self.go("how do I turn a card")
+        self.assertIn(self.demo.state.shown, DEMO_IDS)
+        result = self.demo_button()
+        self.assertTrue(self.demo.state.fresh)
+        self.assertIn(NO_DATA_HINT, texts(result[OUT["face"]]))
+        self.assertEqual(result[OUT["placeholder"]], NO_DATA)
+        self.assertFalse(self.path.exists())  # no state file read or written
+
+    def test_the_tiles_read_the_newest_runs_and_the_figures_but_ps_need_the_course(self):
+        tiles = {tile.letter: tile for tile in self.demo.tiles()}
+        for letter in "SCTD":
+            self.assertTrue(tiles[letter].numbers, letter)  # the results' rows of the course, whatever course they name
+        self.assertIn("No prompt.csv in", tiles["P"].line)
+        self.assertIsNone(self.demo.results.note)
+        for letter in "SCTD":
+            self.assertIn(NO_DATA_FIGURE, str(self.panel_figure(letter)[1]))
+        self.assertNotIn(NO_DATA_FIGURE, str(self.panel_figure("P")[1]))
+        self.demo_button()
+        result = self.call("tile-T")  # the demo's slide row is the same
+        self.assertIn(NO_DATA_FIGURE, str(result[OUT["panel"]]))
+
+    def panel_figure(self, letter):
+        result = self.call(f"tile-{letter}")
+        (body,) = result[OUT["panel"]]
+        self.call(f"tile-{letter}")
+        return body.children
+
+    def test_main_runs_on_deck_00_alone_and_reads_no_state_file(self):
+        folder = Path(self._tmp.name)
+        state_dir = folder / "main-state"
+        state_dir.mkdir()
+        (state_dir / STATE_NAME).write_text(json.dumps({"version": 7}), encoding="utf-8")  # never read
+        served = {}
+
+        def fake_create_app(board, demo=None):
+            served.update(board=board, demo=demo)
+            return SimpleNamespace(run=lambda **options: None)
+
+        with mock.patch("app.dashboard.create_app", fake_create_app), mock.patch("builtins.print"), \
+                mock.patch("app.dashboard.app_vectoriser", return_value=None):
+            dashboard_main(folder / "missing", folder / "results", state_dir, demo_dir=folder / "demo")
+        self.assertIsNone(served["board"])
+        self.assertEqual(served["demo"].table.deck_ids, {"How to use": "00"})
+        self.assertIsNone(served["demo"].state.path)
+        with self.assertRaises(SystemExit) as stop:
+            dashboard_main(folder / "missing", demo_dir=folder / "no-demo")
+        self.assertIn("cards.csv", str(stop.exception.code))
+        self.assertEqual(Boards(None, served["demo"]).slide, served["demo"])
+        with self.assertRaises(ValueError):
+            Boards(None, None)
+
+
 class StateFileTest(unittest.TestCase):
     """The dashboard's state file: the closed start, a restart with the explored cards and the shown card, the
     trail, another version refused, unknown cards dropped, written at every change."""
@@ -796,7 +1033,7 @@ class StateFileTest(unittest.TestCase):
                              encoding="utf-8")
         served = {}
 
-        def fake_create_app(board):
+        def fake_create_app(board, demo=None):
             served["board"] = board
             return SimpleNamespace(run=lambda **options: served.update(options))
 

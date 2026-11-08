@@ -1,6 +1,6 @@
 """The topic model T1: the centroids of the scripted topics, the leave-one-out scoring, the margin, the coherence,
 the edge cases (a two-card topic, an empty topic, a one-card topic, a single centroid, a deck with one topic),
-determinism, the agreement measure, and the judges of the measurement (the neighbour rule, logistic regression,
+determinism, the agreement measure, the membership as written (the demo's deck 00: no card moved), and the judges of the measurement (the neighbour rule, logistic regression,
 chance). Nothing of the viewer: the scripted topics read from the course file and the derived course file are the
 glue's (test_course.py, test_derived.py)."""
 
@@ -213,6 +213,17 @@ class TestCourseTest(unittest.TestCase):
         self.assertTrue(all(second != model.topic_of[card_id] for card_id, second in model.second_of.items() if second))
         moving = model_support.course_model(model_support.moving_cards(), model_support.seeds_of(model_support.MOVING_SCRIPTED)).topic_model
         self.assertEqual(moving.second_of[model_support.MOVED], "01")  # the scripted topic is the runner-up of the moved card
+
+    def test_as_written_no_card_moves_and_the_margins_are_still_measured(self):
+        seeds = model_support.seeds_of(model_support.MOVING_SCRIPTED)
+        moving = model_support.course_model(model_support.moving_cards(), seeds).topic_model
+        kept = model_support.CourseModel(model_support.moving_cards(), model_support.DECK_IDS, seeds, moves=False)
+        model = kept.topic_model
+        self.assertFalse(model.moves)
+        self.assertEqual((model.topic_of[model_support.MOVED], model.moved), ("01", 0))
+        self.assertEqual(model.members[("Gamma", "01")], model_support.MOVING_SCRIPTED[("03", "01")])
+        self.assertEqual(model.margin_of, moving.margin_of)  # the measures as T1 takes them
+        self.assertEqual(kept.topics[("03", "01")].ids, model_support.MOVING_SCRIPTED[("03", "01")])  # the course model's topics
 
 
 class TopicJudgesTest(unittest.TestCase):

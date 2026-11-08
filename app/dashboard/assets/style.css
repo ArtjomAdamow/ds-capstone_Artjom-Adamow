@@ -31,7 +31,8 @@ html, body { height: 100%; }
 body { margin: 0; background: var(--navy-deep); color: var(--ink); font-family: 'Space Grotesk', sans-serif; font-size: var(--size-body); line-height: 1.35; }
 .app-shell { height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 14px 32px 20px; overflow: hidden; background: radial-gradient(circle at 78% 18%, rgba(245, 185, 66, 0.12), transparent 28%), linear-gradient(135deg, var(--navy-deep), var(--navy)); }
 
-/* The top bar: the title, the request box with its answer hanging under it, Back. Dash's input is a container
+/* The top bar: the title, the request box with its answer hanging under it, Back and Demo (filled gold while the
+   demo runs). Dash's input is a container
    (.dash-input-container, 34 px high, its overflow hidden) around the input (.dash-input-element): the box takes its
    height from the text, the padding on the input */
 .topbar { flex: 0 0 auto; height: 72px; display: flex; align-items: center; gap: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
@@ -43,6 +44,8 @@ h1 { margin: 2px 0 0; font-size: clamp(1.5rem, 2.6vw, 2.4rem); line-height: 1; f
 .top-button:hover { background: var(--hover); }
 .top-button:disabled { opacity: 0.4; cursor: not-allowed; }
 .topbar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.demo-toggle.open { background: var(--gold); color: var(--navy-deep); }
+.prompt-box .prompt-input .dash-input-element:disabled { cursor: not-allowed; }
 .prompt-box { position: relative; flex: 1 1 auto; min-width: 0; max-width: 760px; display: flex; gap: 10px; }
 .prompt-box .prompt-input { flex: 1; min-width: 0; height: auto; border: 1px solid var(--line); border-radius: 0; outline: none; background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 0; font: var(--size-body) 'Space Grotesk', sans-serif; }
 .prompt-box .prompt-input .dash-input-element { height: auto; padding: 8px 12px; border-radius: 0; line-height: 1.35; }

@@ -184,9 +184,11 @@ def subtitle_of(rows: Sequence[Mapping[str, str]]) -> str:
 
 
 class Results:
-    """The results files of a folder, read once, with the tables per model letter."""
+    """The results files of a folder, read once, with the tables per model letter: the rows whose notes name the
+    course (`note`, course_note's); with no note, without a course table (the dashboard's demo alone), every row, so
+    each level shows its newest run whatever course it names."""
 
-    def __init__(self, folder: Optional[Path], note: str, names: Optional[Mapping[str, str]] = None,
+    def __init__(self, folder: Optional[Path], note: Optional[str], names: Optional[Mapping[str, str]] = None,
                  chosen: Optional[Mapping[str, str]] = None) -> None:
         self.folder = Path(folder) if folder is not None else None
         self.note = note
@@ -201,7 +203,7 @@ class Results:
             self.rows[name] = self._current(read_rows(path)) if path is not None and path.is_file() else None
 
     def _current(self, rows: Sequence[Mapping[str, str]]) -> list[dict]:
-        return [dict(row) for row in rows if self.note and self.note in (row.get("notes") or "")]
+        return [dict(row) for row in rows if self.note is None or (self.note and self.note in (row.get("notes") or ""))]
 
     def by_ids(self, text: str) -> str:
         """The text with every deck or topic name of the course table replaced (full names, longest first)."""

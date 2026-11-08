@@ -2,16 +2,20 @@
 every term (min_df 1: on 13 cards the baseline's min_df 2 drops "slice" and "merge", each in one card): the floors
 as percentiles over the self set, the three routes' scores per topic, the decision (the few-shot route gates, the
 mean ranks, the nearest card selected inside the entered topic and only there), "no match" with the three nearest, the self set with
-the card held out and its Source: line cut, and the same code on S2's hybrid (a stand-in encoder, no torch)."""
+the card held out and its Source: line cut, the demo's deck 00 alone with its own floors, and the same code on S2's
+hybrid (a stand-in encoder, no torch)."""
 
 import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
 
 import dataclasses
+import tempfile
 import types
 import unittest
+from pathlib import Path
 
 import numpy as np
 
+from app.course_table import load_table
 from app.models import embeddings, similar
 from app.models.prompt_model import (
     CARD, CENTROID, DEFAULT_ROUTES, ENTERED, NEAREST, NO_MATCH, ROUTES, SELECTED, TEXT, PromptModel, checked, gate_of,
@@ -216,6 +220,35 @@ class SelfSetTest(unittest.TestCase):
         self.assertEqual(case.key, INTERVALS)
         self.assertNotEqual(case.nearest[0], INTERVALS)  # nothing of its topic left to match
         self.assertTrue(all(np.isfinite([model.floors.card, model.floors.centroid, model.floors.text])))
+
+
+class DeckZeroTest(unittest.TestCase):
+    """P1 on a deck of deck 00's size alone (the demo's board): T1's membership as written, the floors from its own
+    self set on the baseline TF-IDF, a request in its words entering its topic, the course's words no match."""
+
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as folder:
+            table = load_table(model_support.write_demo_table(Path(folder)))
+        cls.cards = table.cards
+        cls.index = similar.SimilarityIndex.fit(table.cards)
+        cls.model = PromptModel(cls.index, TopicModel(cls.index, table.seeds, moves=False), table.cards)
+
+    def test_the_floors_come_from_deck_00s_own_self_set(self):
+        model = self.model
+        self.assertEqual(model.self_ids, [card.id for card in model_support.DEMO_CARDS])  # its cards alone
+        cosines = np.asarray((self.index.queries(model.self_questions) @ self.index.vectors.T).todense())
+        np.fill_diagonal(cosines, -np.inf)
+        self.assertAlmostEqual(model.floors.card, float(np.percentile(cosines.max(axis=1), 10)))
+        self.assertTrue(all(np.isfinite([model.floors.card, model.floors.centroid, model.floors.text])))
+        self.assertNotEqual(model.floors, model_of(index_of()).floors)
+
+    def test_a_request_in_its_words_enters_its_topic_and_the_courses_words_find_nothing(self):
+        answer = self.model.find("how do you send a request")
+        self.assertTrue(answer.navigate)
+        self.assertEqual(answer.topic, ("How to use", "02"))
+        self.assertEqual(self.model.find("what does git commit do").decision, NO_MATCH)
+        self.assertTrue(all(scored.key[0] == "How to use" for scored in self.model.find("a confidence interval").ranking))
 
 
 class EncoderTest(unittest.TestCase):

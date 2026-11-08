@@ -40,14 +40,22 @@ model's topics as the full app gives every deck from the start; the topics keep 
   and the most confident quarter, D D1's confusion matrix on the rated quizzes, P P1's judged requests on and off the
   course by where it took them (the counts evaluate.py writes).
 * The state: the read and explored flags, the shown card and the trail in the dashboard's own state file
-  (state.DashboardState, saved at every change); the flip, Related drawn, the last request, the open tile and the
-  diagram's open deck and topic in the `view` store (HOME's keys), runtime only. The closed start: a fresh start shows nothing, a restart shows the
-  explored cards and the shown card again. No episodes' log.
+  (state.DashboardState, saved at every change); the flip, Related drawn, the last request, the open tile, the
+  diagram's open deck and topic and the demo flag in the `view` store (HOME's keys), runtime only. The closed start:
+  a fresh start shows nothing, a restart shows the explored cards and the shown card again. No episodes' log.
+* The demo (docs/demo/): DemoBoard, a second board over deck 00's table (data/demo/dashboard/), fitted at the start
+  and kept in memory: T1's membership as written, P1 on its own self set, no D1, its state without a file. Demo in
+  the top bar sets the flag and shows deck 00 from card 001 with a fresh state; every region renders from the board
+  the flag names (Boards), the slide row stays the course's. End demo clears the flag and drops the demo's state, and
+  the course's card, trail and explored cards come back from its state, which the demo never touched; a reload ends
+  the demo the same way. Without course data the dashboard runs on deck 00's board alone: outside the demo the box
+  says "no data loaded", the box and Go are disabled and the diagram and the card's place are empty; the tiles read
+  the results files' newest runs, and the panels' figures but P's say they need the course.
 
 register_callback registers the page's callback: every button and the hidden inputs of Enter and of the diagram's
-clicks are its inputs, the checks, the request box's text and the view its states; it renders every region from the
-state and the view (render). Confirm's disabled state has a callback of its own on the checks, since the checks are
-the page's callback's state, not its input.
+clicks are its inputs, the checks, the request box's text and the view its states; it steps the board the view names
+and renders every region from the state and the view (Boards.step, Boards.render). Confirm's disabled state has a
+callback of its own on the checks, since the checks are the page's callback's state, not its input.
 """
 
 import json
@@ -71,8 +79,8 @@ from ..standalone.layout import CUT_LABELS, DECKS_VIEW, empty_slot, graph, margi
 from ..standalone.results import LEVEL_FILES, Results, course_note
 from . import quiz
 from .layout import (
-    DIAGRAM_INPUT, DIAGRAM_ROWS, GO_SLOTS, KEY_INPUT, PANEL_LETTERS, PANEL_NAMES, RELATED_SLOTS, THIS_DECK, THIS_TOPIC, Dot, Entry, Tile,
-    card_face, card_where,
+    BEGIN_HINT, DEMO_BUTTON, DIAGRAM_INPUT, DIAGRAM_ROWS, GO_SLOTS, KEY_INPUT, NO_DATA_HINT, PANEL_LETTERS, PANEL_NAMES, RELATED_SLOTS, THIS_DECK,
+    THIS_TOPIC, Dot, Entry, Tile, card_face, card_where, demo_controls,
     diagram, go_slots, model_panel, page_layout, prompt_answer, quiz_control_class, quiz_options, related_slots, related_toggle, tile_class,
 )
 from .panel_figures import deck_sphere, outcome_grid, places_figure
@@ -83,8 +91,9 @@ RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"  # next to evaluat
 TITLE = "Guided learning: the dashboard"
 # The view store: what is not saved. `request`: the last request as {"text", "match", "entries"}, the entries of
 # a "no match" as [deck id, topic id, card id] each, None once one of them is clicked; `open`: the diagram's open
-# deck and topic as [deck id, topic id or None] after a click on a deck or a topic, None for the shown card's
-HOME = {"back": False, "related": False, "request": None, "panel": None, "open": None}
+# deck and topic as [deck id, topic id or None] after a click on a deck or a topic, None for the shown card's;
+# `demo`: the demo runs, every region from deck 00's board
+HOME = {"back": False, "related": False, "request": None, "panel": None, "open": None, "demo": False}
 TURN_TRIGGERS = ("card-face", KEY_INPUT)  # a click on the card, Enter
 PROMPT_TRIGGERS = ("prompt-go", "prompt-text")  # Go, and Enter in the request box (its n_submit)
 RELATED_PREFIX, GO_PREFIX, TILE_PREFIX = "related-", "go-", "tile-"
@@ -97,13 +106,14 @@ OUTPUT_NAMES = (
     + ["diagram", "back_disabled"]
     + [f"tile_{letter}" for letter in PANEL_LETTERS]
     + ["panel", "panel_class"]
+    + ["demo_label", "demo_class", "demo_disabled", "placeholder", "box_disabled", "go_disabled"]
 )
 OUT = {name: index for index, name in enumerate(OUTPUT_NAMES)}
-# The callback's inputs, in order: the card's click, Enter, Confirm, Related, its slots, Back, Go, Enter in the box,
-# Go's slots, the tiles, a click in the diagram; then the states: the checks, the box's text, the view
+# The callback's inputs, in order: the card's click, Enter, Confirm, Related, its slots, Back, Demo, Go, Enter in the
+# box, Go's slots, the tiles, a click in the diagram; then the states: the checks, the box's text, the view
 INPUT_IDS = (
     ["card-face", KEY_INPUT, "quiz-confirm", "related-toggle"] + [f"{RELATED_PREFIX}{index}" for index in range(RELATED_SLOTS)]
-    + ["back", "prompt-go", "prompt-text"] + [f"{GO_PREFIX}{index}" for index in range(GO_SLOTS)] + [f"{TILE_PREFIX}{letter}" for letter in PANEL_LETTERS]
+    + ["back", DEMO_BUTTON, "prompt-go", "prompt-text"] + [f"{GO_PREFIX}{index}" for index in range(GO_SLOTS)] + [f"{TILE_PREFIX}{letter}" for letter in PANEL_LETTERS]
     + [DIAGRAM_INPUT]
 )
 INPUTS = len(INPUT_IDS)
@@ -113,6 +123,8 @@ NO_RELATED = "No related card above the minimum score."
 NO_MARGINS = "No card with a margin."
 NO_OUTCOMES = ("No outcome counts in the newest run of prompt.csv yet. The offline evaluation writes them, next to app/: "
                "uv run evaluate.py --part prompt")
+NO_DATA_FIGURE = "No course data loaded: this figure is drawn from the course."
+NO_D1 = "No D1 on deck 00: its quizzes carry their levels as written."
 
 
 def slot_of(trigger, prefix: str) -> Optional[int]:
@@ -121,6 +133,18 @@ def slot_of(trigger, prefix: str) -> Optional[int]:
         return None
     rest = trigger[len(prefix):]
     return int(rest) if rest.isdigit() else None
+
+
+def tile_letter(trigger) -> Optional[str]:
+    """The model letter of a tile's click ("tile-S"); None for another trigger."""
+    if isinstance(trigger, str) and trigger.startswith(TILE_PREFIX) and trigger[len(TILE_PREFIX):] in PANEL_LETTERS:
+        return trigger[len(TILE_PREFIX):]
+    return None
+
+
+def toggle_panel(view: dict, letter: str) -> None:
+    """A tile's click: its model's panel opens, or closes when it is the open one."""
+    view["panel"] = None if view["panel"] == letter else letter
 
 
 def diagram_click(value) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -165,7 +189,11 @@ class Dashboard:
         chosen = {"P1": variant_label(index.vectoriser), "D2": d2_label()}
         if s2_label() is not None:
             chosen["S2"] = s2_label()
-        self.results = Results(results_dir, course_note(table.deck_ids), None, chosen=chosen)
+        self.results = Results(results_dir, self.results_note(), None, chosen=chosen)
+
+    def results_note(self) -> Optional[str]:
+        """The note of the results rows this board's tiles read: its course's."""
+        return course_note(self.table.deck_ids)
 
     # --- where a card lies -------------------------------------------------------------------------------------
 
@@ -337,10 +365,12 @@ class Dashboard:
         hold more than DECK_PART decks."""
         return list(self.model.deck_links[: clustering.preset_rank(self.model.deck_links, DECK_PART)])
 
-    def deck_figure(self):
-        """C's figure: the decks on the sphere with their connections, the shown card's deck gold and in front."""
+    def deck_figure(self, shown: Optional[str] = None):
+        """C's figure: the decks on the sphere with their connections, the shown card's deck gold and in front (`shown`,
+        the board's own shown card by default; a card of another board marks none)."""
         names = {deck_id: deck.name for deck_id, deck in self.deck_by_id.items()}
-        shown = self.state.shown if self.state.shown in self.card_by_id else None
+        shown = shown if shown is not None else self.state.shown
+        shown = shown if shown in self.card_by_id else None
         current = self.model.deck_of.get(shown) if shown else None
         figure = deck_sphere(self.model.deck_points, names, self.deck_links(), current, CUT_LABELS[DECKS_VIEW].format(size=DECK_PART))
         return graph(figure, "panel-graph")
@@ -365,12 +395,13 @@ class Dashboard:
         counts = outcomes(self.results)
         return graph(outcome_grid(counts), "panel-graph") if counts is not None else empty_slot(NO_OUTCOMES)
 
-    def panel_figure(self, letter: str):
-        """The open model's figure, the whole course's whatever card is shown (C marks the shown card's deck): S where
-        the related cards lie, C the decks on the sphere, T the margins with the threshold and the most confident
-        quarter, D D1's confusion matrix, P P1's judged requests on and off the course; a line where there is none."""
+    def panel_figure(self, letter: str, shown: Optional[str] = None):
+        """The open model's figure, the whole course's whatever card is shown (C marks the shown card's deck, `shown`
+        as deck_figure takes it): S where the related cards lie, C the decks on the sphere, T the margins with the
+        threshold and the most confident quarter, D D1's confusion matrix, P P1's judged requests on and off the course;
+        a line where there is none."""
         if letter == "C":
-            return self.deck_figure()
+            return self.deck_figure(shown)
         if letter not in self._figures:
             self._figures[letter] = self.static_figure(letter)
         return self._figures[letter]
@@ -449,9 +480,8 @@ class Dashboard:
             if index < len(entries):
                 select(entries[index].card_id)
                 view["request"] = None  # the answer closed
-        elif isinstance(trigger, str) and trigger.startswith(TILE_PREFIX) and trigger[len(TILE_PREFIX):] in PANEL_LETTERS:
-            letter = trigger[len(TILE_PREFIX):]
-            view["panel"] = None if view["panel"] == letter else letter
+        elif tile_letter(trigger) is not None:
+            toggle_panel(view, tile_letter(trigger))
         elif trigger == DIAGRAM_INPUT:
             row, dot_id, deck_id = diagram_click(clicked)
             if row == "card" and state.is_explored(dot_id) and dot_id in self.card_by_id:
@@ -462,16 +492,18 @@ class Dashboard:
                 view["open"] = [deck_id, dot_id]  # the cards row lists the topic's cards
         return view, checks
 
-    def render(self, view: dict, checks: Sequence) -> tuple:
-        """Every region from the state and the view, in OUTPUT_NAMES' order."""
+    def render(self, view: dict, checks: Sequence, slide: Optional["Dashboard"] = None, hint: str = BEGIN_HINT) -> tuple:
+        """Every region from the state and the view, in OUTPUT_NAMES' order up to the model's panel: the tiles' classes
+        and the panel from `slide` (this board by default; the course's in the demo), `hint` with no card shown."""
+        slide = slide if slide is not None else self
         shown = self.state.shown if self.state.shown in self.card_by_id else None
         card = self.card_by_id.get(shown)
         checks = list(checks or [])
-        face, face_class = card_face(card, view["back"], checks)
+        face, face_class = card_face(card, view["back"], checks, hint)
         entries = self.related_entries(shown) if card is not None and view["related"] else []
         go_entries = self.request_entries(view["request"])
         decks, topics, cards = self.diagram(view["open"])
-        tile = self.tile(view["panel"]) if view["panel"] in PANEL_LETTERS else None
+        tile = slide.tile(view["panel"]) if view["panel"] in PANEL_LETTERS else None
         return (
             view,
             card_where(self.where(shown)),
@@ -487,17 +519,120 @@ class Dashboard:
             diagram(decks, topics, cards),
             not self.state.can_go_back,
             *[tile_class(letter == view["panel"]) for letter in PANEL_LETTERS],
-            *model_panel(tile, self.panel_figure(tile.letter) if tile is not None else None),
+            *model_panel(tile, slide.panel_figure(tile.letter, shown) if tile is not None else None),
         )
 
 
-def register_callback(app: Dash, board: Dashboard):
-    """The dashboard's callbacks; returns the page's (for tests). Its inputs: the card's click, the hidden input
-    Enter writes, Confirm, Related and its slots, Back, Go and Enter in the request box, Go's slots, the five tiles
-    and the hidden input a click in the diagram writes (INPUT_IDS); its states the checks, the box's text and the view.
-    It steps the state and the view (Dashboard.step), saves the state file when the state changed, and renders every
-    region (Dashboard.render). The second callback sets Confirm's disabled state from the checks, at every check and
-    whenever the page's callback sets them."""
+class DemoBoard(Dashboard):
+    """The board of deck 00 (docs/demo/architecture.md, "The dashboard"): a Dashboard over deck 00's table, fitted at
+    the start and kept in memory: the course model over deck 00's cards with T1's membership as written (no card
+    moved), its index for Related, P1 over that index and those topics with its floors from deck 00's own self set; no
+    D1, so Related ranks the unread first in the neighbours' order. Its vectoriser is the app's kind without the
+    embeddings' cache (embeddings.uncached_copy); its state a DashboardState without a file, fresh at every Demo.
+
+    Without course data its slide row is the page's: the results files' newest runs, whatever course they name, and
+    P's figure from them; the other figures are drawn from the course and say so."""
+
+    def __init__(self, table: CourseTable, results_dir: Optional[Path] = None, vectoriser=None,
+                 min_score: Optional[float] = similar.MIN_SCORE) -> None:
+        model = CourseModel(table.cards, table.deck_ids, table.seeds, vectoriser, min_score=min_score, moves=False)
+        no_d1 = DifficultyReport("", (0, 0, 0), 0, 0, 0, note=NO_D1)
+        super().__init__(table, DashboardState(), model, no_d1, results_dir)
+        self.start = table.cards[0].id  # card 001 of topic 01, the file's first card (the deck's rules)
+
+    def results_note(self) -> Optional[str]:
+        """None: every row, deck 00 being no course of the results files."""
+        return None
+
+    def restart(self) -> None:
+        """Demo: a fresh state with card 001 shown, which explores it."""
+        self.state = DashboardState()
+        self.state.show(self.start)
+        self.changed = False
+
+    def end(self) -> None:
+        """End demo (or a reload): the demo's state dropped."""
+        self.state = DashboardState()
+        self.changed = False
+
+    def deck_figure(self, shown: Optional[str] = None):
+        return empty_slot(NO_DATA_FIGURE)
+
+    def static_figure(self, letter: str):
+        return super().static_figure(letter) if letter == "P" else empty_slot(NO_DATA_FIGURE)
+
+
+class Boards:
+    """The course's board and deck 00's, and which one the regions show: the board the view's demo flag names (deck
+    00's while the demo runs, the course's outside it); the slide row the course's, deck 00's board's without course
+    data. At least one of the two is there."""
+
+    def __init__(self, course: Optional[Dashboard], demo: Optional[DemoBoard] = None) -> None:
+        if course is None and demo is None:
+            raise ValueError("the dashboard needs the course's board or deck 00's")
+        self.course = course
+        self.demo = demo
+
+    @property
+    def slide(self) -> Dashboard:
+        """The board whose tiles and panels show: the course's, else deck 00's."""
+        return self.course if self.course is not None else self.demo
+
+    def board(self, view: dict) -> Optional[Dashboard]:
+        """The board the view names; None without course data outside the demo."""
+        return self.demo if view.get("demo") and self.demo is not None else self.course
+
+    def step(self, view: Optional[dict], trigger, value=None, request: Optional[str] = None, clicked=None) -> tuple[dict, list]:
+        """Demo and End demo, else the step of the board the view names (Dashboard.step). Demo gives deck 00's board a
+        fresh state with card 001 shown, End demo drops it; the view starts clean either way, the flag set or cleared.
+        Outside the demo deck 00's state is dropped (a reload ended it); a flag with deck 00's state fresh starts the
+        view clean (a restart ended it). Without course data, outside the demo, only the tiles answer."""
+        view = {**HOME, **(view if isinstance(view, dict) else {})}
+        view["demo"] = bool(view["demo"]) and self.demo is not None
+        if view["demo"] and self.demo.state.fresh:
+            view = dict(HOME)
+        if trigger == DEMO_BUTTON and self.demo is not None:
+            running = not view["demo"]
+            if running:
+                self.demo.restart()
+            else:
+                self.demo.end()
+            return {**HOME, "demo": running}, []
+        if not view["demo"] and self.demo is not None and not self.demo.state.fresh:
+            self.demo.end()
+        board = self.board(view)
+        if board is None:
+            if view["panel"] not in (None, *PANEL_LETTERS):
+                view["panel"] = None
+            if tile_letter(trigger) is not None:
+                toggle_panel(view, tile_letter(trigger))
+            return view, []
+        return board.step(view, trigger, value, request, clicked)
+
+    def save(self) -> None:
+        """The state file of a board whose state changed in the last step (deck 00's has none)."""
+        for board in (self.course, self.demo):
+            if board is not None and board.changed:
+                board.state.save()
+                board.changed = False
+
+    def render(self, view: dict, checks: Sequence) -> tuple:
+        """Every region in OUTPUT_NAMES' order: the board the view names (deck 00's, fresh and empty, without course
+        data outside the demo) with the slide row's tiles and panel, then Demo and the request box."""
+        board = self.board(view)
+        drawn = board if board is not None else self.demo
+        regions = drawn.render(view, checks, self.slide, BEGIN_HINT if board is not None else NO_DATA_HINT)
+        return regions + demo_controls(view["demo"], self.demo is not None, self.course is None)
+
+
+def register_callback(app: Dash, board):
+    """The dashboard's callbacks on `board` (Boards, or the course's Dashboard alone); returns the page's (for tests).
+    Its inputs: the card's click, the hidden input Enter writes, Confirm, Related and its slots, Back, Demo, Go and
+    Enter in the request box, Go's slots, the five tiles and the hidden input a click in the diagram writes
+    (INPUT_IDS); its states the checks, the box's text and the view. It steps the state and the view (Boards.step),
+    saves a state file when its state changed, and renders every region (Boards.render). The second callback sets
+    Confirm's disabled state from the checks, at every check and whenever the page's callback sets them."""
+    boards = board if isinstance(board, Boards) else Boards(board)
 
     @app.callback(
         Output("view", "data"),
@@ -518,6 +653,12 @@ def register_callback(app: Dash, board: Dashboard):
         *[Output(f"{TILE_PREFIX}{letter}", "className") for letter in PANEL_LETTERS],
         Output("model-panel", "children"),
         Output("model-panel", "className"),
+        Output(DEMO_BUTTON, "children"),
+        Output(DEMO_BUTTON, "className"),
+        Output(DEMO_BUTTON, "disabled"),
+        Output("prompt-text", "placeholder"),
+        Output("prompt-text", "disabled"),
+        Output("prompt-go", "disabled"),
         *[Input(component, "value" if component in VALUE_INPUTS else ("n_submit" if component == "prompt-text" else "n_clicks")) for component in INPUT_IDS],
         State("quiz-options", "value"),
         State("prompt-text", "value"),
@@ -527,11 +668,9 @@ def register_callback(app: Dash, board: Dashboard):
         from dash import ctx
 
         checks, request, view = values[-3:]
-        view, checks = board.step(view, ctx.triggered_id, checks, request, values[INPUT_IDS.index(DIAGRAM_INPUT)])
-        if board.changed:
-            board.state.save()
-            board.changed = False
-        return board.render(view, checks)
+        view, checks = boards.step(view, ctx.triggered_id, checks, request, values[INPUT_IDS.index(DIAGRAM_INPUT)])
+        boards.save()
+        return boards.render(view, checks)
 
     @app.callback(Output("quiz-confirm", "disabled"), Input("quiz-options", "value"))
     def confirm(checks):
@@ -540,11 +679,12 @@ def register_callback(app: Dash, board: Dashboard):
     return update
 
 
-def create_app(board: Dashboard) -> Dash:
-    """The Dash app of the dashboard, in the one theme (assets/style.css), with its callback; the tiles' content is
-    built once at the layout."""
+def create_app(board: Optional[Dashboard], demo: Optional[DemoBoard] = None) -> Dash:
+    """The Dash app of the dashboard on the course's board and deck 00's (either may be missing, not both), in the one
+    theme (assets/style.css), with its callback; the tiles' content is built once at the layout."""
+    boards = Boards(board, demo)
     app = Dash(__name__, assets_folder=str(ASSETS_DIR), title=TITLE)
     app.index_string = app.index_string.replace("<html>", '<html lang="en">', 1)  # the stylesheet's hyphens need the language
-    app.layout = page_layout(HOME, board.tiles())
-    register_callback(app, board)
+    app.layout = page_layout(HOME, boards.slide.tiles(), has_demo=demo is not None, no_data=board is None)
+    register_callback(app, boards)
     return app

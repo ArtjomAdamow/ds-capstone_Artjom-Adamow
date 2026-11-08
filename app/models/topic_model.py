@@ -26,6 +26,8 @@ for the state. The raw scripted topics stay in the course file, so nothing is ev
   topics; evaluate.py --part topics records them.
 * T1 is deterministic (the vectoriser and the means): the derived file and the viewer's dot ids are the same at
   every start; a changed course or vectoriser changes them, and the state starts fresh (the viewer's rule).
+* As written (`moves=False`, the demo's deck 00, docs/demo/architecture.md): every card keeps its scripted topic,
+  no card is moved; the margins and the runner-ups are measured as above.
 
 Edge cases: a topic with one scripted card has no centroid under leave-one-out, so its card
 goes to the nearest other topic and the topic is emptied; a card with a single centroid to compare with (its own
@@ -96,9 +98,13 @@ class TopicModel:
     """T1 fitted on the index: every card's topic and margin, the model's membership per topic, the coherence per
     scripted topic, and the measures against the scripted topics."""
 
-    def __init__(self, index: similar.SimilarityIndex, seeds: Sequence[TopicSeed], margin: float = FOCUS_MARGIN) -> None:
+    def __init__(
+        self, index: similar.SimilarityIndex, seeds: Sequence[TopicSeed], margin: float = FOCUS_MARGIN, moves: bool = True,
+    ) -> None:
+        """`moves=False` keeps every card in its scripted topic (the membership as written), the margins measured."""
         self.seeds: list[TopicSeed] = list(seeds)
         self.margin = margin
+        self.moves = moves
         self.scripted_of: dict[str, str] = {card_id: seed.topic_id for seed in self.seeds for card_id in seed.card_ids}
         self.topic_of: dict[str, str] = {}  # card id -> the model's topic id (within the card's deck)
         self.margin_of: dict[str, float] = {}  # card id -> the best cosine minus the second best
@@ -142,6 +148,8 @@ class TopicModel:
                 else:
                     ordered = sorted(scores, key=lambda item: -item[0])  # a stable sort: ties keep the file order
                     topic, margin, second = ordered[0][1], ordered[0][0] - ordered[1][0], ordered[1][1]
+                if not self.moves and own_topic is not None:
+                    topic = own_topic  # as written: no card moved
                 self.topic_of[card_id] = topic
                 self.margin_of[card_id] = margin
                 self.second_of[card_id] = second

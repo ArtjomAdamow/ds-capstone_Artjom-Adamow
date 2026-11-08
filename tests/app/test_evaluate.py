@@ -6,7 +6,7 @@ random draw, the hand precision per card, the paired bootstrap, the fixed-k over
 layout); the rows of the similarity part; D2's rows per model and template with the deck rows; P1's part (every
 variant's rows, the request file read against T1's membership and protected, the review form and its marks, the file
 alone, the paired difference to the card route); and a run on the test course's table, with and without the hand
-files, in a process where the viewer cannot be imported."""
+files, in a process where the viewer cannot be imported, the demo's deck 00 next to it never read."""
 
 import model_support  # noqa: F401  (the helper's package on the path, and the folder next to it with evaluate.py)
 
@@ -913,6 +913,22 @@ class RunTest(unittest.TestCase):
         self._without_tagger.stop()
         self._without.stop()
         self._tmp.cleanup()
+
+    def test_the_demos_deck_00_is_never_read(self):
+        self.assertEqual(evaluate.default_table_dir().name, "course")
+        self.assertEqual(evaluate.default_table_dir().parent, model_support.data_dir(model_support.MODULE_DIR))
+        model_support.write_demo_table(self.folder / "demo" / "dashboard")  # next to the course table, as in data/
+        opened = []
+        real_open = io.open
+
+        def recording_open(file, *arguments, **options):
+            opened.append(str(file))
+            return real_open(file, *arguments, **options)
+
+        with mock.patch("io.open", recording_open), mock.patch("builtins.open", recording_open), contextlib.redirect_stdout(io.StringIO()):
+            evaluate.run(self.table, self.results, "topics", today=TODAY)
+        self.assertTrue(any(name.endswith("cards.csv") for name in opened))
+        self.assertFalse([name for name in opened if "demo" in Path(name).parts])
 
     def test_without_the_hand_files_the_derived_rows_are_written_and_no_form(self):
         evaluate.run(self.table, self.results, "similarity", today=TODAY)

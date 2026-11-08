@@ -17,7 +17,8 @@ embeddings (docs/models/similarity.md, "S2").
   own minimum. The index, C1, T1 and D1 read the rows as they read TF-IDF's.
 * `app_vectoriser` is the vectoriser the app runs: APP_VECTORISER, set by the hand check's verdict, or TF-IDF with
   one printed line when the library or the model is not there. The launchers and evaluate.py pass it explicitly;
-  CourseModel(vectoriser=None) stays TF-IDF, so the fixture tests run without torch.
+  CourseModel(vectoriser=None) stays TF-IDF, so the fixture tests run without torch. `uncached_copy` gives the
+  dashboard's deck 00 the same kind, unfitted, without the cache, on the encoder already loaded.
 """
 
 from __future__ import annotations
@@ -263,6 +264,25 @@ def app_vectoriser(cache_dir: Optional[Path] = None, name: Optional[str] = None,
     if name.startswith("hybrid-"):
         return HybridVectoriser(similar.tfidf_vectoriser(), encoder)
     return encoder
+
+
+def uncached_copy(vectoriser):
+    """A vectoriser of the same kind and settings, not fitted and without the embeddings' cache, an encoder's model the
+    same (loaded once): the demo's deck 00 beside the course (docs/demo/architecture.md), so the course's index keeps
+    its fitted vectoriser and the cache the course's file. None stays None (TF-IDF)."""
+    if vectoriser is None:
+        return None
+    if isinstance(vectoriser, HybridVectoriser):
+        return HybridVectoriser(uncached_copy(vectoriser.first), uncached_copy(vectoriser.second), vectoriser.k, vectoriser.percentile)
+    if isinstance(vectoriser, SentenceEncoder):
+        model = vectoriser.load()
+        copy = SentenceEncoder(vectoriser.model_name, vectoriser.batch_size, cache=None, loader=vectoriser._loader,
+                               device=vectoriser.device)
+        copy._model = model
+        return copy
+    from sklearn.base import clone
+
+    return clone(vectoriser, safe=False)  # TF-IDF unfitted with its settings; anything else a deep copy
 
 
 def describe(vectoriser) -> str:

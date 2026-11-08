@@ -4,22 +4,26 @@ row, the slide row along the bottom at the full width, a model's panel over the 
 
 * the top bar: the title; the request box (`prompt-text`, Enter submits, and Go `prompt-go`), the one way in, with
   its answer hanging under it (`prompt-answer`: the message `prompt-message` and up to GO_SLOTS entries `go-<n>`,
-  each a click to its card; hidden while there is nothing to say); Back (`back`), disabled on an empty trail;
+  each a click to its card; hidden while there is nothing to say); Back (`back`), disabled on an empty trail; Demo
+  (`demo`), "End demo" while the demo runs, disabled without deck 00's table; without course data, outside the demo,
+  the box says NO_DATA and the box and Go are disabled;
 * the diagram (`diagram`), the left column: three rows, decks → topics → cards, each a row of items in plain HTML,
   a dot with its name, the shown card's deck, topic and card highlighted, the open deck and topic marked; a click on
   an item goes to the callback through the hidden input `diagram-click` (assets/diagram.js);
-* the card, the right column: its title row (`card-where`, the deck and the topic by name, and the Related button
-  `related-toggle`), the card's frame with the card's face (`card-face`: the front or the back; a click on it turns
-  a flashcard) and, under a quiz's question in the same frame, the options (`quiz-options`, the checks live in its
-  value) with Confirm (`quiz-confirm`), the one scroll bar of the page inside the frame; under the frame the Related
-  list, RELATED_SLOTS fixed buttons (`related-<n>`), the next card first and marked, hidden while unused;
+* the card, the right column: with no card how to begin (BEGIN_HINT; NO_DATA_HINT without course data); its title
+  row (`card-where`, the deck and the topic by name, and the Related button `related-toggle`), the card's frame with
+  the card's face (`card-face`: the front or the back; a click on it turns a flashcard) and, under a quiz's question
+  in the same frame, the options (`quiz-options`, the checks live in its value) with Confirm (`quiz-confirm`), the
+  one scroll bar of the page inside the frame; under the frame the Related list, RELATED_SLOTS fixed buttons
+  (`related-<n>`), the next card first and marked, hidden while unused;
 * the slide row (`tile-S` to `tile-P`): one tile per model with its headline and its two numbers with their verdict
   words, or one line where the results file is missing; a click opens the model's panel (`model-panel`) over the two
   columns, the tiles staying visible under it: the numbers on its left (`panel-text`), the model's figure on its
   right (`panel-figure`);
 * the hidden inputs `key-enter`, written by assets/keys.js on Enter outside the request box and the buttons, and
   `diagram-click`, written by assets/diagram.js on a click in the diagram; the `view` store (app.HOME's keys) with
-  what is not saved: the flip, Related drawn, the last request, the open tile, the diagram's open deck and topic.
+  what is not saved: the flip, Related drawn, the last request, the open tile, the diagram's open deck and topic,
+  the demo flag.
 
 What the regions show comes from app.Dashboard; the state is its own (state.DashboardState).
 """
@@ -34,6 +38,7 @@ from . import quiz
 
 KEY_INPUT = "key-enter"  # the hidden input Enter writes (assets/keys.js)
 DIAGRAM_INPUT = "diagram-click"  # the hidden input a click in the diagram writes (assets/diagram.js)
+DEMO_BUTTON = "demo"  # Demo and End demo, in the top bar after Back
 DIAGRAM_ROWS = ("deck", "topic", "card")  # the rows' names in a click, by the rows' order
 RELATED_SLOTS = 6  # the next card, marked, then the five neighbours
 GO_SLOTS = 3  # the nearest three topics of a "no match"
@@ -41,6 +46,10 @@ EYEBROW = "GUIDED LEARNING · THE DASHBOARD"
 TITLE = "One card at a time."
 PLACEHOLDER = "A question, a concept or a code name"
 BEGIN_HINT = "Type a request in the box above and press Go: the card it finds is shown here."
+NO_DATA = "No data loaded"  # the box's line without course data, outside the demo
+NO_DATA_HINT = "No course data loaded. Demo, in the top bar, shows how the dashboard works on a deck of its own."
+DEMO_LABEL = "Demo"
+END_DEMO_LABEL = "End demo"
 NO_MATCH = "No match in the course."
 NO_MATCH_NEAREST = "No match in the course; the nearest topics, each a click:"
 RELATED_LABEL = "Related"
@@ -95,12 +104,12 @@ def card_where(text: str) -> list:
     return [html.Span(text, className="card-where-text")] if text else []
 
 
-def card_face(card, back: bool, value) -> tuple[list, str]:
-    """The card's face and its class: with no card how to begin; a flashcard's question or its answer; a quiz's
-    question (the options stand under it, quiz_control) or its judgement (quiz.judge): the card's feedback under
-    "Correct answer", or every checked option with its own feedback under "Wrong answer"."""
+def card_face(card, back: bool, value, hint: str = BEGIN_HINT) -> tuple[list, str]:
+    """The card's face and its class: with no card how to begin (`hint`); a flashcard's question or its answer; a
+    quiz's question (the options stand under it, quiz_control) or its judgement (quiz.judge): the card's feedback
+    under "Correct answer", or every checked option with its own feedback under "Wrong answer"."""
     if card is None:
-        return [html.P(BEGIN_HINT, className="empty-state")], "card-face empty"
+        return [html.P(hint, className="empty-state")], "card-face empty"
     if quiz.has_options(card):
         if not back:
             return [html.Div(quiz.QUESTION_LABEL, className="card-label"), dcc.Markdown(card.question, className="card-content")], "card-face quiz front"
@@ -231,6 +240,24 @@ def diagram(decks: Sequence[Dot], topics: Sequence[Dot], cards: Sequence[Dot]) -
     return rows
 
 
+# --- the top bar's demo ------------------------------------------------------------------------------------------
+
+
+def demo_controls(running: bool, has_demo: bool, no_data: bool) -> tuple:
+    """Demo's label, class and disabled state, then the request box's placeholder and disabled state and Go's: "End
+    demo" while the demo runs, Demo disabled without deck 00's table; without course data, outside the demo, the box
+    says NO_DATA, and the box and Go are disabled."""
+    closed = no_data and not running
+    return (
+        END_DEMO_LABEL if running else DEMO_LABEL,
+        "top-button demo-toggle open" if running else "top-button demo-toggle",
+        not has_demo,
+        NO_DATA if closed else PLACEHOLDER,
+        closed,
+        closed,
+    )
+
+
 # --- the slide row and its panel ---------------------------------------------------------------------------------
 
 
@@ -303,10 +330,11 @@ def model_panel(tile: Optional[Tile], figure=None) -> tuple[list, str]:
 # --- the page ----------------------------------------------------------------------------------------------------
 
 
-def page_layout(home: dict, tiles: Sequence[Tile]) -> html.Main:
-    """The page: the top bar with the request box, its answer and Back; the diagram and the card with its Related
-    list; the slide row's tiles; the model's panel; the hidden inputs of Enter and of the diagram's clicks and the
-    `view` store."""
+def page_layout(home: dict, tiles: Sequence[Tile], has_demo: bool = False, no_data: bool = False) -> html.Main:
+    """The page: the top bar with the request box, its answer, Back and Demo; the diagram and the card with its
+    Related list; the slide row's tiles; the model's panel; the hidden inputs of Enter and of the diagram's clicks and
+    the `view` store. `has_demo`: deck 00's table is there; `no_data`: the course table is not."""
+    label, demo_class, demo_disabled, placeholder, box_disabled, go_disabled = demo_controls(False, has_demo, no_data)
     return html.Main(
         [
             html.Header(
@@ -314,9 +342,9 @@ def page_layout(home: dict, tiles: Sequence[Tile]) -> html.Main:
                     html.Div([html.P(EYEBROW, className="eyebrow"), html.H1(TITLE)], className="topbar-title"),
                     html.Div(
                         [
-                            dcc.Input(id="prompt-text", type="text", value="", n_submit=0, placeholder=PLACEHOLDER, className="prompt-input",
-                                      autoComplete="off"),
-                            html.Button("Go", id="prompt-go", n_clicks=0, className="top-button prompt-go"),
+                            dcc.Input(id="prompt-text", type="text", value="", n_submit=0, placeholder=placeholder, className="prompt-input",
+                                      autoComplete="off", disabled=box_disabled),
+                            html.Button("Go", id="prompt-go", n_clicks=0, className="top-button prompt-go", disabled=go_disabled),
                             html.Div(
                                 [html.Div(id="prompt-message", className="prompt-message")]
                                 + [html.Button([], id=f"go-{index}", n_clicks=0, className="go-entry hidden") for index in range(GO_SLOTS)],
@@ -325,7 +353,11 @@ def page_layout(home: dict, tiles: Sequence[Tile]) -> html.Main:
                         ],
                         className="prompt-box",
                     ),
-                    html.Div([html.Button("Back", id="back", n_clicks=0, className="top-button", disabled=True)], className="topbar-actions"),
+                    html.Div(
+                        [html.Button("Back", id="back", n_clicks=0, className="top-button", disabled=True),
+                         html.Button(label, id=DEMO_BUTTON, n_clicks=0, className=demo_class, disabled=demo_disabled)],
+                        className="topbar-actions",
+                    ),
                 ],
                 className="topbar",
             ),

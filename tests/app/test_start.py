@@ -1,7 +1,8 @@
 """The launcher (start.py, exported next to the package): it searches for sputnik and asks only when it finds it (on
 the flashcards workspace's own viewer the full app starts without the question), asks the backup question before the
 full app and before the dashboard (`--mode dashboard`, the third mode, by the argument alone), the reloader's child asks nothing, and a missing library, a missing data file or an older sputnik stops the
-start with the command that fixes it; its folders follow the data folder's rule; it loads and stops without the
+start with the command that fixes it (the dashboard starts with deck 00 alone without the course table, and stops
+without either); its folders follow the data folder's rule; it loads and stops without the
 models' libraries (a subprocess with them blocked). The two runs and the backup question are mocked, so nothing is
 served, no state is touched and nothing of the viewer is imported."""
 
@@ -166,18 +167,32 @@ class StartDataTest(unittest.TestCase):
         self.assertIn("cards.csv", message)
         self.assertIn(start.DATA_HINT, message)
 
-    def test_the_dashboard_without_the_course_table_stops_with_the_data_hint_and_passes_its_folders(self):
+    def test_the_dashboard_without_either_table_stops_with_the_data_hint_and_passes_its_folders(self):
         with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
             with self.assertRaises(SystemExit) as stop:
-                start.run_dashboard(Path(folder) / "course")
+                start.run_dashboard(folder / "course", demo_dir=folder / "demo")
             message = str(stop.exception.code)
             self.assertIn("cards.csv", message)
             self.assertIn(start.DATA_HINT, message)
             with mock.patch("app.dashboard.main") as dashboard_main:
-                table = model_support.write_test_table(Path(folder) / "course")
-                start.run_dashboard(table, Path(folder) / "results", Path(folder) / "state", Path(folder) / "cache", port=8053)
-            dashboard_main.assert_called_once_with(table, Path(folder) / "results", Path(folder) / "state", cache_dir=Path(folder) / "cache", port=8053)
-        self.assertEqual(inspect.signature(start.run_dashboard).parameters["state_dir"].default, start.STATE_FILE.parent)  # next to the viewer's state
+                table = model_support.write_test_table(folder / "course")
+                start.run_dashboard(table, folder / "results", folder / "state", folder / "cache", port=8053, demo_dir=folder / "demo")
+            dashboard_main.assert_called_once_with(table, folder / "results", folder / "state", cache_dir=folder / "cache", port=8053,
+                                                   demo_dir=folder / "demo")
+        parameters = inspect.signature(start.run_dashboard).parameters
+        self.assertEqual(parameters["state_dir"].default, start.STATE_FILE.parent)  # next to the viewer's state
+        self.assertEqual(parameters["demo_dir"].default, start.DATA_DIR / "demo" / "dashboard")
+
+    def test_the_dashboard_without_the_course_table_starts_with_deck_00_alone(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            demo = model_support.write_demo_table(folder / "demo")
+            with mock.patch("app.dashboard.main") as dashboard_main, mock.patch("builtins.print") as printed:
+                start.run_dashboard(folder / "course", folder / "results", folder / "state", folder / "cache", demo_dir=demo)
+            dashboard_main.assert_called_once_with(folder / "course", folder / "results", folder / "state", cache_dir=folder / "cache",
+                                                   port=None, demo_dir=demo)
+            self.assertIn("starts empty, with its Demo", printed.call_args.args[0])
 
     def test_standalone_passes_the_port_and_the_viewers_url_to_the_page(self):
         with tempfile.TemporaryDirectory() as folder, mock.patch("app.standalone.main") as standalone_main:

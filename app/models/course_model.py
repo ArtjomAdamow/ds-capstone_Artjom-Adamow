@@ -69,11 +69,13 @@ class CourseModel:
         index: Optional[similar.SimilarityIndex] = None,
         margin: float = FOCUS_MARGIN,
         min_score: Optional[float] = similar.MIN_SCORE,
+        moves: bool = True,
     ) -> None:
         """Fit on all cards. `deck_ids` maps deck names to the deck ids of the course file (the decks state's dot
         ids); a deck without an id keeps its name as id. `topics` are the scripted topics (TopicSeed), the input of
         T1. `vectoriser` is the index's (TF-IDF by default; S2's encoder or hybrid, models.embeddings), `min_score`
-        the neighbours' minimum (the fixed one; None for the index's own, as the launchers fit it)."""
+        the neighbours' minimum (the fixed one; None for the index's own, as the launchers fit it). `moves=False`
+        keeps T1's membership as written (the demo's deck 00)."""
         self.index = index if index is not None else similar.SimilarityIndex.fit(cards, vectoriser, min_score=min_score)
         self.deck_ids = {name: deck_ids.get(name, name) for name in dict.fromkeys(self.index.decks)}
         self.deck_of: dict[str, str] = {
@@ -92,7 +94,7 @@ class CourseModel:
         self.deck_links: list[tuple[str, str]] = clustering.merge_links(
             [self.deck_ids[name] for name in self.deck_names], self.deck_vectors
         )
-        self.topic_model = TopicModel(self.index, topics, margin)
+        self.topic_model = TopicModel(self.index, topics, margin, moves=moves)
         self._row_of = {card_id: row for row, card_id in enumerate(self.index.ids)}
         self.topics: dict[Key, TopicLayout] = {}
         for seed in self.topic_model.seeds:

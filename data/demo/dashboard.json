@@ -1,0 +1,398 @@
+{
+  "courseName": "Guided learning: how to use the dashboard",
+  "version": 3,
+  "decks": [
+    {
+      "id": "00",
+      "name": "How to use",
+      "topics": [
+        {
+          "topic_id": "01",
+          "name": "Start here",
+          "headings": [
+            "Start here",
+            "The two columns",
+            "The closed start",
+            "The request box",
+            "Demo and End demo"
+          ]
+        },
+        {
+          "topic_id": "02",
+          "name": "Asking",
+          "headings": [
+            "Asking",
+            "A request in your own words",
+            "Go and Enter",
+            "No match",
+            "The nearest topics"
+          ]
+        },
+        {
+          "topic_id": "03",
+          "name": "Studying a card",
+          "headings": [
+            "Studying a card",
+            "The title row",
+            "Turning a card",
+            "Quizzes and Confirm",
+            "Correct answer and Wrong answer"
+          ]
+        },
+        {
+          "topic_id": "04",
+          "name": "Moving on",
+          "headings": [
+            "Moving on",
+            "Related",
+            "The next card",
+            "Where a card lies",
+            "Back"
+          ]
+        },
+        {
+          "topic_id": "05",
+          "name": "The diagram",
+          "headings": [
+            "The diagram",
+            "Decks, topics and cards",
+            "What you explored",
+            "The gold highlights",
+            "A click in the diagram"
+          ]
+        },
+        {
+          "topic_id": "06",
+          "name": "The models",
+          "headings": [
+            "The models",
+            "The slide row",
+            "The five tiles",
+            "A model's panel",
+            "Similarity, course model, topics, difficulty and prompt"
+          ]
+        }
+      ],
+      "cards": [
+        {
+          "card_id": "001",
+          "topic": "01",
+          "question": "Welcome to the dashboard. What does this page show, and where do you go from here?",
+          "feedback": "One card at a time, in the right column; the diagram of what you have explored, in the left column; the models' numbers, in the five tiles along the bottom. The way in is the request box in the top bar. From here, Related in this card's title row lists the cards nearest to this one, and Back in the top bar returns to the card before. Turn a card by clicking it or pressing Enter."
+        },
+        {
+          "card_id": "002",
+          "topic": "01",
+          "question": "What is in the two columns under the top bar?",
+          "feedback": "The left column is the diagram: the decks, topics and cards you have explored, in three rows. The right column is the card: its title row with the deck, the topic and the Related button, the card itself, and under it the Related list once you open it."
+        },
+        {
+          "card_id": "003",
+          "topic": "01",
+          "question": "Why is the page empty when you start fresh?",
+          "feedback": "The dashboard starts closed: nothing is shown until you explore it. The first card comes from a request in the box; from then on the diagram fills with every card you reach, and a restart shows them again, with the card you left."
+        },
+        {
+          "card_id": "004",
+          "topic": "01",
+          "quiz": true,
+          "question": "Where do you type a request to find a card?",
+          "feedback": "In the request box in the top bar: the one way in, there at all times.",
+          "options": [
+            "In the request box in the top bar",
+            "In the card's title row",
+            "In the diagram's Cards row",
+            "In a tile of the slide row"
+          ],
+          "correct": 0,
+          "answers": [
+            "In the request box in the top bar: the one way in, there at all times.",
+            "The title row names the card's deck and topic and holds Related; there is nothing to type in.",
+            "The diagram lists what you have explored: a click on a card shows it, but there is nothing to type in.",
+            "A tile shows a model's numbers, and a click opens its panel."
+          ],
+          "difficulty": "easy"
+        },
+        {
+          "card_id": "005",
+          "topic": "01",
+          "question": "What do Demo and End demo do?",
+          "feedback": "Demo, in the top bar, puts the course aside and shows this deck, \"How to use\", from its first card: the request box, Related and the diagram then answer from this deck alone. While it runs the button reads End demo, and its click brings back the course as you left it, with your card, your trail and your explored cards. Nothing you do in the demo is saved."
+        },
+        {
+          "card_id": "006",
+          "topic": "02",
+          "question": "How do you ask for a card?",
+          "feedback": "Type what you want to learn into the request box in the top bar, in your own words: a question, a concept or a name from the code. Then press Go, next to the box, or Enter."
+        },
+        {
+          "card_id": "007",
+          "topic": "02",
+          "question": "What happens when a request finds a topic?",
+          "feedback": "The card it finds is shown in the right column, front up: the card nearest to your request in the topic it matches. The card counts as explored and joins the diagram."
+        },
+        {
+          "card_id": "008",
+          "topic": "02",
+          "question": "What does \"No match in the course.\" mean?",
+          "feedback": "The request lies too far from every topic. Under the box the message lists up to three cards of the nearest topics, each named by its deck, its topic and its question; a click on one shows that card and closes the answer."
+        },
+        {
+          "card_id": "009",
+          "topic": "02",
+          "quiz": true,
+          "question": "Which of these sends the request you typed?",
+          "feedback": "Go, next to the request box, or Enter while you type in it.",
+          "options": [
+            "Go, or Enter in the request box",
+            "Back in the top bar",
+            "A click on the card",
+            "Related in the card's title row"
+          ],
+          "correct": 0,
+          "answers": [
+            "Go, next to the request box, or Enter while you type in it.",
+            "Back returns to the card shown before.",
+            "A click on the card turns it.",
+            "Related lists the cards nearest to the shown one."
+          ],
+          "difficulty": "easy"
+        },
+        {
+          "card_id": "010",
+          "topic": "02",
+          "question": "What does an empty request do?",
+          "feedback": "Nothing: Go and Enter on an empty box leave the page as it is. While this demo runs, ask in your own words about any part of the page: the box answers from this deck."
+        },
+        {
+          "card_id": "011",
+          "topic": "03",
+          "question": "What does the card's title row tell you?",
+          "feedback": "The deck and the topic the card lies in, in full, over as many lines as they need, and the Related button on its right. In this demo the deck is \"How to use\"."
+        },
+        {
+          "card_id": "012",
+          "topic": "03",
+          "question": "How do you turn a card?",
+          "feedback": "Click the card, or press Enter. The front shows the question, the back the answer, and turning it again shows the front. A card you have turned counts as read."
+        },
+        {
+          "card_id": "013",
+          "topic": "03",
+          "question": "How does a quiz look on its front?",
+          "feedback": "The question with its answer options under it, each with a check box, and Confirm under the options. Confirm stays disabled until you check an option."
+        },
+        {
+          "card_id": "014",
+          "topic": "03",
+          "quiz": true,
+          "question": "A many-choice quiz: check every correct option. Which of these judge a quiz's checked options and turn it to its back?",
+          "feedback": "Confirm and Enter: both judge the checked options and turn the quiz to its back.",
+          "options": [
+            "Confirm",
+            "Enter",
+            "A click on Related",
+            "Back in the top bar"
+          ],
+          "correct": [
+            0,
+            1
+          ],
+          "answers": [
+            "Confirm judges the checked options and turns the quiz to its back.",
+            "Enter does the same as Confirm, once an option is checked.",
+            "Related lists the nearest cards; the quiz stays as it is.",
+            "Back shows the card before and leaves this one unjudged."
+          ],
+          "difficulty": "easy"
+        },
+        {
+          "card_id": "015",
+          "topic": "03",
+          "question": "What does the back of a quiz show?",
+          "feedback": "\"Correct answer\" with the card's feedback when you checked exactly the correct options. Otherwise \"Wrong answer\", with each option you checked and its own feedback, the correct ones marked. Enter on the back turns the quiz to its front again, with the checks cleared."
+        },
+        {
+          "card_id": "016",
+          "topic": "03",
+          "quiz": true,
+          "question": "When is a many-choice quiz answered right?",
+          "feedback": "Only when exactly the correct options are checked: a missing correct option and an extra wrong one both make the answer wrong.",
+          "options": [
+            "When exactly the correct options are checked",
+            "When at least one correct option is checked",
+            "When every option is checked",
+            "When nothing is checked"
+          ],
+          "correct": 0,
+          "answers": [
+            "Only when exactly the correct options are checked: a missing correct option and an extra wrong one both make the answer wrong.",
+            "One correct option is not enough: every correct one must be checked, and no other.",
+            "Checking every option adds the wrong ones, so the answer is wrong.",
+            "With nothing checked Confirm stays disabled: there is no answer to judge."
+          ],
+          "difficulty": "easy"
+        },
+        {
+          "card_id": "017",
+          "topic": "03",
+          "question": "What if a quiz is taller than the card?",
+          "feedback": "It scrolls inside the card's frame: the frame keeps its place on the page, and its own scroll bar brings the options and Confirm into view."
+        },
+        {
+          "card_id": "018",
+          "topic": "04",
+          "question": "What does Related list?",
+          "feedback": "Related, the button in the card's title row, lists the shown card's five related cards under the card: the cards nearest to it by the similarity model. Each entry shows the card's question, shortened, and where it lies. A second click hides the list."
+        },
+        {
+          "card_id": "019",
+          "topic": "04",
+          "question": "Which related card is marked \"next\"?",
+          "feedback": "The first entry of Related, marked \"next\", is the card to take next: the cards you have not read come first, the ones you have read after them. It stands again in its own place among the five."
+        },
+        {
+          "card_id": "020",
+          "topic": "04",
+          "question": "What do \"this topic\" and \"this deck\" next to a related card mean?",
+          "feedback": "Where the related card lies, seen from the shown card: in the same topic, in the same deck but another topic, or in another deck, which is then named."
+        },
+        {
+          "card_id": "021",
+          "topic": "04",
+          "quiz": true,
+          "question": "How do you return to the card you saw before?",
+          "feedback": "Back, in the top bar: it walks the trail of the cards shown, one card at a time, and is disabled when the trail is empty.",
+          "options": [
+            "Back in the top bar",
+            "Related in the card's title row",
+            "End demo",
+            "A second click on a tile"
+          ],
+          "correct": 0,
+          "answers": [
+            "Back, in the top bar: it walks the trail of the cards shown, one card at a time, and is disabled when the trail is empty.",
+            "Related lists the cards nearest to the shown one, not the ones before it.",
+            "End demo leaves the demo and brings back the course.",
+            "A second click on the open tile closes its panel."
+          ],
+          "difficulty": "easy"
+        },
+        {
+          "card_id": "022",
+          "topic": "04",
+          "question": "Does drawing the Related list explore its cards?",
+          "feedback": "No. A card is explored only when it is shown: by a request, a click on a Related entry, on an entry under the request box or on a card in the diagram, or by Back. Drawing the list explores nothing."
+        },
+        {
+          "card_id": "023",
+          "topic": "05",
+          "question": "What does the diagram in the left column show?",
+          "feedback": "Three rows, decks → topics → cards, each item a dot with its name: the decks you have explored, the open deck's topics that hold an explored card, and the open topic's explored cards. Nothing you have not explored."
+        },
+        {
+          "card_id": "024",
+          "topic": "05",
+          "question": "What do the gold marks in the diagram mean?",
+          "feedback": "The shown card's deck, topic and card are highlighted in gold, and the open deck and topic, the ones whose topics and cards the next rows list, are framed."
+        },
+        {
+          "card_id": "025",
+          "topic": "05",
+          "quiz": true,
+          "question": "You click a topic in the diagram's Topics row. What changes?",
+          "feedback": "The Cards row lists that topic's explored cards, and the shown card stays as it is. A click on a deck lists its topics and empties the Cards row; only a click on a card shows it.",
+          "options": [
+            "The Cards row lists its explored cards; the shown card stays",
+            "The topic's first card is shown",
+            "The topic leaves the diagram",
+            "The request box searches that topic"
+          ],
+          "correct": 0,
+          "answers": [
+            "The Cards row lists that topic's explored cards, and the shown card stays as it is.",
+            "A click on a topic shows no card: only a click on a card in the Cards row does.",
+            "Nothing leaves the diagram: it holds every card you have explored.",
+            "The request box answers what you type into it; a click in the diagram does not use it."
+          ],
+          "difficulty": "medium"
+        },
+        {
+          "card_id": "026",
+          "topic": "05",
+          "question": "How do you show a card from the diagram?",
+          "feedback": "Click it in the Cards row. A click on a deck or a topic only opens its row and leaves the card as it is; showing a card in any way opens its deck and topic in the diagram again."
+        },
+        {
+          "card_id": "027",
+          "topic": "05",
+          "question": "Why does the diagram grow as you learn?",
+          "feedback": "It holds only what you have explored. A fresh start shows it empty, and every card you reach adds itself, its topic and its deck. In this demo it holds this deck alone, and End demo brings back the course's."
+        },
+        {
+          "card_id": "028",
+          "topic": "06",
+          "quiz": true,
+          "question": "A many-choice quiz: which of these open a model's panel or close it?",
+          "feedback": "A click on a tile opens its model's panel over the two columns, another tile shows its model in its place, and a second click on the open tile closes it.",
+          "options": [
+            "A click on a tile in the slide row",
+            "A second click on the open tile",
+            "Enter",
+            "Go"
+          ],
+          "correct": [
+            0,
+            1
+          ],
+          "answers": [
+            "A click on a tile opens its model's panel over the two columns.",
+            "A second click on the open tile closes its panel.",
+            "Enter does nothing while a panel is open; on the card it turns it.",
+            "Go sends the request in the box."
+          ],
+          "difficulty": "medium"
+        },
+        {
+          "card_id": "029",
+          "topic": "06",
+          "question": "What do the five tiles along the bottom show?",
+          "feedback": "One tile per model: S finds similar cards, C places the decks and their cards on a sphere, T sorts the cards into topics, D rates the quizzes, P answers a request. Each shows what its model does and two numbers with their verdict words, from the offline evaluation of the course."
+        },
+        {
+          "card_id": "030",
+          "topic": "06",
+          "question": "What is in a model's panel?",
+          "feedback": "On its left the model's two numbers one under the other, each with its label, what it is measured against, a sentence on what it measures and its verdict in words. On its right the model's figure for the whole course."
+        },
+        {
+          "card_id": "031",
+          "topic": "06",
+          "quiz": true,
+          "question": "The demo runs and you open the S tile. Whose numbers does it show?",
+          "feedback": "The course's: the tiles and their panels show the results files of the offline evaluation, the same in the demo as outside it; nothing on them is measured live.",
+          "options": [
+            "The course's, from the offline evaluation's results files",
+            "This deck's, measured live",
+            "None until the demo ends",
+            "The shown card's"
+          ],
+          "correct": 0,
+          "answers": [
+            "The course's: the tiles and their panels show the results files of the offline evaluation, the same in the demo as outside it.",
+            "Nothing on the tiles is measured live: they read the results files of the course.",
+            "The tiles stay as they are while the demo runs.",
+            "A tile describes its model over the whole course, never one card."
+          ],
+          "difficulty": "hard"
+        },
+        {
+          "card_id": "032",
+          "topic": "06",
+          "question": "Where do the related cards and the request's answer come from in this demo?",
+          "feedback": "From this deck alone: the models are fitted on its cards at the start, apart from the course's. Related ranks the cards you have not read first, and a request finds this deck's topics. End demo hands everything back to the course's models."
+        }
+      ]
+    }
+  ]
+}
