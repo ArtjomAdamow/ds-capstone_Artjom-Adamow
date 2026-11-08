@@ -3,10 +3,11 @@ the card panel through its `card_section` hook (project.services.actions.ModuleS
 
 * Related cards: the selected card's neighbours of the index (CourseModel.related: the five nearest above the
   index's own minimum score, across the whole course), in the index's order, each with where it lies: this topic,
-  this deck, or another deck by name. A neighbour in a checked deck is a target the viewer navigates to on a click
-  (its topic entered, the card selected); a neighbour in an unchecked deck is listed without a click, its note says
-  so. The cards view shows about 44 % of the neighbours; the list is where the other 56 % show
-  (docs/models/similarity.md, "The hand check", point 8).
+  this deck, or another deck by name. Every neighbour is a target the viewer navigates to on a click (its topic
+  entered, the card selected, which explores it and checks its deck and topic; roadmap step 33 of the helper, since
+  the viewer loads every deck), a neighbour in an unchecked deck with a note that says so; on an older viewer, which
+  loads the checked decks alone, such a neighbour is listed without a click. The cards view shows about 44 % of the
+  neighbours; the list is where the other 56 % show (docs/models/similarity.md, "The hand check", point 8).
 * The next card: the first entry, marked, the neighbour the learner should take next by the learner's confidence
   (app.neighbours.rank_by_confidence, shared with the dashboard, which has no confidence): unread cards first, then
   the read ones by their confidence, the lowest ("review") first (CardConfidence.confidence, 1 to 100; the course's
@@ -58,12 +59,14 @@ def helper_section(model, questions: Mapping[str, str], scores: Optional[Mapping
         neighbours = [other for other, _score in model.related(dot.id)]
         if not neighbours:
             return []
+        checked = set(state.cards_state.enabled_decks)
         listed = []
         for other in neighbours:
             card = loaded.get(other)
             target = other if card is not None else None
             label = shorten(card.question if card is not None else questions.get(other, other))
-            note = place(state, other) if target else f"{place(state, other)} · {UNCHECKED}"
+            unchecked = card is None or card.deck not in checked
+            note = f"{place(state, other)} · {UNCHECKED}" if unchecked else place(state, other)
             listed.append(SectionEntry(label, target, note))
         read = {other: bool(records[other].read) for other in neighbours if other in records}
         confidence = {other: int(records[other].confidence) for other in neighbours if other in records}

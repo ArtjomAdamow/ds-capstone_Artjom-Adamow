@@ -19,7 +19,8 @@ checked list runs every model the view offers, the one click of a viewer without
 Giving a deck the model's topics (T1, models.topic_model): the derived course file (derived.write_derived_course)
 is written again with the model's topics for those decks, the viewer's topic index is rebuilt from it in place
 (TopicIndex.reload), and the deck's dots are reloaded, so the dialogs, the predefined groups and the state follow
-the new topics. Every card of the deck is shown again (the topics are new).
+the new topics. The deck's checks start over (its entries of the view settings dropped): since step 33 its new topics
+and its cards show where they hold an explored card.
 
 The model's connections are its own (LINK_ORIGIN, the viewer's CardLink.origin), apart from the user's, like the
 generated groups: a run replaces the model's earlier connections among the objects it ran on with the fresh ones in
@@ -34,6 +35,13 @@ model's entry); the Helper writes it with the derived file and after every save 
 after_save hook), so the file mirrors memory. At a start with a stored card state the difficulty groups and the
 connections come back from it (load_groups, load_links), and the views that hold the model's connections get their
 presets and Display's check again (preset_cutoffs).
+
+Roadmap step 33 of the helper: the viewer loads every deck's cards and every topic's dot, and its checks only show and
+hide, so a run works on every topic of the checked decks, hidden or not (_checked_topics: the topics whose dots are
+loaded, which an older viewer loads for the checked topics alone), and a topic's preset is measured over all its cards
+(shown_ids; on an older viewer over the cards its view settings show). A preset is written into the router's `presets`
+next to the line it sets (set_preset), where the router keeps them: the navigation cuts the model's connections at the
+preset, whatever the line shows.
 """
 
 from dataclasses import asdict
@@ -163,7 +171,7 @@ class Helper:
         that wrote them set them."""
         deck_pairs = model_pairs(router.decks_state)
         if deck_pairs:
-            router.cutoffs[DECKS] = preset_cutoff(self._checked_deck_ids(router), deck_pairs, DECK_PART)
+            set_preset(router, DECKS, preset_cutoff(self._checked_deck_ids(router), deck_pairs, DECK_PART))
             router.show_origin(DECKS, LINK_ORIGIN)
         card_pairs = model_pairs(router.cards_state)
         if not card_pairs:
@@ -177,7 +185,7 @@ class Helper:
                 members = set(topic.card_ids)
                 pairs = [pair for pair in card_pairs if pair[0] in members and pair[1] in members]
                 if pairs:
-                    router.cutoffs[topic_key(topic)] = preset_cutoff(shown_ids(router, topic), pairs, CARD_PART)
+                    set_preset(router, topic_key(topic), preset_cutoff(shown_ids(router, topic), pairs, CARD_PART))
                     router.show_origin(topic_key(topic), LINK_ORIGIN)
 
     # --- the button and its dialog ---------------------------------------------
@@ -286,7 +294,7 @@ class Helper:
         """The decks' connections of the model in merge order (replacing its earlier ones), the decks' cut-off
         preset and Display's check of them. Returns the connections written."""
         written = set_links(state.decks_state, self.model.deck_links, self.model.deck_points)
-        state.cutoffs[DECKS] = preset_cutoff(self._checked_deck_ids(state), self.model.deck_links, DECK_PART)
+        set_preset(state, DECKS, preset_cutoff(self._checked_deck_ids(state), self.model.deck_links, DECK_PART))
         if written:
             state.show_origin(DECKS, LINK_ORIGIN)
         return written
@@ -329,7 +337,7 @@ class Helper:
         the topic's cut-off preset and Display's check of them. Returns the connections written."""
         pairs = self.layout(topic).links
         written = set_links(state.cards_state, pairs, topic.card_ids)
-        state.cutoffs[topic_key(topic)] = preset_cutoff(shown_ids(state, topic), pairs, CARD_PART)
+        set_preset(state, topic_key(topic), preset_cutoff(shown_ids(state, topic), pairs, CARD_PART))
         if written:
             state.show_origin(topic_key(topic), LINK_ORIGIN)
         return written
@@ -355,7 +363,11 @@ class Helper:
 
     @staticmethod
     def _checked_topics(state, deck_id: str) -> list[TopicInfo]:
-        """The deck's checked topics (their dots are loaded), none for an unchecked deck."""
+        """The deck's topics a run works on, none for an unchecked deck: the topics whose dots are loaded, every topic
+        since step 33 (the checks only show and hide), the checked ones on an older viewer."""
+        info = state.decks.by_id.get(deck_id)
+        if info is None or info.name not in state.cards_state.enabled_decks:
+            return []
         return [topic for topic in state.topics.topics(deck_id) if topic.dot_id in state.cards_state.card_by_id]
 
 
@@ -370,12 +382,25 @@ def deck_key(deck_id: str) -> str:
 
 
 def shown_ids(state, topic: TopicInfo) -> list[str]:
-    """The topic's checked cards (the Cards dialog's), the dots its cards view shows."""
+    """The topic's cards its preset is measured over: all of them since step 33 (the viewer loads every card and its
+    checks only show and hide; the router tells the checked ones, `checked_card_ids`), the cards the view settings
+    show on an older viewer."""
+    if callable(getattr(state, "checked_card_ids", None)):
+        return list(topic.card_ids)
     stored = state.settings.shown(topic.deck_id)
     if stored is None:
         return list(topic.card_ids)
-    checked = set(stored)
-    return [card_id for card_id in topic.card_ids if card_id in checked]
+    ids = set(stored)
+    return [card_id for card_id in topic.card_ids if card_id in ids]
+
+
+def set_preset(state, key: str, value: float) -> None:
+    """A view's cut-off preset: the line itself, and the router's record of the preset where it keeps one (step 33:
+    the navigation cuts the model's connections at the preset, whatever the line shows)."""
+    state.cutoffs[key] = value
+    presets = getattr(state, "presets", None)
+    if isinstance(presets, dict):
+        presets[key] = value
 
 
 def model_pairs(core) -> list[tuple[str, str]]:

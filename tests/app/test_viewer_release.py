@@ -1,6 +1,6 @@
 """The glue on viewers of every release: it imports on the installed viewer whatever its release, takes only the
 newer hooks that viewer's compose has (glue.composition.viewer_hooks), and makes the Models link only where the
-viewer takes links; on a viewer as old as sputnik 0.3.0 (no TopBarLink, ModuleSection, SectionEntry or ModuleFocus,
+viewer takes links; on a viewer as old as sputnik 0.3.0 (no TopBarLink, ModuleSection or SectionEntry,
 none of the newer hooks, no ModulePrompt, PromptTarget or PromptAnswer; a subprocess with those names taken out of the
 installed viewer) it still imports, takes no hook and makes no link. Which release the capstone pins is the capstone's own check, not this one's."""
 
@@ -13,7 +13,7 @@ import unittest
 
 ROOT = model_support.MODULE_DIR
 HAS_VIEWER = importlib.util.find_spec("project") is not None
-NEWER_NAMES = ("TopBarLink", "ModuleSection", "SectionEntry", "ModuleFocus", "ModulePrompt", "PromptTarget", "PromptAnswer")
+NEWER_NAMES = ("TopBarLink", "ModuleSection", "SectionEntry", "ModulePrompt", "PromptTarget", "PromptAnswer")
 URL = "http://127.0.0.1:8051/"
 # A viewer as old as sputnik 0.3.0: the installed one without the newer names in its actions and without the newer
 # hooks in compose; the glue imports, takes no hook and makes no Models link

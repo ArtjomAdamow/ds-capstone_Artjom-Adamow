@@ -14,7 +14,8 @@ for the state. The raw scripted topics stay in the course file, so nothing is ev
 * The decision for the state: the membership is the nearest centroid, for every card (the app shows them all); a
   topic is never removed, and an emptied one keeps its dot. The margin is kept as a measure: a card below
   FOCUS_MARGIN sits between two topics (`hidden`, for the evaluation), and the runner-up topic next to it
-  (`second_of`, for the standalone page's card panel). The viewer's margin slider (the glue's focus, step 28) runs on
+  (`second_of`, for the standalone page's card panel). The models view's margin table (and, until step 33, the viewer's
+  margin slider, the glue's focus of step 28) runs on
   a share scale: `share_threshold` gives the margin that keeps a share of the cards, the highest margins first, so
   100 % keeps every card and 1 % the eleven with the highest margins on the course (models/topic.md, "The margin on
   a share scale").

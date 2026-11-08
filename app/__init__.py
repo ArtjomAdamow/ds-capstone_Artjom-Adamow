@@ -5,7 +5,7 @@
   difficulty model D1, with the offline measures. They import nothing of the viewer (the flashcards package, import
   name `project`), so they run and are tested without it.
 * `glue`: the Helper button per view, the position sources, the cut-off presets, the difficulty groups, the back of
-  the card panel, the related cards and the margin slider under it, the derived course file and the helper's own
+  the card panel, the related cards under it, the derived course file and the helper's own
   state: the models on the viewer, over its public API only.
 * `figures`: the plotly figures the glue's back of the card panel and the standalone page both draw (D1's metrics,
   the sphere's surface and arcs, the dendrogram over scipy's coordinates); plotly only, no Dash, nothing of the

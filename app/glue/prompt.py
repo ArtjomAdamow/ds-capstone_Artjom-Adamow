@@ -14,9 +14,11 @@ to 90 characters where a card is given. No score: a cosine says nothing to a lea
 * A target's card: the decision's own on the first target where the answer navigates; on the others the topic's
   nearest card, as the standalone page lists them (no card bar; prompt.md, "Hard decisions", 3). A card the router
   does not hold is none.
-* Targets in unchecked decks are left out (set_view cannot enter them). When the best match lies in an unchecked
-  deck nothing navigates and the message names the deck; "no match" says so. An empty request has no targets and
-  no message.
+* With the dialog's checkbox All decks off (the router's runtime flag `all_decks`, roadmap step 33 of the helper; off
+  at every start) the targets in unchecked decks are left out: when the best match lies in an unchecked deck nothing
+  navigates and the message names the deck; "no match" says so. With it on, every deck's topics are targets and Go
+  enters an unchecked deck, whose card the viewer's selection then explores and checks. An empty request has no
+  targets and no message.
 
 `navigation` is the answer in plain values; `helper_prompt` is the hook that hands them to the viewer.
 """
@@ -55,7 +57,7 @@ def target_of(state, key, card_id: Optional[str]) -> Optional[Target]:
     """The viewer's target for a topic of T1 (`key`: deck name, topic id) and the card given with it; None for a
     deck the viewer does not show (unknown or unchecked) or a topic its index does not hold."""
     info = state.decks.by_name.get(key[0])
-    if info is None or info.name not in state.enabled_decks:
+    if info is None or (not getattr(state, "all_decks", False) and info.name not in state.enabled_decks):
         return None
     card = state.cards_state.card_by_id.get(card_id) if card_id is not None else None
     topic = state.topics.topic_of(card_id) if card is not None else None

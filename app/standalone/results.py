@@ -73,7 +73,7 @@ P1_MEASURES: tuple[Measure, ...] = (
     "min_text", "ms_per_request",
 )
 MARGIN_SCOPE = "margin >= "
-FOCUS_SCOPE = "focus "  # the margin slider's marks: the share of the course's cards in focus
+FOCUS_SCOPE = "focus "  # the share scale's marks: the share of the course's cards kept (the margin slider of step 28 ran on them; it went with step 33)
 STACK_SCOPE = "stack "
 T1_JUDGES = ("T1", "1-NN", "LR", "chance")
 
@@ -304,7 +304,7 @@ class Results:
         focus = [row for row in run if row.get("model") == "T1" and (row.get("scope") or "").startswith(FOCUS_SCOPE)]
         if focus:
             heads = [row["scope"] for row in focus]
-            tables.append(transpose("The margin slider: the cards in focus at its marks", focus, heads, [False] * len(focus), T1_MARGIN_MEASURES, self.by_ids))
+            tables.append(transpose("The margin on the share scale: the cards kept at its marks", focus, heads, [False] * len(focus), T1_MARGIN_MEASURES, self.by_ids))
         return tables
 
     def _difficulty(self, run: list[dict]) -> Table:
