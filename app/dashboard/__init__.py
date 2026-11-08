@@ -5,14 +5,14 @@ at the start, and keeps its own state file in `data/state/`; it imports nothing 
 glue.
 
 * `app`: `Dashboard`, the fitted models, the state and what the regions show; `create_app`, the Dash app with its
-  one callback (the card's turn and a quiz's judgement, Related and its entries, Back, the request box and its
-  entries, the tiles).
+  callback (the card's turn and a quiz's judgement, Related and its entries, Back, the request box and its entries,
+  the tiles, the diagram's clicks) and Confirm's.
 * `layout`: the regions: the top bar with the request box and Back, the diagram, the card with its options and its
   Related list, the slide row and the model's panel.
 * `state`: the state file `dashboard_state.json`: the read and explored flags, the shown card, the trail.
 * `quiz`: a quiz's judgement as plain functions.
 * `assets/style.css`: the theme's tokens and the type scale, written anew; `assets/keys.js`: Enter into the hidden
-  input the callback reads.
+  input the callback reads; `assets/diagram.js`: a click in the diagram into another.
 
 The launcher starts it with `main` (start.py's third mode, `--mode dashboard`, after the backup question; on Dash's
 default port, without the reloader and with no process next to it).

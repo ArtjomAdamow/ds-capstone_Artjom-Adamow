@@ -9,7 +9,8 @@ model's topics as the full app gives every deck from the start; the topics keep 
 
 * The card (one at a time, as the viewer shows it): the front the question, a click on the card or Enter turns it
   to the answer; a quiz's front the question with its options and Confirm under it, Confirm disabled while nothing
-  is checked, its back the judgement (quiz.judge), Enter on the back turns it to the front with the checks cleared.
+  is checked (its own callback on the checks), Confirm or Enter turns it to its back, the judgement (quiz.judge),
+  Enter on the back turns it to the front with the checks cleared.
   The turn marks the card read (a quiz once judged). With no card shown the card's place says how to begin.
 * The navigation: Related lists the shown card's five related cards by the viewer's rule (neighbours.rank_by_confidence
   without the confidence: the unread first, the quizzes D1 predicted in D1's order among them, the read ones after
@@ -18,26 +19,33 @@ model's topics as the full app gives every deck from the start; the topics keep 
   the list is drawn. Back returns to the card shown before (the trail, state.DashboardState.back), disabled on an
   empty trail. The request box is the one way in: P1's answer shows the topic's card where it navigates (the
   selected card, else the topic's nearest), else "no match" with up to three entries, the nearest topics' cards,
-  each a click; an empty request does nothing.
+  each a click that shows its card and closes the answer; an empty request does nothing.
 * What explores a card (step 33's rule on the dashboard's parts): a selection in any way, Go's answer that shows a
-  card, a click on a Related entry or on one of Go's entries, Back; nothing else and nothing ahead.
-* The diagram (layout.diagram): decks → topics → cards, the explored decks, the shown card's deck's topics that hold
-  an explored card, that topic's explored cards, nothing unexplored; the shown card's deck, topic and card
-  highlighted; empty at a fresh start, filling as the learner explores; no click.
+  card, a click on a Related entry, on one of Go's entries or on a card in the diagram, Back; nothing else and
+  nothing ahead.
+* The diagram (layout.diagram): decks → topics → cards, each item a dot with its name: the explored decks, the open
+  deck's topics that hold an explored card, the open topic's explored cards, nothing unexplored; the open deck and
+  topic are the shown card's until a click in the diagram opens others; the shown card's deck, topic and card
+  highlighted; empty at a fresh start, filling as the learner explores. A click on a card selects it, on a topic
+  lists its cards in the cards row, on a deck lists its topics in the topics row with the cards row empty; a click on
+  a deck or a topic leaves the card as it is. A selection in any way opens the shown card's deck and topic again.
 * The slide row: five tiles, S, C, T, D and P, each the generation the app runs (S2 with the encoder, else S1; C1,
   T1, D1, P1) with its headline and its two numbers with their verdict words from the results files
   (standalone.headlines, the same numbers and words as the models view), one line where a results file is missing;
   nothing live. A click on a tile opens the model's panel over the two columns, the tiles staying visible; another
   tile shows that model in its place, a second click on the open tile closes it; Enter does nothing while it is open.
 * The state: the read and explored flags, the shown card and the trail in the dashboard's own state file
-  (state.DashboardState, saved at every change); the flip, Related drawn, the last request and the open tile in the
-  `view` store (HOME's keys), runtime only. The closed start: a fresh start shows nothing, a restart shows the
+  (state.DashboardState, saved at every change); the flip, Related drawn, the last request, the open tile and the
+  diagram's open deck and topic in the `view` store (HOME's keys), runtime only. The closed start: a fresh start shows nothing, a restart shows the
   explored cards and the shown card again. No episodes' log.
 
-register_callback is the one callback: every button and the hidden input Enter writes are its inputs, the checks,
-the request box's text and the view its states; it renders every region from the state and the view (render).
+register_callback registers the page's callback: every button and the hidden inputs of Enter and of the diagram's
+clicks are its inputs, the checks, the request box's text and the view its states; it renders every region from the
+state and the view (render). Confirm's disabled state has a callback of its own on the checks, since the checks are
+the page's callback's state, not its input.
 """
 
+import json
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -54,7 +62,8 @@ from ..standalone.headlines import WHAT, headlines
 from ..standalone.results import LEVEL_FILES, Results, course_note
 from . import quiz
 from .layout import (
-    GO_SLOTS, KEY_INPUT, PANEL_LETTERS, PANEL_NAMES, RELATED_SLOTS, THIS_DECK, THIS_TOPIC, Dot, Entry, Tile, card_face, card_where,
+    DIAGRAM_INPUT, DIAGRAM_ROWS, GO_SLOTS, KEY_INPUT, PANEL_LETTERS, PANEL_NAMES, RELATED_SLOTS, THIS_DECK, THIS_TOPIC, Dot, Entry, Tile,
+    card_face, card_where,
     diagram, go_slots, model_panel, page_layout, prompt_answer, quiz_control_class, quiz_options, related_slots, related_toggle, tile_class,
 )
 from .state import DashboardState
@@ -63,14 +72,15 @@ ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"  # next to evaluate.py: the capstone's root
 TITLE = "Guided learning: the dashboard"
 # The view store: what is not saved. `request`: the last request as {"text", "match", "entries"}, the entries of
-# a "no match" as [deck id, topic id, card id] each
-HOME = {"back": False, "related": False, "request": None, "panel": None}
+# a "no match" as [deck id, topic id, card id] each, None once one of them is clicked; `open`: the diagram's open
+# deck and topic as [deck id, topic id or None] after a click on a deck or a topic, None for the shown card's
+HOME = {"back": False, "related": False, "request": None, "panel": None, "open": None}
 TURN_TRIGGERS = ("card-face", KEY_INPUT)  # a click on the card, Enter
 PROMPT_TRIGGERS = ("prompt-go", "prompt-text")  # Go, and Enter in the request box (its n_submit)
 RELATED_PREFIX, GO_PREFIX, TILE_PREFIX = "related-", "go-", "tile-"
 # The callback's outputs by name, in order (OUT gives each one's place in the result)
 OUTPUT_NAMES = (
-    ["view", "where", "face", "face_class", "quiz_class", "options", "checks", "confirm_disabled", "related_class", "related_disabled"]
+    ["view", "where", "face", "face_class", "quiz_class", "options", "checks", "related_class", "related_disabled"]
     + [name for index in range(RELATED_SLOTS) for name in (f"related_{index}", f"related_{index}_class")]
     + ["message", "answer_class"]
     + [name for index in range(GO_SLOTS) for name in (f"go_{index}", f"go_{index}_class")]
@@ -80,12 +90,14 @@ OUTPUT_NAMES = (
 )
 OUT = {name: index for index, name in enumerate(OUTPUT_NAMES)}
 # The callback's inputs, in order: the card's click, Enter, Confirm, Related, its slots, Back, Go, Enter in the box,
-# Go's slots, the tiles; then the states: the checks, the box's text, the view
+# Go's slots, the tiles, a click in the diagram; then the states: the checks, the box's text, the view
 INPUT_IDS = (
     ["card-face", KEY_INPUT, "quiz-confirm", "related-toggle"] + [f"{RELATED_PREFIX}{index}" for index in range(RELATED_SLOTS)]
     + ["back", "prompt-go", "prompt-text"] + [f"{GO_PREFIX}{index}" for index in range(GO_SLOTS)] + [f"{TILE_PREFIX}{letter}" for letter in PANEL_LETTERS]
+    + [DIAGRAM_INPUT]
 )
 INPUTS = len(INPUT_IDS)
+VALUE_INPUTS = (KEY_INPUT, DIAGRAM_INPUT)  # the hidden inputs, read by their value
 
 
 def slot_of(trigger, prefix: str) -> Optional[int]:
@@ -94,6 +106,19 @@ def slot_of(trigger, prefix: str) -> Optional[int]:
         return None
     rest = trigger[len(prefix):]
     return int(rest) if rest.isdigit() else None
+
+
+def diagram_click(value) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """The row ("deck", "topic" or "card"), the id and a topic's deck of a click in the diagram, from the hidden
+    input's JSON (assets/diagram.js); three Nones for anything else."""
+    try:
+        click = json.loads(value) if isinstance(value, str) else None
+    except ValueError:
+        click = None
+    if not isinstance(click, dict) or click.get("row") not in DIAGRAM_ROWS or not isinstance(click.get("id"), str):
+        return None, None, None
+    deck = click.get("deck")
+    return click["row"], click["id"], deck if isinstance(deck, str) else None
 
 
 class Dashboard:
@@ -218,23 +243,50 @@ class Dashboard:
 
     # --- the diagram -------------------------------------------------------------------------------------------
 
-    def diagram(self) -> tuple[list[Dot], list[Dot], list[Dot]]:
-        """The three rows: the explored decks in deck id order; the shown card's deck's topics that hold an explored
-        card, in file order; that topic's explored cards, in the topic's order; the shown card's highlighted."""
-        explored = {card_id for card_id in self.state.explored_ids if card_id in self.card_by_id}
+    def explored(self) -> set[str]:
+        return {card_id for card_id in self.state.explored_ids if card_id in self.card_by_id}
+
+    def explored_decks(self) -> list[str]:
+        """The decks that hold an explored card, in deck id order."""
+        return sorted({self.model.deck_of[card_id] for card_id in self.explored() if card_id in self.model.deck_of})
+
+    def explored_topics(self, deck_id: Optional[str]) -> list[TopicLayout]:
+        """The deck's topics that hold an explored card, in file order."""
+        if deck_id is None:
+            return []
+        explored = self.explored()
+        return [placed for placed in self.model.topics_of_deck(deck_id) if any(card_id in explored for card_id in placed.ids)]
+
+    def opened(self, view_open) -> tuple[Optional[str], Optional[str]]:
+        """The diagram's open deck and topic: the ones a click in the diagram opened (the view's `open`), else the
+        shown card's."""
+        if isinstance(view_open, (list, tuple)) and len(view_open) == 2:
+            return view_open[0], view_open[1]
+        shown = self.state.shown if self.state.shown in self.card_by_id else None
+        topic = self.topic_of(shown)
+        return (self.model.deck_of.get(shown) if shown else None), (topic.topic_id if topic is not None else None)
+
+    def diagram(self, view_open=None) -> tuple[list[Dot], list[Dot], list[Dot]]:
+        """The three rows: the explored decks in deck id order; the open deck's topics that hold an explored card, in
+        file order; the open topic's explored cards, in the topic's order (opened: the shown card's deck and topic, or
+        the ones a click in the diagram opened); the shown card's deck, topic and card highlighted, the open deck and
+        topic marked."""
+        explored = self.explored()
         shown = self.state.shown if self.state.shown in self.card_by_id else None
         shown_deck = self.model.deck_of.get(shown) if shown else None
         shown_topic = self.topic_of(shown)
-        deck_ids = sorted({self.model.deck_of[card_id] for card_id in explored if card_id in self.model.deck_of})
-        decks = [Dot(deck_id, self.deck_by_id[deck_id].name if deck_id in self.deck_by_id else deck_id, deck_id == shown_deck) for deck_id in deck_ids]
-        topics: list[Dot] = []
-        cards: list[Dot] = []
-        if shown_deck is not None:
-            for placed in self.model.topics_of_deck(shown_deck):
-                if any(card_id in explored for card_id in placed.ids):
-                    topics.append(Dot(placed.topic_id, placed.name, shown_topic is not None and placed.topic_id == shown_topic.topic_id))
-        if shown_topic is not None:
-            cards = [Dot(card_id, shorten(self.card_by_id[card_id].question), card_id == shown) for card_id in shown_topic.ids if card_id in explored]
+        shown_key = (shown_topic.deck_id, shown_topic.topic_id) if shown_topic is not None else None
+        open_deck, open_topic = self.opened(view_open)
+        decks = [
+            Dot(deck_id, self.deck_by_id[deck_id].name if deck_id in self.deck_by_id else deck_id, deck_id == shown_deck, deck_id == open_deck)
+            for deck_id in self.explored_decks()
+        ]
+        topics = [
+            Dot(placed.topic_id, placed.name, (placed.deck_id, placed.topic_id) == shown_key, placed.topic_id == open_topic, placed.deck_id)
+            for placed in self.explored_topics(open_deck)
+        ]
+        placed = self.model.topics.get((open_deck, open_topic)) if open_topic is not None else None
+        cards = [Dot(card_id, shorten(self.card_by_id[card_id].question), card_id == shown) for card_id in placed.ids if card_id in explored] if placed else []
         return decks, topics, cards
 
     # --- the slide row -----------------------------------------------------------------------------------------
@@ -254,17 +306,21 @@ class Dashboard:
 
     # --- the moves ---------------------------------------------------------------------------------------------
 
-    def step(self, view: Optional[dict], trigger, value=None, request: Optional[str] = None) -> tuple[dict, list]:
+    def step(self, view: Optional[dict], trigger, value=None, request: Optional[str] = None, clicked=None) -> tuple[dict, list]:
         """The view and the checks after a trigger: a click on the card or Enter turns it (a quiz's Confirm with
         checks, Enter on its back to the front with the checks cleared; nothing while a panel is open), Confirm
         judges, Related draws or hides the list, one of its entries shows that card, Back the card before, Go or
-        Enter in the box runs the request, one of Go's entries shows that card, a tile opens its panel or closes it.
-        A selection in any way explores the card, puts the front up, hides the list and clears the checks."""
+        Enter in the box runs the request, one of Go's entries shows that card and closes the answer, a tile opens its
+        panel or closes it, a click in the diagram (`clicked`, the hidden input's value) selects its card or opens its
+        deck or topic. A selection in any way explores the card, puts the front up, hides the list, clears the checks
+        and opens the shown card's deck and topic in the diagram."""
         view = {**HOME, **(view if isinstance(view, dict) else {})}
         if view["panel"] not in (None, *PANEL_LETTERS):
             view["panel"] = None
         if not isinstance(view["request"], dict):
             view["request"] = None
+        if not (isinstance(view["open"], (list, tuple)) and len(view["open"]) == 2):
+            view["open"] = None
         checks = list(value or [])
         state = self.state
         shown = state.shown if state.shown in self.card_by_id else None
@@ -276,7 +332,7 @@ class Dashboard:
             nonlocal checks
             state.show(card_id)
             self.changed = True
-            view["back"], view["related"], checks = False, False, []
+            view["back"], view["related"], view["open"], checks = False, False, None, []
 
         def judge() -> None:
             view["back"] = True
@@ -308,7 +364,7 @@ class Dashboard:
         elif trigger == "back":
             if state.back() is not None:
                 self.changed = True
-                view["back"], view["related"], checks = False, False, []
+                view["back"], view["related"], view["open"], checks = False, False, None, []
         elif trigger in PROMPT_TRIGGERS:
             text = (request or "").strip()
             if text:
@@ -321,9 +377,18 @@ class Dashboard:
             index = slot_of(trigger, GO_PREFIX)
             if index < len(entries):
                 select(entries[index].card_id)
+                view["request"] = None  # the answer closed
         elif isinstance(trigger, str) and trigger.startswith(TILE_PREFIX) and trigger[len(TILE_PREFIX):] in PANEL_LETTERS:
             letter = trigger[len(TILE_PREFIX):]
             view["panel"] = None if view["panel"] == letter else letter
+        elif trigger == DIAGRAM_INPUT:
+            row, dot_id, deck_id = diagram_click(clicked)
+            if row == "card" and state.is_explored(dot_id) and dot_id in self.card_by_id:
+                select(dot_id)
+            elif row == "deck" and dot_id in self.explored_decks():
+                view["open"] = [dot_id, None]  # the topics row lists the deck's topics, the cards row is empty
+            elif row == "topic" and any(placed.topic_id == dot_id for placed in self.explored_topics(deck_id)):
+                view["open"] = [deck_id, dot_id]  # the cards row lists the topic's cards
         return view, checks
 
     def render(self, view: dict, checks: Sequence) -> tuple:
@@ -334,7 +399,7 @@ class Dashboard:
         face, face_class = card_face(card, view["back"], checks)
         entries = self.related_entries(shown) if card is not None and view["related"] else []
         go_entries = self.request_entries(view["request"])
-        decks, topics, cards = self.diagram()
+        decks, topics, cards = self.diagram(view["open"])
         tile = self.tile(view["panel"]) if view["panel"] in PANEL_LETTERS else None
         return (
             view,
@@ -344,7 +409,6 @@ class Dashboard:
             quiz_control_class(card, view["back"]),
             quiz_options(card),
             checks,
-            quiz.confirm_disabled(checks),
             *related_toggle(card is not None, view["related"]),
             *related_slots(entries, view["related"]),
             *prompt_answer(view["request"], go_entries),
@@ -357,10 +421,12 @@ class Dashboard:
 
 
 def register_callback(app: Dash, board: Dashboard):
-    """The dashboard's one callback; returns the function (for tests). Its inputs: the card's click, the hidden
-    input Enter writes, Confirm, Related and its slots, Back, Go and Enter in the request box, Go's slots and the
-    five tiles (INPUT_IDS); its states the checks, the box's text and the view. It steps the state and the view
-    (Dashboard.step), saves the state file when the state changed, and renders every region (Dashboard.render)."""
+    """The dashboard's callbacks; returns the page's (for tests). Its inputs: the card's click, the hidden input
+    Enter writes, Confirm, Related and its slots, Back, Go and Enter in the request box, Go's slots, the five tiles
+    and the hidden input a click in the diagram writes (INPUT_IDS); its states the checks, the box's text and the view.
+    It steps the state and the view (Dashboard.step), saves the state file when the state changed, and renders every
+    region (Dashboard.render). The second callback sets Confirm's disabled state from the checks, at every check and
+    whenever the page's callback sets them."""
 
     @app.callback(
         Output("view", "data"),
@@ -370,7 +436,6 @@ def register_callback(app: Dash, board: Dashboard):
         Output("quiz-control", "className"),
         Output("quiz-options", "options"),
         Output("quiz-options", "value"),
-        Output("quiz-confirm", "disabled"),
         Output("related-toggle", "className"),
         Output("related-toggle", "disabled"),
         *[output for index in range(RELATED_SLOTS) for output in (Output(f"{RELATED_PREFIX}{index}", "children"), Output(f"{RELATED_PREFIX}{index}", "className"))],
@@ -382,7 +447,7 @@ def register_callback(app: Dash, board: Dashboard):
         *[Output(f"{TILE_PREFIX}{letter}", "className") for letter in PANEL_LETTERS],
         Output("model-panel", "children"),
         Output("model-panel", "className"),
-        *[Input(component, "value" if component == KEY_INPUT else ("n_submit" if component == "prompt-text" else "n_clicks")) for component in INPUT_IDS],
+        *[Input(component, "value" if component in VALUE_INPUTS else ("n_submit" if component == "prompt-text" else "n_clicks")) for component in INPUT_IDS],
         State("quiz-options", "value"),
         State("prompt-text", "value"),
         State("view", "data"),
@@ -391,11 +456,15 @@ def register_callback(app: Dash, board: Dashboard):
         from dash import ctx
 
         checks, request, view = values[-3:]
-        view, checks = board.step(view, ctx.triggered_id, checks, request)
+        view, checks = board.step(view, ctx.triggered_id, checks, request, values[INPUT_IDS.index(DIAGRAM_INPUT)])
         if board.changed:
             board.state.save()
             board.changed = False
         return board.render(view, checks)
+
+    @app.callback(Output("quiz-confirm", "disabled"), Input("quiz-options", "value"))
+    def confirm(checks):
+        return quiz.confirm_disabled(checks)
 
     return update
 

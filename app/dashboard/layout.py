@@ -5,8 +5,9 @@ row, the slide row along the bottom at the full width, a model's panel over the 
 * the top bar: the title; the request box (`prompt-text`, Enter submits, and Go `prompt-go`), the one way in, with
   its answer hanging under it (`prompt-answer`: the message `prompt-message` and up to GO_SLOTS entries `go-<n>`,
   each a click to its card; hidden while there is nothing to say); Back (`back`), disabled on an empty trail;
-* the diagram (`diagram`), the left column: three rows, decks → topics → cards, each a row of dots in plain HTML,
-  named on hover (the `title`), the shown card's deck, topic and card highlighted; it takes no click;
+* the diagram (`diagram`), the left column: three rows, decks → topics → cards, each a row of items in plain HTML,
+  a dot with its name, the shown card's deck, topic and card highlighted, the open deck and topic marked; a click on
+  an item goes to the callback through the hidden input `diagram-click` (assets/diagram.js);
 * the card, the right column: its title row (`card-where`, the deck and the topic by name, and the Related button
   `related-toggle`), the card's frame with the card's face (`card-face`: the front or the back; a click on it turns
   a flashcard) and, under a quiz's question in the same frame, the options (`quiz-options`, the checks live in its
@@ -15,8 +16,9 @@ row, the slide row along the bottom at the full width, a model's panel over the 
 * the slide row (`tile-S` to `tile-P`): one tile per model with its headline and its two numbers with their verdict
   words, or one line where the results file is missing; a click opens the model's panel (`model-panel`) over the two
   columns, the tiles staying visible under it;
-* the hidden input `key-enter`, written by assets/keys.js on Enter outside the request box and the buttons, and the
-  `view` store (app.HOME's keys) with what is not saved: the flip, Related drawn, the last request, the open tile.
+* the hidden inputs `key-enter`, written by assets/keys.js on Enter outside the request box and the buttons, and
+  `diagram-click`, written by assets/diagram.js on a click in the diagram; the `view` store (app.HOME's keys) with
+  what is not saved: the flip, Related drawn, the last request, the open tile, the diagram's open deck and topic.
 
 What the regions show comes from app.Dashboard; the state is its own (state.DashboardState).
 """
@@ -30,6 +32,8 @@ from ..standalone.layout import PANEL_LETTERS, PANEL_NAMES
 from . import quiz
 
 KEY_INPUT = "key-enter"  # the hidden input Enter writes (assets/keys.js)
+DIAGRAM_INPUT = "diagram-click"  # the hidden input a click in the diagram writes (assets/diagram.js)
+DIAGRAM_ROWS = ("deck", "topic", "card")  # the rows' names in a click, by the rows' order
 RELATED_SLOTS = 6  # the next card, marked, then the five neighbours
 GO_SLOTS = 3  # the nearest three topics of a "no match"
 EYEBROW = "GUIDED LEARNING · THE DASHBOARD"
@@ -60,11 +64,14 @@ class Entry(NamedTuple):
 
 
 class Dot(NamedTuple):
-    """A dot of the diagram: its id, its name on hover, whether it is the shown card's."""
+    """An item of the diagram: its id, its name, whether it is the shown card's, whether it is the open deck or topic
+    (the one whose topics or cards the next row lists), and a topic's deck."""
 
     dot_id: str
     name: str
     current: bool = False
+    opened: bool = False
+    deck: str = ""
 
 
 class Tile(NamedTuple):
@@ -201,19 +208,23 @@ def go_slots(entries: Sequence[Entry]) -> list:
 # --- the diagram -------------------------------------------------------------------------------------------------
 
 
+def diagram_item(row: str, dot: Dot) -> html.Span:
+    """An item of a row: the dot and its name (the full name on hover too), its row, its id and a topic's deck as
+    data for assets/diagram.js; a span, so the focus stays where Enter turns the card."""
+    data = {"data-row": row, "data-dot": dot.dot_id}
+    if dot.deck:
+        data["data-deck"] = dot.deck
+    class_name = "diagram-item" + (" current" if dot.current else "") + (" open" if dot.opened else "")
+    return html.Span([html.Span(className="dot"), html.Span(dot.name, className="dot-name")], className=class_name, title=dot.name, **data)
+
+
 def diagram(decks: Sequence[Dot], topics: Sequence[Dot], cards: Sequence[Dot]) -> list:
-    """The three rows, decks → topics → cards: each a label and its dots, a dot named on hover, the shown card's
-    deck, topic and card highlighted; no click anywhere."""
+    """The three rows, decks → topics → cards: each a label and its items, a dot with its name, the shown card's
+    deck, topic and card highlighted, the open deck and topic marked."""
     rows = []
-    for label, dots in zip(ROW_LABELS, (decks, topics, cards)):
+    for label, row, dots in zip(ROW_LABELS, DIAGRAM_ROWS, (decks, topics, cards)):
         rows.append(html.Div(
-            [
-                html.Div(label, className="diagram-label"),
-                html.Div(
-                    [html.Span(className="dot current" if dot.current else "dot", title=dot.name, **{"data-dot": dot.dot_id}) for dot in dots],
-                    className="diagram-dots",
-                ),
-            ],
+            [html.Div(label, className="diagram-label"), html.Div([diagram_item(row, dot) for dot in dots], className="diagram-dots")],
             className="diagram-row",
         ))
     return rows
@@ -287,7 +298,8 @@ def model_panel(tile: Optional[Tile]) -> tuple[list, str]:
 
 def page_layout(home: dict, tiles: Sequence[Tile]) -> html.Main:
     """The page: the top bar with the request box, its answer and Back; the diagram and the card with its Related
-    list; the slide row's tiles; the model's panel; the hidden input Enter writes and the `view` store."""
+    list; the slide row's tiles; the model's panel; the hidden inputs of Enter and of the diagram's clicks and the
+    `view` store."""
     return html.Main(
         [
             html.Header(
@@ -333,6 +345,7 @@ def page_layout(home: dict, tiles: Sequence[Tile]) -> html.Main:
             html.Section([tile_button(tile) for tile in tiles], className="slide-row"),
             dcc.Store(id="view", data=dict(home)),
             dcc.Input(id=KEY_INPUT, value="0", type="text", className="hidden-input"),
+            dcc.Input(id=DIAGRAM_INPUT, value="", type="text", className="hidden-input"),
         ],
         className="app-shell",
     )

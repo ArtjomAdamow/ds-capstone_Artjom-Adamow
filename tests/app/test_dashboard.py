@@ -1,14 +1,15 @@
 """The dashboard (app.dashboard) on the test course as a course table, with nothing of the viewer: the closed start
-and a restart with the explored cards and the shown card; what explores a card (Go's answer, a Related entry and a
-Go entry when clicked, Back; nothing when Related is drawn); the two sides and the turn marking read, a quiz judged
-right and wrong, Confirm disabled with nothing checked, Enter on the back; Related's order with the next card first
-and again in its place, and each entry's place; Back on the trail, disabled on an empty one; a request's answer
-showing the card, "no match" with its entries, an empty request; the diagram's highlights, its explored set and its
-empty start, no click on it; the five tiles on the results fixtures and the line without a file, a tile opening its
-panel, a second tile replacing it, the open tile closing it, Enter doing nothing while it is open; the layout's
-regions and the stylesheet; the state file; the judgement's functions; and that nothing of the viewer or the glue
-is imported (a subprocess with the viewer blocked). The real course's table serves a request too (skipped without
-it)."""
+and a restart with the explored cards and the shown card; what explores a card (Go's answer, a Related entry, a Go
+entry and a card in the diagram when clicked, Back; nothing when Related is drawn); the two sides and the turn
+marking read, a quiz judged right and wrong, Confirm disabled with nothing checked and enabled by its own callback
+on the checks, Enter on the back; Related's order with the next card first and again in its place, and each entry's
+place; Back on the trail, disabled on an empty one; a request's answer showing the card, "no match" with its
+entries and a click on one closing the answer, an empty request; the diagram's names, highlights, its explored set
+and its empty start, a click on a deck, a topic or a card; the five tiles on the results fixtures and the line
+without a file, a tile opening its panel, a second tile replacing it, the open tile closing it, Enter doing nothing
+while it is open; the layout's regions and the stylesheet; the state file; the judgement's functions; and that
+nothing of the viewer or the glue is imported (a subprocess with the viewer blocked). The real course's table serves
+a request too (skipped without it)."""
 
 import model_support
 
@@ -26,10 +27,10 @@ import test_standalone
 from app.course_table import load_table, missing_files
 from app.dashboard import main as dashboard_main
 from app.dashboard import quiz
-from app.dashboard.app import ASSETS_DIR, HOME, INPUTS, OUT, OUTPUT_NAMES, Dashboard, create_app, register_callback
+from app.dashboard.app import ASSETS_DIR, HOME, INPUT_IDS, INPUTS, OUT, OUTPUT_NAMES, Dashboard, create_app, diagram_click, register_callback
 from app.dashboard.layout import (
-    BACK_HINT, BEGIN_HINT, FLASHCARD_HINT, GO_SLOTS, KEY_INPUT, NEXT_MARK, NO_MATCH, NO_MATCH_NEAREST, PANEL_LETTERS, RELATED_SLOTS,
-    THIS_DECK, THIS_TOPIC, page_layout, tile_class,
+    BACK_HINT, BEGIN_HINT, DIAGRAM_INPUT, FLASHCARD_HINT, GO_SLOTS, KEY_INPUT, NEXT_MARK, NO_MATCH, NO_MATCH_NEAREST, PANEL_LETTERS,
+    RELATED_SLOTS, THIS_DECK, THIS_TOPIC, page_layout, tile_class,
 )
 from app.dashboard.state import STATE_NAME, VERSION, DashboardState
 from app.neighbours import rank_by_confidence, shorten
@@ -63,12 +64,22 @@ def texts(children) -> list[str]:
 
 
 def dots(diagram) -> list[list[tuple[str, bool]]]:
-    """The diagram's three rows: (the dot's id, whether it is the current one) per dot."""
+    """The diagram's three rows: (the item's id, whether it is the current one) per item."""
     rows = []
     for row in diagram:
         spans = row.children[1].children
-        rows.append([(props(span)["data-dot"], "current" in span.className) for span in spans])
+        rows.append([(props(span)["data-dot"], "current" in span.className.split()) for span in spans])
     return rows
+
+
+def opened(diagram) -> list[list[str]]:
+    """The diagram's three rows: the ids of the items marked open."""
+    return [[props(span)["data-dot"] for span in row.children[1].children if "open" in span.className.split()] for row in diagram]
+
+
+def names(diagram) -> list[list[str]]:
+    """The diagram's three rows: the names the items show."""
+    return [[span.children[1].children for span in row.children[1].children] for row in diagram]
 
 
 def entries(result, prefix: str, slots: int) -> list[tuple[str, list[str]]]:
@@ -81,6 +92,25 @@ def entries(result, prefix: str, slots: int) -> list[tuple[str, list[str]]]:
     return found
 
 
+class CallbackRecorder:
+    """An app that keeps every callback with its dependencies (test_standalone.RecordingApp keeps none)."""
+
+    def __init__(self):
+        self.callbacks: list = []
+
+    def callback(self, *dependencies):
+        def register(function):
+            self.callbacks.append((dependencies, function))
+            return function
+
+        return register
+
+    def outputs(self, component_id: str, prop: str) -> list:
+        """The callbacks with that output, as (dependencies, function)."""
+        return [(dependencies, function) for dependencies, function in self.callbacks for output in dependencies
+                if type(output).__name__ == "Output" and (output.component_id, output.component_property) == (component_id, prop)]
+
+
 class Driver(unittest.TestCase):
     """The callback driven by triggers, the view and the checks kept between calls, a fresh state per test."""
 
@@ -89,17 +119,32 @@ class Driver(unittest.TestCase):
     def setUp(self):
         self.board.state = DashboardState()
         self.board.changed = False
-        self.update = register_callback(test_standalone.RecordingApp(), self.board)
+        self.app = CallbackRecorder()
+        self.update = register_callback(self.app, self.board)
         self.view = None
         self.checks: list = []
+        self.clicks = 0
 
-    def call(self, trigger, checks=None, request=None):
+    def call(self, trigger, checks=None, request=None, clicked=None):
         checks = self.checks if checks is None else checks
+        inputs = [0] * INPUTS
+        if clicked is not None:
+            inputs[INPUT_IDS.index(DIAGRAM_INPUT)] = clicked
         with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
-            result = self.update(*([0] * INPUTS), checks, request, self.view)
+            result = self.update(*inputs, checks, request, self.view)
         self.view = result[OUT["view"]]
         self.checks = result[OUT["checks"]]
         return result
+
+    def click(self, row, dot_id, deck=None):
+        """A click on an item of the diagram, as assets/diagram.js writes it into the hidden input."""
+        self.clicks += 1
+        return self.call(DIAGRAM_INPUT, clicked=json.dumps({"row": row, "id": dot_id, "deck": deck, "count": self.clicks}))
+
+    def confirm_disabled(self, checks) -> bool:
+        """Confirm's disabled state from its own callback on the checks."""
+        (_dependencies, function), = self.app.outputs("quiz-confirm", "disabled")
+        return function(checks)
 
     def go(self, text):
         return self.call("prompt-go", request=text)
@@ -136,7 +181,7 @@ class DashboardTest(Driver):
         self.assertIn(BEGIN_HINT, texts(result[OUT["face"]]))
         self.assertEqual(result[OUT["face_class"]], "card-face empty")
         self.assertEqual(result[OUT["quiz_class"]], "quiz-control hidden")
-        self.assertTrue(result[OUT["confirm_disabled"]])
+        self.assertTrue(self.confirm_disabled(result[OUT["checks"]]))
         self.assertTrue(result[OUT["related_disabled"]])
         self.assertEqual(entries(result, "related", RELATED_SLOTS), [])
         self.assertEqual(result[OUT["answer_class"]], "prompt-answer hidden")
@@ -171,9 +216,9 @@ class DashboardTest(Driver):
         self.assertEqual([option["value"] for option in result[OUT["options"]]], [0, 1, 2, 3])
         self.assertEqual([option["label"].children for option in result[OUT["options"]]], list(self.board.card_by_id[SLICING].options))
         self.assertEqual(result[OUT["checks"]], [])
-        self.assertTrue(result[OUT["confirm_disabled"]])
+        self.assertTrue(self.confirm_disabled(result[OUT["checks"]]))
 
-    def test_no_match_lists_the_nearest_topics_cards_and_a_click_on_one_shows_and_explores_it(self):
+    def test_no_match_lists_the_nearest_topics_cards_and_a_click_on_one_shows_and_explores_it_and_closes_the_answer(self):
         result = self.go("how to bake bread")
         self.assertIsNone(self.state.shown)
         self.assertEqual(self.state.explored_ids, set())  # nothing explored ahead
@@ -185,15 +230,19 @@ class DashboardTest(Driver):
         self.assertTrue(listed[1][1][0].startswith("Alpha › Dictionaries · "))
         stored = self.view["request"]["entries"]
         self.assertEqual([entry[:2] for entry in stored], [["01", "01"], ["01", "02"]])
+        self.call("go-2")  # no such entry: nothing, the answer stays
+        self.assertIsNone(self.state.shown)
+        self.assertEqual(self.view["request"]["entries"], stored)
         result = self.call("go-1")
         self.assertEqual(self.state.shown, stored[1][2])
         self.assertEqual(self.state.explored_ids, {stored[1][2]})
-        self.assertEqual(result[OUT["answer_class"]], "prompt-answer")  # the entries stay until the next request
-        self.assertEqual(len(entries(result, "go", GO_SLOTS)), 2)
-        self.call("go-2")  # no such entry: nothing
+        self.assertEqual(result[OUT["answer_class"]], "prompt-answer hidden")  # the answer closed
+        self.assertEqual(entries(result, "go", GO_SLOTS), [])
+        self.assertIsNone(self.view["request"])
+        self.call("go-0")  # the closed answer's slot: nothing
         self.assertEqual(self.state.shown, stored[1][2])
-        self.go("how do I slice a list")
         self.assertEqual(result[OUT["back_disabled"]], True)
+        self.go("how do I slice a list")
         self.assertEqual(self.call(None)[OUT["answer_class"]], "prompt-answer hidden")
 
     def test_an_empty_request_does_nothing(self):
@@ -229,13 +278,13 @@ class DashboardTest(Driver):
 
     def test_a_quiz_is_judged_by_confirm_or_enter_right_only_with_exactly_the_correct_options(self):
         result = self.show(SLICING)
-        self.assertTrue(result[OUT["confirm_disabled"]])
+        self.assertTrue(self.confirm_disabled(result[OUT["checks"]]))
         result = self.call("quiz-confirm", checks=[])  # nothing checked: no answer
         self.assertEqual(result[OUT["face_class"]], "card-face quiz front")
         self.assertFalse(self.state.is_read(SLICING))
         result = self.call("card-face", checks=[1])  # a click on a quiz's front does nothing
         self.assertEqual(result[OUT["face_class"]], "card-face quiz front")
-        self.assertFalse(result[OUT["confirm_disabled"]])
+        self.assertFalse(self.confirm_disabled(result[OUT["checks"]]))
         result = self.call("quiz-confirm", checks=[1])
         self.assertEqual(result[OUT["face_class"]], "card-face quiz back")
         shown = texts(result[OUT["face"]])
@@ -248,7 +297,7 @@ class DashboardTest(Driver):
         result = self.enter()  # Enter on the back: the front with the checks cleared
         self.assertEqual(result[OUT["face_class"]], "card-face quiz front")
         self.assertEqual(result[OUT["checks"]], [])
-        self.assertTrue(result[OUT["confirm_disabled"]])
+        self.assertTrue(self.confirm_disabled(result[OUT["checks"]]))
         result = self.call(KEY_INPUT, checks=[0, 1])  # a wrong one next to the correct one: wrong
         self.assertEqual(texts(result[OUT["face"]])[0], quiz.WRONG_LABEL)
         blocks = result[OUT["face"]][1].children
@@ -259,6 +308,22 @@ class DashboardTest(Driver):
         self.assertIn("Slicing a list with start and stop indices returns a new list.", str(result[OUT["face"]]))
         self.assertEqual(self.call(KEY_INPUT, checks=[])[OUT["face_class"]], "card-face quiz front")
         self.assertEqual(self.call(KEY_INPUT, checks=[])[OUT["face_class"]], "card-face quiz front")  # Enter with nothing checked
+
+    def test_confirm_is_enabled_by_its_own_callback_on_the_checks_and_turns_the_quiz_to_its_back(self):
+        (dependencies, function), = self.app.outputs("quiz-confirm", "disabled")
+        self.assertEqual([(item.component_id, item.component_property) for item in dependencies[1:]], [("quiz-options", "value")])  # every check
+        page, = self.app.outputs("view", "data")
+        self.assertNotIn(("quiz-confirm", "disabled"), [(item.component_id, item.component_property) for item in page[0] if type(item).__name__ == "Output"])
+        result = self.show(SLICING)
+        self.assertTrue(function(result[OUT["checks"]]))  # nothing checked: disabled
+        self.assertFalse(function([0]))  # a check enables it, without the page's callback
+        result = self.call("quiz-confirm", checks=[0])
+        self.assertEqual(result[OUT["face_class"]], "card-face quiz back")  # the flipped side
+        self.assertEqual(texts(result[OUT["face"]])[0], quiz.CORRECT_LABEL)
+        self.assertFalse(function(result[OUT["checks"]]))  # the checks kept on the back
+        self.assertTrue(self.state.is_read(SLICING))
+        result = self.enter()
+        self.assertTrue(function(result[OUT["checks"]]))  # the front again, the checks cleared
 
     def test_related_lists_the_next_card_first_and_again_in_its_place_with_where_each_lies(self):
         result = self.show(COMMIT)
@@ -345,7 +410,7 @@ class DashboardTest(Driver):
         self.go("how do I slice a list")  # the same card again: the trail is unchanged
         self.assertEqual(self.state.trail, [])
 
-    def test_the_diagram_draws_the_explored_set_with_the_shown_cards_place_highlighted_and_takes_no_click(self):
+    def test_the_diagram_draws_the_explored_set_by_name_with_the_shown_cards_place_highlighted(self):
         self.go("how do I slice a list")
         result = self.go("null hypothesis")
         tests_card = self.state.shown
@@ -353,14 +418,16 @@ class DashboardTest(Driver):
         self.assertEqual(decks, [("01", False), ("03", True)])  # the explored decks in deck id order
         self.assertEqual(topics, [("02", True)])  # Gamma's topics with an explored card: Tests alone
         self.assertEqual(cards, [(tests_card, True)])
+        self.assertEqual(names(result[OUT["diagram"]]), [["Alpha", "Gamma"], ["Tests"], [shorten(self.board.card_by_id[tests_card].question)]])
         titles = [props(span)["title"] for row in result[OUT["diagram"]] for span in row.children[1].children]
-        self.assertEqual(titles[:2], ["Alpha", "Gamma"])  # named on hover
-        self.assertEqual(titles[2], "Tests")
-        self.assertEqual(titles[3], shorten(self.board.card_by_id[tests_card].question))
-        for row in result[OUT["diagram"]]:
+        self.assertEqual(titles, ["Alpha", "Gamma", "Tests", shorten(self.board.card_by_id[tests_card].question)])  # on hover too
+        self.assertEqual(opened(result[OUT["diagram"]]), [["03"], ["02"], []])  # the shown card's deck and topic open
+        for row, name in zip(result[OUT["diagram"]], ("deck", "topic", "card")):
             for span in row.children[1].children:
-                self.assertEqual(type(span).__name__, "Span")  # no button, no click
-                self.assertIsNone(getattr(span, "n_clicks", None))
+                self.assertEqual(type(span).__name__, "Span")  # no button: the focus stays where Enter turns the card
+                self.assertIsNone(getattr(span, "n_clicks", None))  # its click goes through the hidden input
+                self.assertEqual(props(span)["data-row"], name)
+        self.assertEqual([props(span).get("data-deck") for span in result[OUT["diagram"]][1].children[1].children], ["03"])  # a topic's deck
         self.board.state.show("103001")  # Intervals, in the same deck
         decks, topics, cards = dots(self.call(None)[OUT["diagram"]])
         self.assertEqual(topics, [("01", True), ("02", False)])  # both topics hold an explored card now
@@ -368,6 +435,64 @@ class DashboardTest(Driver):
         self.call("back")
         decks, topics, cards = dots(self.call(None)[OUT["diagram"]])
         self.assertEqual((decks[1], topics[1], cards), (("03", True), ("02", True), [(tests_card, True)]))
+
+    def test_a_click_on_a_deck_lists_its_topics_on_a_topic_its_cards_and_on_a_card_selects_it(self):
+        self.go("how do I slice a list")
+        lists_card = self.state.shown
+        self.go("null hypothesis")
+        tests_card = self.state.shown
+        self.board.state.show("103001")  # Intervals, in Gamma too
+        result = self.call("card-face")  # turned: the back up
+        self.call("related-toggle")  # the list drawn
+        self.assertEqual(result[OUT["face_class"]], "card-face back")
+        face = str(result[OUT["face"]])
+        result = self.click("deck", "01")  # Alpha: its topics, the cards row empty, the card as it was
+        decks, topics, cards = dots(result[OUT["diagram"]])
+        self.assertEqual(decks, [("01", False), ("03", True)])
+        self.assertEqual(topics, [("01", False)])  # Alpha's topics with an explored card: Lists alone, none the shown card's
+        self.assertEqual(cards, [])
+        self.assertEqual(opened(result[OUT["diagram"]]), [["01"], [], []])
+        self.assertEqual(self.view["open"], ["01", None])
+        self.assertEqual((self.state.shown, result[OUT["face_class"]], str(result[OUT["face"]])), ("103001", "card-face back", face))
+        self.assertTrue(self.view["related"])  # Related still drawn
+        self.assertEqual(texts(result[OUT["where"]]), ["Gamma › Intervals"])
+        result = self.click("topic", "01", "01")  # Lists: its explored cards, the card as it was
+        decks, topics, cards = dots(result[OUT["diagram"]])
+        self.assertEqual(cards, [(lists_card, False)])
+        self.assertEqual(opened(result[OUT["diagram"]]), [["01"], ["01"], []])
+        self.assertEqual((self.state.shown, result[OUT["face_class"]], self.view["back"]), ("103001", "card-face back", True))
+        self.assertEqual(self.state.trail, [lists_card, tests_card])
+        result = self.click("card", lists_card)  # a card: selected, the diagram on its deck and topic
+        self.assertEqual(self.state.shown, lists_card)
+        self.assertEqual(self.state.trail, [lists_card, tests_card, "103001"])
+        self.assertEqual(result[OUT["face_class"]], "card-face quiz front" if lists_card == SLICING else "card-face front")
+        self.assertFalse(self.view["related"])
+        self.assertIsNone(self.view["open"])
+        self.assertEqual(dots(result[OUT["diagram"]]), [[("01", True), ("03", False)], [("01", True)], [(lists_card, True)]])
+        self.assertEqual(texts(result[OUT["where"]]), ["Alpha › Lists"])
+        self.click("deck", "03")
+        result = self.click("topic", "02", "03")  # Gamma's Tests opened, then Back: the shown card's place again
+        self.assertEqual(dots(result[OUT["diagram"]])[2], [(tests_card, False)])
+        result = self.call("back")
+        self.assertEqual(self.state.shown, "103001")
+        self.assertIsNone(self.view["open"])
+        self.assertEqual(dots(result[OUT["diagram"]])[1:], [[("01", True), ("02", False)], [("103001", True)]])
+
+    def test_a_click_in_the_diagram_on_nothing_explored_does_nothing(self):
+        self.go("null hypothesis")
+        shown = self.state.shown
+        for row, dot_id, deck in (("card", "102001", None), ("deck", "02", None), ("topic", "01", "02"), ("topic", "09", "03"), ("dot", "03", None)):
+            result = self.click(row, dot_id, deck)
+            self.assertEqual(self.state.shown, shown, (row, dot_id))
+            self.assertIsNone(self.view["open"], (row, dot_id))
+        self.assertEqual(self.state.explored_ids, {shown})
+        for value in (None, "", "not json", "[]", json.dumps({"row": "card"}), 0):
+            self.assertEqual(diagram_click(value), (None, None, None))
+            self.call(DIAGRAM_INPUT, clicked=value)
+            self.assertEqual(self.state.shown, shown)
+        self.assertEqual(diagram_click(json.dumps({"row": "topic", "id": "02", "deck": "03", "count": 4})), ("topic", "02", "03"))
+        self.assertEqual(self.click("card", shown)[OUT["face_class"]], "card-face front")  # the shown card itself: the front up
+        self.assertEqual(self.state.trail, [])
 
     def test_the_tiles_say_how_to_make_the_results_files_and_open_their_panel_one_at_a_time(self):
         result = self.call(None)
@@ -406,7 +531,7 @@ class DashboardTest(Driver):
         layout = page_layout(HOME, self.board.tiles())
         text = str(layout)
         for component_id in (
-            "view", KEY_INPUT, "prompt-text", "prompt-go", "prompt-answer", "prompt-message", "back", "diagram", "card-where", "related-toggle",
+            "view", KEY_INPUT, DIAGRAM_INPUT, "prompt-text", "prompt-go", "prompt-answer", "prompt-message", "back", "diagram", "card-where", "related-toggle",
             "card-face", "quiz-control", "quiz-options", "quiz-confirm", "model-panel",
             *[f"related-{index}" for index in range(RELATED_SLOTS)], *[f"go-{index}" for index in range(GO_SLOTS)],
             *[f"tile-{letter}" for letter in PANEL_LETTERS],
@@ -427,6 +552,11 @@ class DashboardTest(Driver):
         keys = (ASSETS_DIR / "keys.js").read_text(encoding="utf-8")
         self.assertIn(f'"{KEY_INPUT}"', keys)
         self.assertIn('event.key !== "Enter"', keys)
+        clicks = (ASSETS_DIR / "diagram.js").read_text(encoding="utf-8")
+        self.assertIn(f'"{DIAGRAM_INPUT}"', clicks)
+        self.assertIn('closest(".diagram-item")', clicks)
+        self.assertIn(".prompt-box .prompt-input { flex: 1; min-width: 0; height: auto;", css)  # the box at its text's height
+        self.assertNotIn("text-overflow: ellipsis; white-space: nowrap; }\n.related-toggle", css)  # the card's title row wraps
         app = create_app(self.board)
         self.assertEqual(app.title, "Guided learning: the dashboard")
         self.assertEqual(str(ASSETS_DIR.name), "assets")

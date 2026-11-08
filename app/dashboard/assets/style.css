@@ -2,7 +2,8 @@
 /* The dashboard (app.dashboard): the one theme, its tokens written anew here (no file of the viewer is copied), by
    the space rule: the top bar, under it two columns at the screen's height less the slide row (the diagram left, the
    card right), the slide row along the bottom at the full width, a model's panel over the two columns while a tile is
-   open; no scroll bar at the top level, one inside the card's frame for a quiz too tall for it; nothing shrinks. The
+   open; no scroll bar at the top level, one inside the card's frame for a quiz too tall for it and one inside a
+   diagram's row too full for it; nothing shrinks. The
    type scale is the models view's: the panel's numbers --size-number, the headings and the tiles' numbers
    --size-heading, the body --size-body, the labels 1rem; the card's text --size-card; nothing below 16 px. Under
    1400 px (a projector's 1280 x 720) the scale is a step smaller. Landscape only: no stacked layout. */
@@ -22,7 +23,7 @@
   --size-body: 1.25rem;
   --size-card: clamp(1.35rem, 2.2vw, 2rem);
   --gap: 20px;
-  --dot: 26px;
+  --dot: 18px;
 }
 
 * { box-sizing: border-box; }
@@ -30,7 +31,9 @@ html, body { height: 100%; }
 body { margin: 0; background: var(--navy-deep); color: var(--ink); font-family: 'Space Grotesk', sans-serif; font-size: var(--size-body); line-height: 1.35; }
 .app-shell { height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 14px 32px 20px; overflow: hidden; background: radial-gradient(circle at 78% 18%, rgba(245, 185, 66, 0.12), transparent 28%), linear-gradient(135deg, var(--navy-deep), var(--navy)); }
 
-/* The top bar: the title, the request box with its answer hanging under it, Back */
+/* The top bar: the title, the request box with its answer hanging under it, Back. Dash's input is a container
+   (.dash-input-container, 34 px high, its overflow hidden) around the input (.dash-input-element): the box takes its
+   height from the text, the padding on the input */
 .topbar { flex: 0 0 auto; height: 72px; display: flex; align-items: center; gap: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .topbar-title { flex: 0 0 auto; }
 .eyebrow, .card-label, .diagram-label { color: var(--gold); font-family: 'DM Mono', monospace; font-size: 1rem; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -41,30 +44,38 @@ h1 { margin: 2px 0 0; font-size: clamp(1.5rem, 2.6vw, 2.4rem); line-height: 1; f
 .top-button:disabled { opacity: 0.4; cursor: not-allowed; }
 .topbar-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
 .prompt-box { position: relative; flex: 1 1 auto; min-width: 0; max-width: 760px; display: flex; gap: 10px; }
-.prompt-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 8px 12px; font: var(--size-body) 'Space Grotesk', sans-serif; }
-.prompt-input:focus { outline: none; border-color: var(--gold); }
+.prompt-box .prompt-input { flex: 1; min-width: 0; height: auto; border: 1px solid var(--line); border-radius: 0; outline: none; background: rgba(16, 42, 67, 0.72); color: var(--ink); padding: 0; font: var(--size-body) 'Space Grotesk', sans-serif; }
+.prompt-box .prompt-input .dash-input-element { height: auto; padding: 8px 12px; border-radius: 0; line-height: 1.35; }
+.prompt-box .prompt-input:focus-within { border-color: var(--gold); outline: none; }
 .prompt-go { padding: 8px 18px; }
 .prompt-answer { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 6; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(7, 24, 39, 0.97); border: 1px solid var(--gold); }
 .prompt-answer.hidden { display: none; }
 .prompt-message-text { color: var(--ink); font-size: var(--size-body); }
-/* The hidden input Enter writes (keys.js); never shown */
-.hidden-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* The hidden inputs Enter and a click in the diagram write (keys.js, diagram.js); never shown, taking no room */
+.app-shell .hidden-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 /* The workspace: the diagram left, the card right, both at the height left under the top bar and above the slide row */
 .workspace { position: relative; flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--gap); }
 
-/* The diagram: three rows, decks, topics, cards, each a label and its dots; no click */
-.diagram { min-height: 0; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.diagram-row { min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); }
-.diagram-dots { flex: 1 1 auto; min-height: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 10px; overflow: hidden; }
-.dot { width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--muted); opacity: 0.85; }
-.dot.current { background: var(--gold); opacity: 1; box-shadow: 0 0 0 4px rgba(245, 185, 66, 0.3); }
+/* The diagram: three rows, decks, topics, cards, each a label and its items, a dot with its name; a click on an item
+   (diagram.js) selects a card or opens a deck or a topic. The rows share the column's height by their content, each
+   at least its label and one line; a row too full scrolls inside itself */
+.diagram { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.diagram-row { flex: 1 1 auto; min-width: 0; min-height: 5.5rem; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; border: 1px solid var(--line); background: rgba(16, 42, 67, 0.5); }
+.diagram-dots { flex: 1 1 auto; min-height: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px 10px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.diagram-item { max-width: 100%; display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 6px; border: 1px solid transparent; color: var(--ink); font-size: 1rem; line-height: 1.3; cursor: pointer; }
+.diagram-item:hover { background: var(--hover); }
+.diagram-item.open { border-color: var(--gold); }
+.dot { flex: 0 0 auto; width: var(--dot); height: var(--dot); border-radius: 50%; background: var(--muted); opacity: 0.85; }
+.diagram-item.current .dot { background: var(--gold); opacity: 1; box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.3); }
+.diagram-item.current .dot-name { color: var(--gold); }
+.dot-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The card: its title row with Related, the frame with the face and a quiz's options, the Related list under it */
-.card-column { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.card-column { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .card-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 42px; }
-.card-where { color: var(--muted); font: 1.25rem 'DM Mono', monospace; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.related-toggle { border: 1px solid var(--line); background: transparent; color: var(--muted); padding: 8px 16px; font: 600 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
+.card-where { color: var(--muted); font: 1.25rem 'DM Mono', monospace; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
+.related-toggle { flex: 0 0 auto; border: 1px solid var(--line); background: transparent; color: var(--muted); padding: 8px 16px; font: 600 1rem 'Space Grotesk', sans-serif; cursor: pointer; }
 .related-toggle:hover { background: var(--hover); color: var(--ink); }
 .related-toggle.open { border-color: var(--gold); color: var(--gold); }
 .related-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -138,11 +149,11 @@ h1 { margin: 2px 0 0; font-size: clamp(1.5rem, 2.6vw, 2.4rem); line-height: 1; f
 /* A projector's 1280 x 720 and other windows under 1400 px: the type scale a step smaller (nothing below 16 px), the
    paddings tighter */
 @media (max-width: 1400px) {
-  :root { --size-number: 2.25rem; --size-heading: 1.25rem; --size-body: 1rem; --size-card: clamp(1.15rem, 2vw, 1.6rem); --gap: 14px; --dot: 20px; }
+  :root { --size-number: 2.25rem; --size-heading: 1.25rem; --size-body: 1rem; --size-card: clamp(1.15rem, 2vw, 1.6rem); --gap: 14px; --dot: 16px; }
   .app-shell { gap: 10px; padding: 10px 20px 14px; }
   .topbar { height: 64px; padding-bottom: 8px; }
   .card-frame { padding: 12px 16px; }
-  .diagram-row { padding: 8px 12px; gap: 6px; }
+  .diagram-row { padding: 8px 12px; gap: 6px; min-height: 4.75rem; }
   .tile { padding: 6px 10px; gap: 2px; }
   .tile-what { display: none; }
   .model-panel { padding: 16px 24px; gap: 10px; }

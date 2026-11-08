@@ -9,8 +9,8 @@ course does not hold (an older course) are dropped at the load, and a shown card
 
 The rules (step 33's, on the dashboard's parts):
 
-* what explores a card is a selection in any way: Go's answer that shows a card, a click on a Related entry or on
-  one of Go's entries, Back; nothing else and nothing ahead (`show`);
+* what explores a card is a selection in any way: Go's answer that shows a card, a click on a Related entry, on one
+  of Go's entries or on a card in the diagram, Back; nothing else and nothing ahead (`show`);
 * the turn marks the card read, a quiz once judged (`mark_read`); explored is not turned;
 * `show` puts the card shown before onto the trail; `back` takes the last card of the trail back as the shown card
   and drops the one left, as the viewer's Return restores the view before a navigation.
