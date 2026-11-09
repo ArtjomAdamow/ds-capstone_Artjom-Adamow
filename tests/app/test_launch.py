@@ -1,10 +1,12 @@
 """The launchers' part of the package (app.launch): the mode question start.py asks with sputnik, and the full app
-without it on the flashcards workspace's own viewer; the page's process next to the viewer; the data folder; the
-backup question both launchers ask before the full app. Nothing of the viewer: the viewer's presence is passed in or
-faked."""
+without it on the flashcards workspace's own viewer; the page's process next to the viewer; the port check; the data
+folder; the backup question both launchers ask before the full app. Nothing of the viewer: the viewer's presence is
+passed in or faked; the port check runs on a socket the test binds, the holder's lookup on faked command output."""
 
 import model_support  # noqa: F401  (the helper's package on the path)
 
+import socket
+import subprocess
 import tempfile
 import unittest
 from importlib import metadata
@@ -161,6 +163,94 @@ class PageProcessTest(unittest.TestCase):
         self.assertEqual(launch.stop_standalone(process, grace=5), 1)
         self.assertEqual((process.waits, process.killed), ([5, None], True))
         self.assertEqual(launch.STANDALONE_GRACE, 10.0)
+
+
+class PortCheckTest(unittest.TestCase):
+    """The port check (the ports finding): a port is held when a server answers a connect; the dashboard and the page
+    move to the next free one, the full app and a named port stop with the holder's hint."""
+
+    def test_a_port_is_in_use_while_a_server_listens_on_it(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen()
+            port = server.getsockname()[1]
+            self.assertTrue(launch.port_in_use(port))
+        self.assertFalse(launch.port_in_use(port))
+
+    def test_free_port_scans_upwards_from_the_start(self):
+        held = {8050, 8051, 8053}
+        self.assertEqual(launch.free_port(8050, held.__contains__), 8052)
+        self.assertEqual(launch.free_port(8052, held.__contains__), 8052)
+        with self.assertRaises(SystemExit) as stop:
+            launch.free_port(8050, lambda port: True, scan=3)
+        self.assertIn("8050 to 8052", str(stop.exception.code))
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.bind(("127.0.0.1", 0))
+            server.listen()
+            port = server.getsockname()[1]
+            self.assertNotEqual(launch.free_port(port), port)  # the real check passes over the bound socket
+
+    def test_the_holder_on_windows_from_netstat_and_the_process_list(self):
+        netstat = (
+            "\nAktive Verbindungen\n\n  Proto  Lokale Adresse         Remoteadresse          Status           PID\n"
+            "  TCP    0.0.0.0:135            0.0.0.0:0              ABH\ufffdREN         1944\n"
+            "  TCP    127.0.0.1:8050         127.0.0.1:60000        HERGESTELLT     777\n"
+            "  TCP    127.0.0.1:8050         0.0.0.0:0              ABH\ufffdREN         4242\n"
+            "  TCP    [::1]:18050            [::]:0                 ABH\ufffdREN         99\n"
+        )
+        commands = []
+
+        def run(command, **options):
+            commands.append(command)
+            output = netstat if command[0] == "netstat" else "C:\\py\\python.exe modules\\start.py\r\n"
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+
+        self.assertEqual(launch.port_holder(8050, run, "win32"), (4242, "C:\\py\\python.exe modules\\start.py"))
+        self.assertIn("ProcessId=4242", commands[-1][-1])  # the listening row, whatever the state's language
+        self.assertIsNone(launch.port_holder(8060, run, "win32"))
+        self.assertEqual(launch.port_holder(18050, run, "win32")[0], 99)
+
+    def test_the_holder_elsewhere_from_lsof_and_ps_or_nothing_without_them(self):
+        def run(command, **options):
+            output = {"lsof": "4242\n", "ps": "python start.py --mode dashboard\n"}[command[0]]
+            return subprocess.CompletedProcess(command, 0, stdout=output)
+
+        self.assertEqual(launch.port_holder(8050, run, "linux"), (4242, "python start.py --mode dashboard"))
+
+        def without_ps(command, **options):
+            if command[0] == "ps":
+                raise FileNotFoundError(command[0])
+            return run(command)
+
+        self.assertEqual(launch.port_holder(8050, without_ps, "darwin"), (4242, None))  # the PID alone
+        self.assertIsNone(launch.port_holder(8050, mock.Mock(side_effect=FileNotFoundError), "linux"))  # no lsof
+        self.assertIsNone(launch.port_holder(8050, lambda command, **options: subprocess.CompletedProcess(command, 1, stdout=""), "linux"))
+
+    def test_the_hint_names_the_holder_and_the_way_out(self):
+        self.assertEqual(
+            launch.port_hint(8050, (4242, "python start.py")),
+            "Port 8050 is already in use (PID 4242, command line python start.py). Stop it or use --port N",
+        )
+        self.assertEqual(launch.port_hint(8050, (4242, None)), "Port 8050 is already in use (PID 4242). Stop it or use --port N")
+        self.assertEqual(launch.port_hint(8050, None), "Port 8050 is already in use. Stop it or use --port N")
+
+    def test_choose_port_moves_where_the_app_moves_and_stops_where_it_does_not(self):
+        held = {8050, 8051}.__contains__
+        holder = mock.Mock(return_value=(4242, "python start.py"))
+        messages = []
+        self.assertEqual(launch.choose_port(None, True, in_use=held, holder=holder, output=messages.append), 8052)
+        self.assertEqual(messages, ["Port 8050 is already in use (PID 4242, command line python start.py): serving on http://127.0.0.1:8052/"])
+        with self.assertRaises(SystemExit) as stop:  # the full app
+            launch.choose_port(None, False, in_use=held, holder=holder, output=messages.append)
+        self.assertEqual(stop.exception.code, launch.port_hint(8050, (4242, "python start.py")))
+        with self.assertRaises(SystemExit):  # a named port that is held stops in every mode
+            launch.choose_port(8051, True, in_use=held, holder=holder)
+        messages.clear()
+        self.assertEqual(launch.choose_port(None, False, in_use=held, start=8060, holder=holder, output=messages.append), 8060)
+        self.assertEqual(launch.choose_port(8070, False, in_use=held, holder=holder, output=messages.append), 8070)
+        self.assertEqual(messages, [])  # a free port is taken without a word
+        with mock.patch.object(launch, "port_in_use", return_value=False):  # looked up at the call
+            self.assertEqual(launch.choose_port(None, False), launch.VIEWER_PORT)
 
 
 class TempDirTest(unittest.TestCase):

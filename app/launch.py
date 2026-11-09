@@ -34,9 +34,18 @@ viewer's reloader, with the viewer's URL in its environment, VIEWER_URL) and put
 (MODELS_URL), where the composition reads it for the viewer's Models button; once the viewer has stopped it waits for
 the page's process (stop_standalone). The page draws a Sputnik link to the viewer's URL (standalone.main's viewer_url).
 Two tabs, not a switch in place: one server for both would make the page a route of the viewer's app.
+
+The ports (choose_port), taken by the launcher's first process before anything serves: on Windows a second server
+binds a port a live one holds (Werkzeug's SO_REUSEADDR) and the older process keeps getting the requests, so a port
+counts as held when a connect to it is answered (port_in_use), never by a bind. The dashboard and the standalone page
+take the next free port from Dash's default (free_port) and print the URL they serve on; the full app stops with the
+hint (port_hint: the PID and the command line of the process listening there, port_holder) when its port is held,
+since the page's URL and the viewer's name the two ports, and its page takes the next free port above it.
+`--port N` names the port and stops when it is held.
 """
 
 import importlib.util
+import socket
 import subprocess
 import sys
 from importlib import metadata
@@ -150,14 +159,19 @@ def requested_port(arguments: Sequence[str]) -> Optional[int]:
     return int(value)
 
 
+def app_url(port: int) -> str:
+    """Where an app of the launcher serves on the port."""
+    return f"http://127.0.0.1:{port}/"
+
+
 def standalone_url(port: int = STANDALONE_PORT) -> str:
     """Where the page's process serves: the link the viewer's Models button opens."""
-    return f"http://127.0.0.1:{port}/"
+    return app_url(port)
 
 
 def viewer_url(port: int = VIEWER_PORT) -> str:
     """Where the viewer serves: the link the page's Sputnik link opens."""
-    return f"http://127.0.0.1:{port}/"
+    return app_url(port)
 
 
 def start_standalone(
@@ -186,6 +200,97 @@ def stop_standalone(process, grace: float = STANDALONE_GRACE) -> int:
     except subprocess.TimeoutExpired:
         process.kill()
         return process.wait()
+
+
+# --- the ports ------------------------------------------------------------------------------------------------
+
+HOST = "127.0.0.1"  # where Dash serves by default
+PORT_PROBE = 0.25  # seconds a connect waits for an answer: a closed port on Windows answers only after two seconds
+PORT_SCAN = 100  # ports free_port tries upwards
+HOLDER_TIMEOUT = 10.0  # seconds the lookup of a port's holder may take
+
+
+def port_in_use(port: int, host: str = HOST, timeout: float = PORT_PROBE) -> bool:
+    """Whether a server answers on the port: a connect, since on Windows a bind succeeds on a held port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(timeout)
+        return probe.connect_ex((host, port)) == 0
+
+
+def free_port(start: int, in_use: Callable[[int], bool] = port_in_use, scan: int = PORT_SCAN) -> int:
+    """The first port from `start` upwards that no server answers on; none among `scan` ports stops."""
+    for port in range(start, start + scan):
+        if not in_use(port):
+            return port
+    raise SystemExit(f"No free port from {start} to {start + scan - 1}")
+
+
+def _output(command: Sequence[str], run: Callable) -> Optional[str]:
+    try:
+        result = run(list(command), capture_output=True, text=True, errors="replace", timeout=HOLDER_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def port_holder(port: int, run: Callable = subprocess.run, platform: str = sys.platform) -> Optional[tuple[int, Optional[str]]]:
+    """The PID and the command line of the process listening on the port, or None. On Windows the PID from
+    `netstat -ano` (a TCP row with the port local and no remote address: the state's name is the system language's)
+    and the command line from the process list (Win32_Process through PowerShell); elsewhere the PID from `lsof`
+    where it is there and the command line from `ps`. The command line is None where it is not found."""
+    if platform == "win32":
+        listing = _output(["netstat", "-ano", "-p", "TCP"], run) or ""
+        pid = None
+        for row in listing.splitlines():
+            parts = row.split()
+            if len(parts) == 5 and parts[0] == "TCP" and parts[1].rsplit(":", 1)[-1] == str(port) and parts[2].endswith(":0") and parts[4].isdigit():
+                pid = int(parts[4])
+                break
+        if pid is None:
+            return None
+        query = f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"
+        command = _output(["powershell", "-NoProfile", "-Command", query], run)
+    else:
+        listing = _output(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], run) or ""
+        pids = [int(line) for line in listing.split() if line.isdigit()]
+        if not pids:
+            return None
+        pid = pids[0]
+        command = _output(["ps", "-o", "command=", "-p", str(pid)], run)
+    return pid, (command or "").strip() or None
+
+
+def port_held(port: int, holder: Optional[tuple[int, Optional[str]]]) -> str:
+    """What is known of the port's holder: Port 8050 is already in use (PID 1234, command line ...)."""
+    if holder is None:
+        return f"Port {port} is already in use"
+    pid, command = holder
+    return f"Port {port} is already in use (PID {pid}" + (f", command line {command})" if command else ")")
+
+
+def port_hint(port: int, holder: Optional[tuple[int, Optional[str]]]) -> str:
+    """The stop's text when the port the app needs is held: the holder, then what to do."""
+    return f"{port_held(port, holder)}. Stop it or use {PORT_OPTION} N"
+
+
+def choose_port(
+    requested: Optional[int], moves: bool, start: int = VIEWER_PORT, in_use: Optional[Callable[[int], bool]] = None,
+    holder: Optional[Callable] = None, output: Callable = print,
+) -> int:
+    """The port an app serves on, taken before it serves: the requested one (`--port N`) when free, else the stop
+    with the hint; without one `start` (Dash's default) when free, else, where the app `moves` (the dashboard, the
+    standalone page), the next free port with the URL printed, or the stop with the hint (the full app). `in_use` and
+    `holder` are looked up at the call (port_in_use, port_holder) unless given."""
+    in_use = in_use or port_in_use
+    holder = holder or port_holder
+    port = start if requested is None else requested
+    if not in_use(port):
+        return port
+    if requested is not None or not moves:
+        raise SystemExit(port_hint(port, holder(port)))
+    free = free_port(port + 1, in_use)
+    output(f"{port_held(port, holder(port))}: serving on {app_url(free)}")
+    return free
 
 
 # --- the folders and the state ---------------------------------------------------------------------------------
