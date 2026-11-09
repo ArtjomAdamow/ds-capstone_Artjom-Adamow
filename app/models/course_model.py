@@ -1,17 +1,17 @@
 """The course model (no Dash, no state, nothing of the viewer): the pipeline fitted once on all cards, and from it the
-topics, positions and connections the glue hands to the viewer's map at every start (the model state).
+topics, positions and connections the plugin hands to the viewer's map at every start (the model state).
 
 * Decks view: one unit vector per deck (similar.deck_vectors); the layout step (models.layout, k = 3) places all
   decks on the unit sphere at once. The points are keyed by deck id, the dots of the viewer's decks state. The
   clustering of the deck vectors (models.clustering) gives the deck connections.
 * Topics: the topic model T1 (models.topic_model) takes the scripted topics of the course file as its input and
-  decides every card's topic and margin; the glue writes them into the derived course file the viewer reads, every
+  decides every card's topic and margin; the plugin writes them into the derived course file the viewer reads, every
   deck's (the topic dots stay the viewer's own, at random around the deck's centroid; the model places none). A
   deck's topic vectors (topic_vectors: per topic the mean of its members' unit rows, normalised, as a deck's vector
   is made of its cards) and their clustering give the topic connections
   (topic_links: one per merge in merge order, n - 1 for a deck's n topics with cards, none for an emptied topic), for
-  the model's membership or any other (a deck with scripted topics); the glue writes them between the viewer's topic
-  dots, the standalone page draws the deck's tree from them (step 28).
+  the model's membership or any other (a deck with scripted topics); the plugin writes them between the viewer's topic
+  dots, the models view draws the deck's tree from them (step 28).
 * Cards view, for each topic of the model: the layout step on the topic's card vectors, centred on the topic's mean
   (the start's own centring), with the neighbours within the topic (k = min(5, n - 1)), gives one unit direction per
   card, and that direction is the position: every card sits on the surface of its topic's sphere (radius 1), as the
@@ -19,7 +19,7 @@ topics, positions and connections the glue hands to the viewer's map at every st
   with fewer than two cards gets no layout and no connections. A scripted topic (in a deck without the model's
   topics) is laid out the same way on request (layout_of).
 * The points are plain (x, y, z) tuples, deterministic. The viewer's position sources with their random fallback on
-  the surface are the glue's (glue.positions): any id the model has no point for (a card of a one-card topic, a
+  the surface are the plugin's (plugin.positions): any id the model has no point for (a card of a one-card topic, a
   card of a deck left out, an id that is not in the course the model was fitted on) gets the viewer's random
   position there.
 """

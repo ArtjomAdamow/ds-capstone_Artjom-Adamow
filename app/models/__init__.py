@@ -16,6 +16,6 @@
   floor, the fixed-k overlap of the layouts) and the judges of T1, for evaluate.py next to the package.
 
 The input is a sequence of cards (app.cards.Card), the deck ids by deck name and the scripted topics
-(TopicSeed); the glue reads them from the course file with the viewer's parser, the capstone from the data
+(TopicSeed); the plugin reads them from the course file with the viewer's parser, the capstone from the data
 package's table.
 """

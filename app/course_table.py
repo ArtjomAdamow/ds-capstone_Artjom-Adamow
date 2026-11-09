@@ -11,9 +11,9 @@ viewer's parser from the refined course file, read here with the csv module (no 
 * topics.csv (TOPIC_COLUMNS): every deck's scripted topics in file order, the empty ones too, which cards.csv
   cannot carry: T1's seeds hold them (an emptied topic keeps its dot); with the course file's headings and sources
   of each topic, joined by " | " (TEXT_SEPARATOR), which the parser does not keep (topic_texts reads them from the
-  course file with the json module, for the export and for glue.course alike).
+  course file with the json module, for the export and for plugin.course alike).
 
-load_table gives what glue.course.load_course gives with the parser (the CardRecords, the deck ids by name, the
+load_table gives what plugin.course.load_course gives with the parser (the CardRecords, the deck ids by name, the
 TopicSeeds in deck name order and file order), plus the deck list; the ids agree because both come from the same
 parser. An empty difficulty or explanation reads as None.
 """
@@ -53,7 +53,7 @@ class DeckRow:
 
 @dataclass(frozen=True)
 class CourseTable:
-    """What the models and the standalone page read of the course table."""
+    """What the models and the models view read of the course table."""
 
     cards: list[CardRecord]  # every card, in the parser's order
     deck_ids: dict[str, str]  # deck name -> deck id

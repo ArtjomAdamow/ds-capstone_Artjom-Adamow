@@ -1,4 +1,4 @@
-"""The model panels' parts the dashboard and the standalone page share (Dash; nothing of the viewer): the model
+"""The model panels' parts the dashboard and the models view share (Dash; nothing of the viewer): the model
 letters with their names, the views with the cut labels of the connections' preset, the two helpers of a figure
 slot (a graph without plotly's bar, a line instead of a figure) and the labels the results rows are read by (the
 decks view's preset, S2's and D2's variant labels of the models the app runs).

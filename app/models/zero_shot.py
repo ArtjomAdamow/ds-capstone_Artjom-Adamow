@@ -19,7 +19,7 @@ learner read off the quiz with its resolution by natural language inference, not
   the file named by the model and the template, keyed by the premises in order).
 * `tags_of`: the tags of a course's quizzes (the rated and the unrated ones; flashcards are not tagged) for the
   evaluation and the app, as `Tags`; None with one printed line without the library or the model. `cached_tags`:
-  the same from the cache alone, for the standalone page, which loads no model.
+  the same from the cache alone, for the models view, which loads no model.
 """
 
 from __future__ import annotations
@@ -214,7 +214,7 @@ def tags_of(cards: Sequence, cache_dir: Optional[Path] = None, template: Templat
 def cached_tags(cards: Sequence, cache_dir: Optional[Path], template: Template = CRITERION,
                 model_name: str = NLI_MODEL) -> Optional[Tags]:
     """The tags of the course's quizzes from the cache alone, as `tags_of` wrote them: no model is loaded and no
-    library is needed (the standalone page's D2). None without the folder or where the cache does not hold them."""
+    library is needed (the models view's D2). None without the folder or where the cache does not hold them."""
     if cache_dir is None:
         return None
     rated, unrated = split(cards)

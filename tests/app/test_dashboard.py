@@ -14,7 +14,7 @@ demo back to the course's card and trail, Related and the request box answering 
 reload ending the demo, the slide row the course's, the state file and the embeddings' cache the same after it); the
 dashboard without course data ("no data loaded" with the box and Go disabled, the Demo, the tiles from the newest
 runs, main on deck 00 alone reading no state file); the layout's regions and the stylesheet; the state file; the judgement's functions; and that
-nothing of the viewer, the glue or the standalone page is imported (a subprocess with the viewer blocked). The real course's table serves
+nothing of the viewer is imported (a subprocess with the viewer blocked). The real course's table serves
 a request too (skipped without it)."""
 
 import model_support
@@ -1095,7 +1095,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 import test_dashboard
-from app import launch
+import importlib.util
 from app.dashboard.app import INPUTS, OUT, Dashboard, register_callback
 from app.course_table import load_table
 with tempfile.TemporaryDirectory() as folder:
@@ -1106,14 +1106,14 @@ for trigger, request in (("prompt-go", "how do I slice a list"), ("related-toggl
     with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
         view = update(*([0] * INPUTS), [], request, view)[OUT["view"]]
 assert len(board.state.explored_ids) == 2 and len(board.state.trail) == 1 and view["panel"] == "D", (board.state.shown, view)
-assert not launch.viewer_available()
-loaded = sorted(name for name in sys.modules if (name == "project" or name.startswith(("project.", "app.glue", "app.standalone"))) and sys.modules[name] is not None)
+assert importlib.util.find_spec("project") is None  # the viewer is not found
+loaded = sorted(name for name in sys.modules if (name == "project" or name.startswith("project.")) and sys.modules[name] is not None)
 print("LOADED", loaded)
 """
 
 
 class NoViewerTest(unittest.TestCase):
-    def test_the_dashboard_runs_with_the_viewer_blocked_and_imports_none_of_it_the_glue_or_the_page(self):
+    def test_the_dashboard_runs_with_the_viewer_blocked_and_imports_none_of_it(self):
         tests_dir, module_dir = Path(__file__).resolve().parent, model_support.MODULE_DIR
         script = NO_VIEWER.format(module_dir=str(module_dir), tests_dir=str(tests_dir))
         result = subprocess.run([sys.executable, "-B", "-c", script], capture_output=True, text=True, cwd=str(module_dir))

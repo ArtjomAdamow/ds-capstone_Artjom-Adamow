@@ -1,4 +1,4 @@
-"""The related cards' order and labels, shared by the glue's card section (glue.related, on the viewer) and the
+"""The related cards' order and labels, shared by the plugin's card section (plugin.related, on the viewer) and the
 dashboard (app.dashboard, without it); nothing of the viewer is imported here.
 
 * `rank_by_confidence`: the neighbours in the order the learner should take them: the unread cards first, among

@@ -1,8 +1,7 @@
 """The results files (app.results; the csv module, nothing of Dash or the viewer), read as the dashboard and the
-standalone page read them: the current course's rows, the newest run, the transposed tables with their floor, the
-chosen variant and the app's pick marked, a deck's or a topic's name replaced, the glossary, and the hints without a
-file or a folder. The small results files the dashboard's and the page's tests read are written here too
-(write_results, PROMPT_ROWS)."""
+models view read them: the current course's rows, the newest run, the transposed tables with their floor, the chosen
+variant and the app's pick marked, the glossary, and the hints without a file or a folder. The small results files
+the dashboard's and the models view's tests read are written here too (write_results, PROMPT_ROWS)."""
 
 import model_support
 
@@ -166,11 +165,6 @@ class ResultsTest(unittest.TestCase):
         self.assertIn("uv run evaluate.py", results.hint("results.csv"))
         self.assertEqual(Results(None, self.note).hint("topics.csv"), NO_FOLDER)
         self.assertIsNone(headlines(results, "S1"))
-
-    def test_a_decks_or_a_topics_name_is_replaced_longest_first(self):
-        results = Results(self.folder / "results", self.note, {"Alpha": "deck 01", "Lists": "01 · ab12cd", "Alpha and Lists": "x"})
-        self.assertEqual(results.by_ids("deck Alpha and Lists; Lists"), "deck x; 01 · ab12cd")
-        self.assertEqual(self.results.by_ids("deck Alpha"), "deck Alpha")  # no names: the text as it is
 
 
 if __name__ == "__main__":

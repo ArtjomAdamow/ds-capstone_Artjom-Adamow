@@ -916,7 +916,7 @@ class RunTest(unittest.TestCase):
 
     def test_the_demos_deck_00_is_never_read(self):
         self.assertEqual(evaluate.default_table_dir().name, "course")
-        self.assertEqual(evaluate.default_table_dir().parent, model_support.data_dir(model_support.MODULE_DIR))
+        self.assertEqual(evaluate.default_table_dir(), model_support.COURSE_TABLE_DIR)
         model_support.write_demo_table(self.folder / "demo" / "dashboard")  # next to the course table, as in data/
         opened = []
         real_open = io.open

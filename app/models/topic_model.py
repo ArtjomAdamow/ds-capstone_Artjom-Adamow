@@ -14,13 +14,13 @@ for the state. The raw scripted topics stay in the course file, so nothing is ev
 * The decision for the state: the membership is the nearest centroid, for every card (the app shows them all); a
   topic is never removed, and an emptied one keeps its dot. The margin is kept as a measure: a card below
   FOCUS_MARGIN sits between two topics (`hidden`, for the evaluation), and the runner-up topic next to it
-  (`second_of`, for the standalone page's card panel). The models view's margin table (and, until step 33, the viewer's
+  (`second_of`, for the models view's card panel). The models view's margin table (and, until step 33, the viewer's
   margin slider, the glue's focus of step 28) runs on
   a share scale: `share_threshold` gives the margin that keeps a share of the cards, the highest margins first, so
   100 % keeps every card and 1 % the eleven with the highest margins on the course (models/topic.md, "The margin on
   a share scale").
-* The derived course file the viewer reads (the raw file with the cards' "topic" set by the model) is the glue's
-  (glue.derived.write_derived_course): it is written in the viewer's format with the viewer's parser.
+* The derived course file the viewer reads (the raw file with the cards' "topic" set by the model) is the plugin's
+  (plugin.derived.write_derived_course): it is written in the viewer's format with the viewer's parser.
 * The measures: the agreement with the scripted topics (the share of cards whose nearest centroid is their scripted
   topic, one minus the lessons' Hamming loss), the coherence per topic (the share of its scripted cards nearest to
   itself), the margin table (the cards kept at a threshold and their agreement), the moved cards and the emptied

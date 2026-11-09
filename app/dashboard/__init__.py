@@ -1,5 +1,5 @@
 """The dashboard: the capstone's app once the viewer leaves it, one card at a time with what a learner sees of
-the models, in place of sputnik; the models view (app.standalone) stays next to it until its move. It reads the
+the models, in place of sputnik; the models view is no part of the package. It reads the
 course table (app.course_table) and the results files of the offline evaluation, fits the course model, D1 and P1
 at the start, and keeps its own state file in `data/state/`; it imports nothing of the viewer and nothing of the
 glue. Beside the course it reads deck 00's table (data/demo/dashboard/, docs/demo/) for its Demo; without the course
@@ -19,8 +19,8 @@ table it runs on deck 00 alone, empty outside the demo.
 * `assets/style.css`: the theme's tokens and the type scale, written anew; `assets/keys.js`: Enter into the hidden
   input the callback reads; `assets/diagram.js`: a click in the diagram into another.
 
-The launcher starts it with `main` (start.py's third mode, `--mode dashboard`, after the backup question; on Dash's
-default port, without the reloader and with no process next to it).
+The launcher starts it with `main` (start.py, after the port check and the backup question; on Dash's default port
+or the next free one, without the reloader and with no process next to it).
 """
 
 import time

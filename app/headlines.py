@@ -1,4 +1,4 @@
-"""The section's numbers of the dashboard and the standalone page (nothing of Dash, as results.py): each
+"""The section's numbers of the dashboard and the models view (nothing of Dash, as results.py): each
 generation's two headline numbers from the results rows of its newest run, each with its contrast (the random
 floor, a baseline, or the generation before), one plain sentence on what it measures, and a verdict with its
 explanation in words.

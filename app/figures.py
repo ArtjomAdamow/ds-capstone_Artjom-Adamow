@@ -1,4 +1,4 @@
-"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the dashboard and the standalone
+"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the dashboard and the models
 page:
 
 * the difficulty models D1 and D2 (models.difficulty_model.DifficultyReport): the line that says what was measured
@@ -17,7 +17,7 @@ page:
   the neighbour lies.
 
 Every figure takes the size of its slot (no fixed height: the page's figure slot gives it), and no font is below
-FONT_SIZE (16 px): the page's type scale (standalone/assets/style.css) reaches no plotly figure, so the sizes are
+FONT_SIZE (16 px): a page's type scale (its assets/style.css) reaches no plotly figure, so the sizes are
 set here. Colours: the sequential ramp and the two series colours are the dataviz reference steps for a dark
 surface, validated against the panel's background; the levels are named on the axes, so no colour carries them
 alone. The theme's tokens (INK, MUTED, GOLD) are the viewer's values, written here anew.

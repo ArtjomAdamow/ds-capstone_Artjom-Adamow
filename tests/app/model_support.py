@@ -16,13 +16,14 @@ if not any(Path(entry or ".").resolve() == MODULE_DIR for entry in sys.path):
     sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
 
 from app.cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE, CardRecord  # noqa: E402
-from app.launch import data_dir  # noqa: E402
 from app.models.course_model import CourseModel  # noqa: E402
 from app.models.topic_model import TopicSeed  # noqa: E402
 
-# The real course table (git-ignored data, the tests that read it skip without it), in the launchers' data folder:
-# data/ next to the package (the capstone), or in the folder above it (the flashcards workspace)
-COURSE_TABLE_DIR = data_dir(MODULE_DIR) / "course"
+# The real course table (git-ignored data, the tests that read it skip without it), in the launchers' data folder
+# (app.launch.data_dir, not imported: sputnik's release, where the plugin's tests read this file, ships the models'
+# part of the package alone): data/ next to the package (the capstone), or in the folder above it (the workspace)
+COURSE_TABLE_DIR = next((folder / "data" for folder in (MODULE_DIR, MODULE_DIR.parent) if (folder / "data").is_dir()),
+                        MODULE_DIR / "data") / "course"
 
 # Three small decks with real words, so the TF-IDF baseline (terms in at least two cards) has something to match.
 # The ids are comb_ids: stack + deck id + card id (stack 1 plain, 2 quiz, 3 quiz with difficulty, 4 a flashcard of
@@ -134,7 +135,7 @@ DESCRIPTIONS = {"01": "Alpha's description.", "02": "Beta's description.", "03":
 
 def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
     """The test course as a course table in `folder`, as export_course.py writes it from the course file (the
-    standalone page's and the evaluation's input); or another course with its scripted topics (the moving course:
+    models view's, the dashboard's and the evaluation's input); or another course with its scripted topics (the moving course:
     `moving_cards()` with MOVING_SCRIPTED)."""
     from app.course_table import encode_list, flag, join_texts, write_table
 

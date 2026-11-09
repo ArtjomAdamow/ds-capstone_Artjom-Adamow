@@ -1,5 +1,5 @@
 """The dashboard (app.dashboard): the capstone's app without the viewer, one card at a time with what a learner
-sees of the models, on the dashboard's own state (Dash; nothing of the viewer, nothing of the glue).
+sees of the models, on the dashboard's own state (Dash; nothing of the viewer, nothing of the viewer's plugin).
 
 Dashboard fits the course model with T1, D1 and P1 on the course table once, as the models view's Page does, and
 reads three things of them: the shown card's related cards from the index (CourseModel.related, the five nearest),
@@ -188,7 +188,7 @@ class Dashboard:
         chosen = {"P1": variant_label(index.vectoriser), "D2": d2_label()}
         if s2_label() is not None:
             chosen["S2"] = s2_label()
-        self.results = Results(results_dir, self.results_note(), None, chosen=chosen)
+        self.results = Results(results_dir, self.results_note(), chosen=chosen)
 
     def results_note(self) -> Optional[str]:
         """The note of the results rows this board's tiles read: its course's."""

@@ -70,8 +70,8 @@ folder holds a file without its form, the hand columns are computed from the fil
 where it holds neither, that side's columns stay empty, the form is not written and one line says so. The form lists a quiz's
 options with their feedback from the course table (the record's options), the answer for a quiz without them.
 
-Every row of a run carries the run's start time to the minute (`run`), next to its date, so the standalone page
-reads the newest run of each file (app/standalone/results.py; what the columns mean: app/docs/columns.md).
+Every row of a run carries the run's start time to the minute (`run`), next to its date, so the models view
+reads the newest run of each file (app/results.py; what the columns mean: app/docs/columns.md).
 """
 
 from __future__ import annotations
@@ -637,7 +637,7 @@ def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: st
     for deck in deck_order:
         ids = [card_id for card_id in all_ids if by_id[card_id].deck == deck]
         topics = len([seed for seed in seeds if seed.deck == deck])
-        scope = f"deck {deck_ids.get(deck, deck)}"  # by id: the rows travel and the standalone page shows them
+        scope = f"deck {deck_ids.get(deck, deck)}"  # by id: the rows travel and the models view shows them
         values = (model.agreement_of(ids), agree(nearest, ids), agree(logistic, ids), chance_of(ids))
         for name, value in zip(("T1", "1-NN", "LR", "chance"), values):
             rows.append(topic_row(today, name, scope, len(ids), value, note, topics=topics))

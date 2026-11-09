@@ -1,7 +1,7 @@
 """The models import nothing of the viewer: no source of app.models or
 its card record imports `project`, and the models import, fit and measure in a process where `project` cannot be
-imported at all, as in the capstone's CI without the private viewer package. The glue, by contrast, is the part
-that imports the viewer."""
+imported at all, as in the capstone's CI without the private viewer package. No source of the package imports the
+viewer: the models on the viewer are the viewer's own plugin (project/plugin/ in the flashcards workspace)."""
 
 import model_support  # noqa: F401  (the helper's package on the path)
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 PACKAGE = model_support.MODULE_DIR / "app"
 MODEL_SOURCES = sorted((PACKAGE / "models").glob("*.py")) + [PACKAGE / "cards.py", PACKAGE / "__init__.py"]
-GLUE_SOURCES = sorted((PACKAGE / "glue").glob("*.py"))
+PACKAGE_SOURCES = sorted(path for path in PACKAGE.rglob("*.py") if "__pycache__" not in path.parts)
 VIEWER_IMPORT = re.compile(r"^\s*(from|import)\s+project\b", re.MULTILINE)
 TESTS_DIR = Path(__file__).resolve().parent
 # A process in which the viewer cannot be imported: every model module imported, the course model fitted on the
@@ -42,10 +42,10 @@ class ModelsWithoutTheViewerTest(unittest.TestCase):
             with self.subTest(file=path.name):
                 self.assertIsNone(VIEWER_IMPORT.search(path.read_text(encoding="utf-8")), f"{path.name} imports the viewer")
 
-    def test_the_glue_is_the_part_that_imports_the_viewer(self):
-        importing = [path.name for path in GLUE_SOURCES if VIEWER_IMPORT.search(path.read_text(encoding="utf-8"))]
-        self.assertIn("composition.py", importing)
-        self.assertIn("course.py", importing)
+    def test_no_source_of_the_package_imports_the_viewer(self):
+        self.assertGreater(len(PACKAGE_SOURCES), len(MODEL_SOURCES))
+        importing = [path.relative_to(PACKAGE).as_posix() for path in PACKAGE_SOURCES if VIEWER_IMPORT.search(path.read_text(encoding="utf-8"))]
+        self.assertEqual(importing, [])
 
     def test_the_models_import_fit_and_measure_where_the_viewer_cannot_be_imported(self):
         result = subprocess.run(

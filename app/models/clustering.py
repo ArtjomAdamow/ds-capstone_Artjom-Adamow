@@ -6,8 +6,8 @@ viewer's dendrogram replays stored connections in that order (project.services.d
 joins the two trees its ends belong to, which at that point are exactly the two clusters scipy merged. So the
 connections give the same tree as scipy's, with the merge ranks as heights, and the project needs no scipy itself.
 
-The cut-off preset (preset_rank): where a cut of those connections leaves parts small enough to read. The glue's
-preset of the viewer's cut-off line and the standalone page both measure it over the model's pairs alone.
+The cut-off preset (preset_rank): where a cut of those connections leaves parts small enough to read. The plugin's
+preset of the viewer's cut-off line and the models view both measure it over the model's pairs alone.
 """
 
 from typing import Iterable, Sequence

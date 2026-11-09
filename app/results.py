@@ -1,9 +1,8 @@
-"""The results files for the model panels of the dashboard and the standalone page (the csv module, nothing of
-Dash): the rows of the current course, each level's newest run, its tables with one row per measure and one
-column per variant next to its floor, every deck or topic name of the course table replaced by the deck's id or
-the topic's label, and the glossary of the measure columns (app/docs/columns.md).
+"""The results files for the model panels of the dashboard and the models view (the csv module, nothing of Dash):
+the rows of the current course, each level's newest run, its tables with one row per measure and one column per
+variant next to its floor, and the glossary of the measure columns (app/docs/columns.md).
 
-* `Results(folder, note, names, chosen)`: reads results.csv, topics.csv, difficulty.csv and prompt.csv of `folder`
+* `Results(folder, note, chosen)`: reads results.csv, topics.csv, difficulty.csv and prompt.csv of `folder`
   once; a missing file gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
   "decks 01 to 24", as evaluate.scope_note writes it), so the rows of an older course stay out. A run is the `run`
   column, the date for the rows written before it, and a level (S1, S2, C1, T1, D1, D2, P1: the model generations)
@@ -26,7 +25,6 @@ the topic's label, and the glossary of the measure columns (app/docs/columns.md)
 """
 
 import csv
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Optional, Sequence, Union
@@ -153,18 +151,18 @@ def names_of(measure: Measure) -> list[str]:
 
 
 def transpose(title: str, rows: Sequence[Mapping[str, str]], heads: Sequence[str], chosen: Sequence[bool],
-              measures: Sequence[Measure], by_ids=lambda text: text) -> Table:
-    """The table: a measure every row of `rows` left empty is no row; the heads and cells pass through `by_ids`."""
+              measures: Sequence[Measure]) -> Table:
+    """The table: a measure every row of `rows` left empty is no row."""
     kept_rows: list[tuple[str, list[str]]] = []
     kept_measures: list[str] = []
     row_columns: list[list[str]] = []
     for measure in measures:
-        values = [by_ids(cell(row, measure)) for row in rows]
+        values = [cell(row, measure) for row in rows]
         if any(values):
             kept_rows.append((label(measure), values))
             kept_measures += names_of(measure)
             row_columns.append(names_of(measure))
-    return Table(title, [by_ids(head) for head in heads], kept_rows, list(chosen), by_ids(subtitle_of(rows)), kept_measures, row_columns)
+    return Table(title, list(heads), kept_rows, list(chosen), subtitle_of(rows), kept_measures, row_columns)
 
 
 def subtitle_of(rows: Sequence[Mapping[str, str]]) -> str:
@@ -188,15 +186,10 @@ class Results:
     course (`note`, course_note's); with no note, without a course table (the dashboard's demo alone), every row, so
     each level shows its newest run whatever course it names."""
 
-    def __init__(self, folder: Optional[Path], note: Optional[str], names: Optional[Mapping[str, str]] = None,
-                 chosen: Optional[Mapping[str, str]] = None) -> None:
+    def __init__(self, folder: Optional[Path], note: Optional[str], chosen: Optional[Mapping[str, str]] = None) -> None:
         self.folder = Path(folder) if folder is not None else None
         self.note = note
-        self.names = dict(names or {})
         self.chosen = dict(chosen or {})  # a level -> the variant the app runs, where its file's names do not say
-        self._pattern = (
-            re.compile("|".join(re.escape(name) for name in sorted(self.names, key=len, reverse=True))) if self.names else None
-        )
         self.rows: dict[str, Optional[list[dict]]] = {}
         for name in FILES:
             path = self.folder / name if self.folder is not None else None
@@ -204,12 +197,6 @@ class Results:
 
     def _current(self, rows: Sequence[Mapping[str, str]]) -> list[dict]:
         return [dict(row) for row in rows if self.note is None or (self.note and self.note in (row.get("notes") or ""))]
-
-    def by_ids(self, text: str) -> str:
-        """The text with every deck or topic name of the course table replaced (full names, longest first)."""
-        if not text or self._pattern is None:
-            return text
-        return self._pattern.sub(lambda match: self.names[match.group(0)], text)
 
     def hint(self, name: str) -> str:
         """Why there is no table: the file is missing (how to make it), or no folder was given."""
@@ -269,7 +256,7 @@ class Results:
         rows += variants
         heads += [row.get("variant") or "" for row in variants]
         chosen = [False] * len(floors[:1]) + [CHOSEN in (row.get("variant") or "") for row in variants]
-        return transpose("S1 next to the random floor B0", rows, heads, chosen, S1_MEASURES, self.by_ids)
+        return transpose("S1 next to the random floor B0", rows, heads, chosen, S1_MEASURES)
 
     def _embeddings(self, run: list[dict]) -> Table:
         """S2's rows of the run (the encoders and the hybrids) next to S1's chosen variant, which every paired
@@ -279,13 +266,13 @@ class Results:
         rows = reference + variants
         heads = [f"S1 {row.get('variant') or ''}" for row in reference] + [row.get("variant") or "" for row in variants]
         chosen = [True] * len(reference) + [row.get("variant") == self.chosen.get("S2") for row in variants]
-        return transpose("S2 next to S1's chosen variant", rows, heads, chosen, S1_MEASURES, self.by_ids)
+        return transpose("S2 next to S1's chosen variant", rows, heads, chosen, S1_MEASURES)
 
     def _course(self, run: list[dict]) -> Table:
         rows = [row for row in run if row.get("model") == "C1"]
         heads = [row.get("variant") or "" for row in rows]
         chosen = [head == "model" for head in heads]
-        return transpose("C1 next to the SVD start and random directions", rows, heads, chosen, C1_MEASURES, self.by_ids)
+        return transpose("C1 next to the SVD start and random directions", rows, heads, chosen, C1_MEASURES)
 
     def _topics(self, run: list[dict], deck_id: Optional[str]) -> list[Table]:
         scope = f"deck {deck_id}" if deck_id else "all"
@@ -293,18 +280,18 @@ class Results:
         judged.sort(key=lambda row: T1_JUDGES.index(row["model"]) if row.get("model") in T1_JUDGES else len(T1_JUDGES))
         heads = [row.get("model") or "" for row in judged]
         title = f"T1 next to the judges, deck {deck_id}" if deck_id else "T1 next to the judges, the course"
-        tables = [transpose(title, judged, heads, [head == "T1" for head in heads], T1_DECK_MEASURES if deck_id else T1_MEASURES, self.by_ids)]
+        tables = [transpose(title, judged, heads, [head == "T1" for head in heads], T1_DECK_MEASURES if deck_id else T1_MEASURES)]
         stacks = [row for row in run if row.get("model") == "T1" and (row.get("scope") or "").startswith(STACK_SCOPE)]
         if stacks:
-            tables.append(transpose("T1 by stack", stacks, [row["scope"] for row in stacks], [False] * len(stacks), T1_STACK_MEASURES, self.by_ids))
+            tables.append(transpose("T1 by stack", stacks, [row["scope"] for row in stacks], [False] * len(stacks), T1_STACK_MEASURES))
         margins = [row for row in run if row.get("model") == "T1" and (row.get("scope") or "").startswith(MARGIN_SCOPE)]
         if margins:
             heads = [row["scope"] for row in margins]
-            tables.append(transpose("T1's cards kept at a margin", margins, heads, [False] * len(margins), T1_MARGIN_MEASURES, self.by_ids))
+            tables.append(transpose("T1's cards kept at a margin", margins, heads, [False] * len(margins), T1_MARGIN_MEASURES))
         focus = [row for row in run if row.get("model") == "T1" and (row.get("scope") or "").startswith(FOCUS_SCOPE)]
         if focus:
             heads = [row["scope"] for row in focus]
-            tables.append(transpose("The margin on the share scale: the cards kept at its marks", focus, heads, [False] * len(focus), T1_MARGIN_MEASURES, self.by_ids))
+            tables.append(transpose("The margin on the share scale: the cards kept at its marks", focus, heads, [False] * len(focus), T1_MARGIN_MEASURES))
         return tables
 
     def _difficulty(self, run: list[dict]) -> Table:
@@ -312,7 +299,7 @@ class Results:
         rows = sorted((row for row in run if row.get("model") in order and course_row(row)), key=lambda row: order[row["model"]])
         heads = [difficulty_head(row) for row in rows]
         chosen = [CHOSEN in (row.get("variant") or "") and row.get("label_rule") == "deck shares" for row in rows]
-        return transpose("D1 next to the baselines and the hand labels", rows, heads, chosen, D1_MEASURES, self.by_ids)
+        return transpose("D1 next to the baselines and the hand labels", rows, heads, chosen, D1_MEASURES)
 
     def _tags(self, run: list[dict]) -> Table:
         """D2's rows of the run (the templates, each by the deck shares and by the most likely class) next to D1's
@@ -324,7 +311,7 @@ class Results:
         rows = reference + variants
         heads = [f"D1 {difficulty_head(row)}" for row in reference] + [difficulty_head(row) for row in variants]
         chosen = [True] * len(reference) + [self.app_tags(row) for row in variants]
-        return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES, self.by_ids)
+        return transpose("D2 next to D1's chosen row", rows, heads, chosen, D1_MEASURES)
 
     def app_tags(self, row: Mapping[str, str]) -> bool:
         """Whether a D2 row is the app's: its variant the app's template and model (`chosen`), by the deck shares."""
@@ -336,7 +323,7 @@ class Results:
         rows = [row for row in run if row.get("model") == "P1"]
         heads = [row.get("variant") or "" for row in rows]
         chosen = [head == self.chosen.get("P1") for head in heads]
-        return transpose("P1's variants: the judged requests and the self set", rows, heads, chosen, P1_MEASURES, self.by_ids)
+        return transpose("P1's variants: the judged requests and the self set", rows, heads, chosen, P1_MEASURES)
 
     def _deck_difficulty(self, run: list[dict], level: str, deck_id: Optional[str]) -> list[Table]:
         """The entered deck's rows of the run (scope "deck <id>"): D1's variants' within-deck
@@ -358,7 +345,7 @@ class Results:
             title = f"D2 within deck {deck_id} next to D1's chosen row"
         if not rows:
             return []
-        return [transpose(title, rows, heads, chosen, D1_DECK_MEASURES, self.by_ids)]
+        return [transpose(title, rows, heads, chosen, D1_DECK_MEASURES)]
 
 
 def difficulty_head(row: Mapping[str, str]) -> str:
