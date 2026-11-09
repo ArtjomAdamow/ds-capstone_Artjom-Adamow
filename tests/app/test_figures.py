@@ -1,5 +1,6 @@
 """The shared figures (app.figures; plotly only, nothing of the viewer): D1's score rows, subtitle,
-confusion matrix and shares on a measured report, the sphere's surface and its arcs, the dendrogram of a
+confusion matrix and shares on a measured report, the sphere's surface and its arcs, the connections as one trace,
+T1's margins on the teal scale with the threshold and the focus labelled, the dendrogram of a
 clustering over scipy's coordinates with the real merge distances and the preset's cut-off line labelled on the
 plot, its leaves labelled up to twelve, a card's neighbours as bars; no font below 16 px and no fixed height in
 any figure."""
@@ -90,6 +91,7 @@ class MetricsFiguresTest(unittest.TestCase):
             ("confusion", figures.confusion_figure(self.report)), ("shares", figures.shares_figure(self.report)),
             ("dendrogram", figures.dendrogram_figure(merges_of(vectors), ids, {}, 2, cut_label="groups of ≤ 4 cards")),
             ("neighbours", figures.neighbours_figure([("a", 0.9, figures.HERE), ("b", 0.5, figures.THIS_DECK), ("c", 0.3, figures.ELSEWHERE)])),
+            ("margins", figures.margin_histogram([0.01, 0.2, 0.4], 0.05, 0.3)),
         ):
             sizes = font_sizes(figure.to_plotly_json())
             self.assertTrue(sizes, name)
@@ -129,6 +131,36 @@ class SphereTest(unittest.TestCase):
         for x, y, z in zip(xs, ys, zs):
             self.assertAlmostEqual(radius(x, y, z), 1.0)
         self.assertEqual(figures.surface_arc((0.0, 0.0, 0.0), (1.0, 0.0, 0.0)), ([0.0, 1.0], [0.0, 0.0], [0.0, 0.0]))
+
+    def test_the_connections_are_one_trace_of_the_drawn_dots_pairs_straight_or_along_the_surface(self):
+        points = {"a": (1.0, 0.0, 0.0), "b": (0.0, 1.0, 0.0), "c": (0.0, 0.0, 1.0)}
+        straight = figures.links_trace(points, [("a", "b"), ("b", "c"), ("a", "gone")], along_surface=False)
+        self.assertEqual(list(straight.x), [1.0, 0.0, None, 0.0, 0.0, None])  # a pair with a dot not drawn is left out
+        self.assertEqual((straight.line.color, straight.line.dash, straight.line.width), (figures.GOLD, "dash", figures.LINK_WIDTH))
+        self.assertFalse(straight.showlegend)
+        arc = figures.links_trace(points, [("a", "b")], along_surface=True)
+        self.assertEqual(len(arc.x), len(figures.surface_arc(points["a"], points["b"])[0]) + 1)
+        self.assertIsNone(figures.links_trace(points, [("a", "gone")], along_surface=True))
+        grouped = figures.links_trace(points, [("a", "b")], True, "pairs", legend=True, group={"legendgroup": "S"})
+        self.assertEqual((grouped.name, grouped.showlegend, grouped.legendgroup), ("pairs", True, "S"))
+
+
+class MarginsTest(unittest.TestCase):
+    def test_the_teal_scale_runs_from_pale_at_zero_to_full_at_the_scale(self):
+        self.assertEqual(figures.margin_color(0.0, 0.2), "#ccfbf1")
+        self.assertEqual(figures.margin_color(0.2, 0.2), "#14b8a6")
+        self.assertEqual(figures.margin_color(0.5, 0.2), "#14b8a6")  # above the scale: full
+        self.assertEqual(figures.margin_color(0.1, 0.0), "#ccfbf1")  # no scale: pale
+
+    def test_the_histogram_labels_the_threshold_and_the_dashboards_focus_on_the_plot(self):
+        figure = figures.margin_histogram([0.01, 0.2, 0.4], 0.05)
+        self.assertEqual(len(figure.layout.shapes), 1)
+        self.assertEqual(figure.layout.annotations[0].text, "between two topics below 0.05")
+        self.assertEqual(figure.data[0].marker.color, "#14b8a6")
+        focus = figures.margin_histogram([0.01, 0.2, 0.4], 0.05, 0.3, 0.25)
+        self.assertEqual(len(focus.layout.shapes), 2)
+        self.assertEqual(focus.layout.annotations[1].text, "the 25 % most confident above 0.30")
+        self.assertEqual({note.bgcolor for note in focus.layout.annotations}, {figures.LABEL_BACKING})  # on a dark backing
 
 
 class DendrogramTest(unittest.TestCase):

@@ -1,6 +1,6 @@
 """The figures of the dashboard's model panels (plotly only; nothing of Dash, nothing of the viewer): each the whole
 course's, whatever card is shown, but C's mark of the shown card's deck. T's histogram and D's confusion matrix are
-the models view's (standalone.layout.margin_histogram, figures.confusion_figure); the three drawn here:
+the models view's (figures.margin_histogram, figures.confusion_figure); the three drawn here:
 
 * S, where the related cards lie (places_figure): one bar split into this topic, this deck and another deck, seen
   from each card, in the neighbours figure's colours (figures.PLACE_COLORS), each part with its share, a bracket over
@@ -21,10 +21,9 @@ from typing import Mapping, Optional, Sequence
 import plotly.graph_objects as go
 
 from ..figures import (
-    DARK_INK, ELSEWHERE, FONT, GOLD, HERE, INK, LABEL_FONT, MUTED, PLACE_COLORS, THIS_DECK, TRANSPARENT, Point, plain_layout,
-    sphere_surface,
+    DARK_INK, DECK_COLOR, DEFAULT_CAMERA, DOT_SIZE, ELSEWHERE, FONT, GOLD, GREY, HERE, HOVER_FONT, INK, LABEL_FONT, MUTED, PLACE_COLORS,
+    SELECTED_SIZE, THIS_DECK, TRANSPARENT, Point, links_trace, plain_layout, sphere_surface,
 )
-from ..standalone.layout import DECK_COLOR, DEFAULT_CAMERA, DOT_SIZE, GREY, HOVER_FONT, SELECTED_SIZE, links_trace
 
 PLACES = (HERE, THIS_DECK, ELSEWHERE)  # near to far, the bar's parts from the left
 SURFACE = "#071827"  # the panel's background: the gap between the bar's parts

@@ -5,8 +5,8 @@ and the connections from C, C on the scripted topics with T off, the membership 
 S's lines, P's target; the bare course with nothing checked), the legend's strip with one group per layer and T's
 colour bar along the full height, no axes, the dots' sizes, the tab bar (a tab opened and closed by its second
 click, P's among them), the generation tabs with the "app" mark, the section (the line with no tab open; each
-generation's two numbers with their contrast, verdict and explanation from the results rows, the verdict rule on its
-own cases, the app's pick marked in S2's and D2's tables; T's line of the view; P's request box, a request navigating
+generation's two numbers from the results rows, the app's pick marked in S2's table; T's line of the view; P's
+request box, a request navigating
 the view by ids, the decision line, the three nearest a click away, the box disabled with S off), Details (collapsed,
 holding today's content, opening in the figure slot's place, closing on a tab or generation change; the results
 tables of the newest run with their floor, a row's description opened by a click, one at a time), the tag strip
@@ -14,7 +14,8 @@ tables of the newest run with their floor, a row's description opened by a click
 the breadcrumb and the dendrogram's leaves without a topic's hash (the hover keeping it), no learning material and no
 deck's or topic's name in any view or region, and that neither the page nor the table, the figures or the mode
 question import the viewer or the glue (a subprocess with the viewer blocked). The real course's table serves the
-three views too (skipped without it)."""
+three views too (skipped without it). The results files, the section's numbers and the parts the page shares with
+the dashboard are tested on their own: test_results.py, test_headlines.py, test_panels.py and test_figures.py."""
 
 import model_support
 
@@ -31,15 +32,16 @@ from unittest import mock
 
 from plotly.utils import PlotlyJSONEncoder
 
+from app import headlines as hl
 from app.course_table import load_table, missing_files
 from app.figures import GOLD, PREDICTED_COLOR, FONT_SIZE
 from app.models.course_model import TopicLayout
 from app.models.topic_model import FOCUS_MARGIN
+from app.panels import DECK_PART, PANEL_LETTERS
+from app.results import course_note, glossary_entry, read_glossary
 from app.standalone import main as standalone_main
-from app.standalone import headlines as hl
 from app.standalone.app import (
-    ASSETS_DIR, CARD_PART, DECK_PART, FALLBACK, HOME, NO_ENCODER, NO_TAGS, OFF, ON, PANEL_LETTERS, ROW_INPUT, Page, create_app,
-    d2_label, register_callback, s2_label,
+    ASSETS_DIR, CARD_PART, FALLBACK, HOME, NO_ENCODER, NO_TAGS, OFF, ON, ROW_INPUT, Page, create_app, register_callback,
 )
 from app.standalone.layout import (
     BETWEEN, CROSS_SYMBOL, DISAGREE, DOT_SIZE, EMPTIED, EMPTIED_SYMBOL, GENERATIONS, GREY, GROWN, LEGEND_STRIP, LEGEND_TITLES,
@@ -47,7 +49,8 @@ from app.standalone.layout import (
     PREDICTED, PROMPT_HINT, PROMPT_OFF, PROMPT_PLACEHOLDER, SELECTED_LINE, SELECTED_PAIRS, SELECTED_SIZE, TARGET,
     details_class, faded, layer_options, margin_color, page_layout, prompt_class, tab_class, tag_class,
 )
-from app.standalone.results import NO_FOLDER, Results, course_note, glossary_entry, read_glossary
+from test_panels import RecordingApp
+from test_results import PROMPT_ROWS, write_results
 
 OUT = {"figure": 0, "view": 1, "where": 2, "open_disabled": 3, "back_disabled": 4, "options": 5, "checked": 6}
 for _index, _letter in enumerate(PANEL_LETTERS):
@@ -160,11 +163,6 @@ def dumped(value) -> str:
 TOPIC_OF, DESCRIPTIONS, write_test_table = model_support.TOPIC_OF, model_support.DESCRIPTIONS, model_support.write_test_table
 
 
-class RecordingApp:
-    def callback(self, *dependencies):
-        return lambda function: function
-
-
 class PageDriver(unittest.TestCase):
     """The callback driven by triggers, the view kept between calls."""
 
@@ -254,64 +252,6 @@ class PageDriver(unittest.TestCase):
         self.click(f"{deck_id}:{topic_id}")
         return self.call("tag-open")  # the tag strip's Open enters it as the top bar's does
 
-
-class VerdictRuleTest(unittest.TestCase):
-    """The verdict rule on its own cases, never a hand-written word."""
-
-    def test_an_interval_by_whether_it_holds_zero(self):
-        self.assertEqual(hl.interval_verdict(0.018, 0.093), "better")
-        self.assertEqual(hl.interval_verdict(-0.358, 0.224), "within noise")
-        self.assertEqual(hl.interval_verdict(-0.3, -0.1), "worse")
-        self.assertEqual(hl.interval_verdict(0.0, 0.1), "within noise")  # 0 held
-
-    def test_kappa_by_landis_and_kochs_words(self):
-        for kappa, word in ((-0.1, "poor"), (0.0, "slight"), (0.2, "slight"), (0.21, "fair"), (0.40, "fair"), (0.41, "moderate"),
-                            (0.6, "moderate"), (0.61, "substantial"), (0.8, "substantial"), (0.81, "almost perfect"), (1.0, "almost perfect")):
-            self.assertEqual(hl.kappa_verdict(kappa), word, kappa)
-
-    def test_a_floor_by_the_distance_above_it_at_each_bands_edge_and_below_the_floor(self):
-        self.assertAlmostEqual(hl.distance(0.686, 0.04), (0.686 - 0.04) / 0.96)
-        floor = 0.2
-        for value, word in ((0.1, "below the floor"), (0.2, "near the floor"), (0.39, "near the floor"), (0.4, "above the floor"),
-                            (0.59, "above the floor"), (0.6, "well above the floor"), (0.79, "well above the floor"), (0.8, "far above the floor"),
-                            (1.0, "far above the floor")):
-            self.assertEqual(hl.floor_verdict(value, floor), f"{word} by generic criteria", value)
-        self.assertEqual(hl.floor_verdict(0.887, 0.638, "all cards"), "well above all cards by generic criteria")
-        self.assertTrue(hl.floor_verdict(0.5, 0.2).endswith(hl.GENERIC))  # the generic criteria named
-
-    def test_the_explanation_says_the_share_of_the_way_with_the_floor_and_the_top_named(self):
-        text = hl.floor_explanation(0.686, 0.04, "random positions", "all five nearest in the card's deck", "4 %")
-        self.assertEqual(text, "about two thirds of the way from random positions (4 %) to all five nearest in the card's deck")
-        self.assertEqual(hl.floor_explanation(0.868, 0.51, "a random layout", "the top", "0.51"), "about three quarters of the way from a random layout (0.51) to the top")
-        self.assertEqual(hl.floor_explanation(0.05, 0.04, "random positions", "the top", "4 %"), "at the level of random positions (4 %)")
-        self.assertEqual(hl.floor_explanation(0.03, 0.04, "random positions", "the top", "4 %"), "below random positions (4 %)")
-        self.assertEqual(hl.floor_explanation(0.99, 0.04, "random positions", "the top", "4 %"), "all the way from random positions (4 %) to the top")
-        self.assertNotRegex(text, r"\d\.\d")  # never the distance as a number
-        for share, word in ((0.1, "a tenth"), (0.2, "a fifth"), (0.25, "a quarter"), (0.33, "a third"), (0.5, "half"), (0.67, "two thirds"),
-                            (0.75, "three quarters"), (0.8, "four fifths"), (0.9, "nine tenths"), (0.96, "all")):
-            self.assertEqual(hl.share_words(share), word, share)
-
-    def test_a_hit_rates_bands_and_a_lower_better_shares_mirrored_ones(self):
-        for share, word in ((0.49, "weak"), (0.5, "fair"), (0.74, "fair"), (0.75, "good"), (0.89, "good"), (0.9, "very good")):
-            self.assertEqual(hl.rate_verdict(share), f"{word} by generic criteria", share)
-        for share, word in ((0.1, "very good"), (0.11, "good"), (0.25, "good"), (0.26, "fair"), (0.5, "fair"), (0.51, "weak")):
-            self.assertEqual(hl.rate_verdict(share, lower_better=True), f"{word} by generic criteria", share)
-
-    def test_the_format_shares_as_percentages_a_difference_in_points(self):
-        self.assertEqual(hl.shown(0.686, True), "69 %")
-        self.assertEqual(hl.shown(0.868, False), "0.87")
-        self.assertEqual(hl.shown(None, True), "–")
-        gain = hl.Headline("x", 0.734, hl.INTERVAL, "s", "S1", 0.68, 0.054, 0.018, 0.093)
-        self.assertEqual(gain.gain, "+5.4 points (+1.8 to +9.3)")
-        self.assertEqual(gain.verdict, "better")
-        self.assertEqual(hl.Headline("x", 0.955, hl.RATE, "s", "S1", 0.92).gain, "+3.5 points")
-        self.assertEqual(hl.Headline("x", 0.013, hl.KAPPA, "s", "D1", 0.413, percent=False).gain, "−0.40")
-        self.assertEqual(hl.Headline("x", 0.75, hl.FLOOR, "s", "a coin", 0.5).gain, "")  # a floor is no gain
-        self.assertEqual(hl.Headline("x", 0.75, hl.FLOOR, "s").verdict, hl.NO_CONTRAST)
-        self.assertEqual(hl.Headline("x", 0.75, hl.RATE, "s").explanation, "")  # a hit rate needs none
-        self.assertEqual(hl.plain_words("hybrid: chosen + MiniLM"), "the sentence encoder MiniLM next to the words")
-        self.assertEqual(hl.plain_words("unknown"), "unknown")
-        self.assertTrue(all(len(text.split()) <= 12 for text in hl.WHAT.values()))  # at most twelve words
 
 
 class StandaloneTest(PageDriver):
@@ -914,83 +854,11 @@ class MovingCourseTest(PageDriver):
         self.assertEqual(self.page.topic_model.second_of[model_support.MOVED], "01")
 
 
-def write_results(folder: Path, note: str) -> None:
-    """Three small results files: an older run without a run column, a 48-deck row without the note, and the newest
-    run, with a deck's and a topic's name in its cells, the floors and the hand columns the headlines read."""
-    import csv
-
-    folder.mkdir(parents=True, exist_ok=True)
-
-    def write(name, columns, rows):
-        with (folder / name).open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=columns)
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({column: row.get(column, "") for column in columns})
-
-    columns = ["date", "run", "model", "variant", "params", "seed", "precision_at_5", "kept_precision", "hand_precision", "hand_p1",
-               "hand_diff", "hand_diff_low", "hand_diff_high", "judged_cards", "trust_decks", "trust_cards", "overlap_k2", "lift_k2", "seconds", "notes"]
-    write("results.csv", columns, [
-        {"date": "2026-10-22", "model": "S1", "variant": "chosen: old", "precision_at_5": "0.1", "notes": "the 48-deck course"},
-        {"date": "2026-10-26", "model": "S1", "variant": "unigrams", "precision_at_5": "0.4", "notes": f"x; {note}"},
-        {"date": "2026-10-26", "model": "S1", "variant": "chosen: uni+bigrams", "precision_at_5": "0.5", "notes": f"x; {note}"},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "B0", "variant": "random positions", "seed": "42", "precision_at_5": "0.2", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "B0", "variant": "random positions", "seed": "1", "precision_at_5": "0.4", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "S1", "variant": "unigrams", "params": "a", "precision_at_5": "0.5", "kept_precision": "0.55", "notes": f"x; {note}"},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "S1", "variant": "chosen: uni+bigrams", "params": "b", "precision_at_5": "0.6", "kept_precision": "0.65",
-         "hand_precision": "0.68", "hand_p1": "0.92", "notes": f"x; {note}"},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "C1", "variant": "model", "params": "k=3", "trust_decks": "0.8", "trust_cards": "0.9", "overlap_k2": "0.7", "lift_k2": "0.5", "notes": f"deck Alpha and Lists; {note}"},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "C1", "variant": "random", "params": "k=3", "seed": "42", "trust_decks": "0.4", "trust_cards": "0.5", "overlap_k2": "0.3", "lift_k2": "0.000", "notes": f"deck Alpha and Lists; {note}"},
-    ])
-    columns = ["date", "run", "model", "scope", "cards", "topics", "agreement", "kept_share", "moved", "notes"]
-    write("topics.csv", columns, [
-        {"date": "2026-10-26", "model": "T1", "scope": "all", "cards": "13", "agreement": "0.9", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "all", "cards": "13", "topics": "7", "agreement": "0.640", "moved": "0", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "chance", "scope": "all", "cards": "13", "topics": "7", "agreement": "0.220", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "1-NN", "scope": "all", "cards": "13", "topics": "7", "agreement": "0.620", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "focus 25 %", "cards": "3", "agreement": "0.890", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "deck 01 Alpha", "cards": "5", "topics": "3", "agreement": "1.000", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "deck 01", "cards": "5", "topics": "3", "agreement": "1.000", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "chance", "scope": "deck 01", "cards": "5", "topics": "3", "agreement": "0.300", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "stack 1", "cards": "6", "agreement": "1.000", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "T1", "scope": "margin >= 0.05", "cards": "12", "kept_share": "0.923", "agreement": "1.000", "notes": note},
-    ])
-    columns = ["date", "run", "model", "variant", "scope", "params", "features", "label_rule", "folds", "repeats", "seed", "macro_f1", "macro_f1_sd",
-               "kappa", "accuracy", "rated", "unrated", "hand_judged", "hand_within_deck", "hand_within_pairs", "hand_diff", "hand_diff_low", "hand_diff_high", "notes"]
-    write("difficulty.csv", columns, [
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "scope": "all", "features": "text", "label_rule": "deck shares",
-         "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.593", "macro_f1_sd": "0.018", "kappa": "0.413", "accuracy": "0.7", "hand_within_deck": "0.75", "hand_within_pairs": "77",
-         "hand_diff": "0.000", "hand_diff_low": "0.000", "hand_diff_high": "0.000", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "scope": "deck 01", "features": "text", "label_rule": "deck shares",
-         "folds": "5", "repeats": "3", "seed": "42", "rated": "12", "unrated": "7", "hand_judged": "7", "hand_within_deck": "0.80", "hand_within_pairs": "16",
-         "hand_diff": "0.000", "hand_diff_low": "0.000", "hand_diff_high": "0.000", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text+options", "scope": "deck 01", "features": "text+options", "label_rule": "deck shares",
-         "folds": "5", "repeats": "3", "seed": "42", "rated": "12", "unrated": "7", "hand_judged": "7", "hand_within_deck": "0.85", "hand_within_pairs": "16",
-         "hand_diff": "0.050", "hand_diff_low": "-0.100", "hand_diff_high": "0.200", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, base", "scope": "all", "params": "model=x", "features": "premise", "label_rule": "deck shares",
-         "folds": "0", "repeats": "0", "macro_f1": "0.410", "macro_f1_sd": "0.000", "kappa": "0.01", "accuracy": "0.5", "hand_within_deck": "0.80", "hand_within_pairs": "77",
-         "hand_diff": "0.052", "hand_diff_low": "-0.020", "hand_diff_high": "0.120", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, large", "scope": "all", "params": "model=y", "features": "premise", "label_rule": "deck shares",
-         "folds": "0", "repeats": "0", "macro_f1": "0.420", "macro_f1_sd": "0.000", "kappa": "0.018", "accuracy": "0.55", "hand_within_deck": "0.688", "hand_within_pairs": "77",
-         "hand_diff": "-0.065", "hand_diff_low": "-0.358", "hand_diff_high": "0.224", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, base", "scope": "all", "params": "model=x", "features": "premise", "label_rule": "most likely class",
-         "folds": "0", "repeats": "0", "macro_f1": "0.380", "macro_f1_sd": "0.000", "accuracy": "0.45", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D2", "variant": "criterion, base", "scope": "deck 01", "params": "model=x", "features": "premise", "label_rule": "deck shares",
-         "folds": "0", "repeats": "0", "rated": "12", "unrated": "7", "hand_judged": "7", "hand_within_deck": "0.90", "hand_within_pairs": "16",
-         "hand_diff": "0.100", "hand_diff_low": "-0.100", "hand_diff_high": "0.300", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "D1", "variant": "text (chosen)", "features": "text", "label_rule": "most likely class",
-         "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.530", "macro_f1_sd": "0.017", "accuracy": "0.62", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "baseline", "variant": "always easy", "label_rule": "constant",
-         "folds": "5", "repeats": "3", "seed": "42", "macro_f1": "0.27", "macro_f1_sd": "0.00", "kappa": "0.000", "accuracy": "0.667", "notes": note},
-        {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "hand", "variant": "the criterion against the authored levels", "label_rule": "authored",
-         "hand_judged": "24", "notes": note},
-    ])
-
 
 class ResultsTest(PageDriver):
-    """The results files read for Details and the section: the current course's rows, the newest run, the transposed
-    tables with their floor, the chosen variant and the app's pick, the names replaced, the glossary; each
-    generation's two numbers with their contrast, verdict and explanation; the hints without them."""
+    """The results in the page (the files and the numbers themselves: test_results.py, test_headlines.py): the section
+    with the two numbers and Details with the tables whose rows open their description, the scope of the view, a
+    deck's and a topic's name replaced by the deck's id and the topic's label, the entered deck's table."""
 
     @classmethod
     def setUpClass(cls):
@@ -1005,85 +873,15 @@ class ResultsTest(PageDriver):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
-    def test_the_note_marks_the_course(self):
-        self.assertEqual(self.note, "decks 01 to 03")
 
-    def test_s1_stands_next_to_b0s_mean_in_the_newest_run_with_the_chosen_variant_marked(self):
-        (table,) = self.page.results.tables("S1")
-        self.assertEqual(table.heads, ["B0 random positions (mean of 2 seeds)", "unigrams", "chosen: uni+bigrams"])
-        self.assertEqual(table.chosen, [False, False, True])
-        self.assertEqual(table.subtitle, "run 2026-11-01T10:00")
-        rows = dict(table.rows)
-        self.assertEqual(rows["precision_at_5"], ["0.300", "0.5", "0.6"])
-        self.assertEqual(rows["kept_precision"], ["", "0.55", "0.65"])
-        self.assertNotIn("hand_p3", rows)  # a measure the run left empty is no row
-        self.assertNotIn("old", dumped(table.heads))  # the 48-deck row and the older run stay out
-        self.assertEqual(self.page.results.run("S1")[0]["run"], "2026-11-01T10:00")
-        self.assertEqual(self.page.results.run("S2"), [])  # the file, but no S2 rows
-        self.assertIsNone(Results(self.folder / "nowhere", self.note).run("S1"))
 
-    def test_s1s_numbers_are_the_same_deck_precision_against_b0_and_the_hand_precision_at_1(self):
-        precision, p1 = hl.headlines(self.page.results, "S1")
-        self.assertEqual((precision.label, precision.shown, precision.contrast_shown), ("same-deck precision@5", "60 %", "random positions 30 %"))
-        self.assertEqual(precision.verdict, "above the floor by generic criteria")  # (0.6 − 0.3) / 0.7 = 0.43
-        self.assertEqual(precision.explanation, "about half of the way from random positions (30 %) to all five nearest in the card's deck")  # 0.43: nearer half
-        self.assertEqual((p1.label, p1.shown, p1.contrast, p1.verdict), ("judged precision@1", "92 %", None, "very good by generic criteria"))
-        self.assertEqual(hl.chosen_label(self.page.results, "S1"), "chosen: uni+bigrams")
 
-    def test_c1s_numbers_are_the_two_trustworthinesses_against_the_random_layout(self):
-        cards, decks = hl.headlines(self.page.results, "C1")
-        self.assertEqual((cards.label, cards.shown, cards.contrast_shown), ("trustworthiness of the card layouts", "0.90", "a random layout 0.50"))
-        self.assertEqual(cards.verdict, "far above the floor by generic criteria")  # 0.8 of the way
-        self.assertEqual(cards.explanation, "about four fifths of the way from a random layout (0.50) to no stranger by text among a card's nearest on the map")
-        self.assertEqual((decks.shown, decks.contrast_shown, decks.verdict), ("0.80", "a random layout 0.40", "well above the floor by generic criteria"))
-        self.assertEqual(hl.chosen_label(self.page.results, "C1"), "model")
 
-    def test_t1s_numbers_are_the_agreement_against_chance_and_the_most_confident_quarter(self):
-        agreement, confident = hl.headlines(self.page.results, "T1")
-        self.assertEqual((agreement.shown, agreement.contrast_shown), ("64 %", "chance 22 %"))
-        self.assertIn("1-NN gets 62 %", agreement.sentence)
-        self.assertEqual(agreement.verdict, "well above the floor by generic criteria")  # (0.64 − 0.22) / 0.78 = 0.54
-        self.assertEqual(agreement.explanation, "about half of the way from chance by the topic sizes (22 %) to every card in its scripted topic")
-        self.assertEqual((confident.label, confident.shown, confident.contrast_shown), ("agreement of the 25 % most confident", "89 %", "all cards 64 %"))
-        self.assertEqual(confident.verdict, "well above all cards by generic criteria")  # in the floor's place
-        self.assertEqual(confident.explanation, "about two thirds of the way from all cards (64 %) to every card in its scripted topic")
 
-    def test_d1s_numbers_are_the_within_deck_order_against_a_coin_and_the_weighted_kappa(self):
-        order, kappa = hl.headlines(self.page.results, "D1")
-        self.assertEqual((order.shown, order.contrast_shown, order.of), ("75 %", "a coin 50 %", "of 77 pairs"))
-        self.assertEqual(order.verdict, "well above the floor by generic criteria")
-        self.assertEqual(order.explanation, "about half of the way from a coin (50 %) to every pair in order")
-        self.assertEqual((kappa.label, kappa.shown, kappa.contrast_shown, kappa.verdict), ("weighted kappa", "0.41", "always easy 0.00", "moderate"))
-        self.assertIn("never accuracy", kappa.sentence)
-        self.assertEqual(hl.chosen_label(self.page.results, "D1"), "text (chosen)")
 
-    def test_d2s_numbers_are_its_gain_over_d1_within_noise_and_its_kappa(self):
-        order, kappa = hl.headlines(self.page.results, "D2")
-        self.assertEqual((order.shown, order.contrast_shown, order.gain), ("69 %", "D1 75 %", "−6.5 points (−35.8 to +22.4)"))
-        self.assertEqual(order.verdict, "within noise")
-        self.assertEqual((kappa.shown, kappa.contrast_shown, kappa.gain, kappa.verdict), ("0.02", "D1 0.41", "−0.39", "slight"))
-        self.assertEqual(hl.chosen_label(self.page.results, "D2"), d2_label())
-        self.assertEqual(d2_label(), "criterion, large")  # the app's D2: the criterion template on the large model
 
-    def test_claude_is_the_judge_never_a_hand(self):
-        """The slide brief's rule: the relevance marks, the quizzes' levels and the requests were judged by Claude."""
-        for level in ("S1", "S2", "C1", "T1", "D1", "D2", "P1"):
-            for headline in hl.headlines(self.page.results, level) or []:
-                for words in (headline.label, headline.sentence, headline.explanation):
-                    self.assertNotIn("hand", words.lower(), (level, words))
-                    self.assertNotIn("authored", words.lower(), (level, words))
-        self.assertEqual(hl.headlines(self.page.results, "D1")[0].label, "within-deck order on Claude's levels")
-        self.assertFalse(any("hand" in words for words in hl.PLAIN.values()))
 
-    def test_the_app_pick_is_marked_in_d2s_table_next_to_the_reference(self):
-        (tags,) = self.page.results.tables("D2")
-        self.assertEqual(tags.heads, ["D1 text (chosen) · deck shares", "D2 criterion, base · deck shares", "D2 criterion, large · deck shares", "D2 criterion, base · most likely class"])
-        self.assertEqual(tags.chosen, [True, False, True, False])  # the reference and the app's pick
-        rows = dict(tags.rows)
-        self.assertEqual(rows["hand_within_deck (pairs)"], ["0.75 (77)", "0.80 (77)", "0.688 (77)", ""])
-        self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "0.052 [-0.020, 0.120]", "-0.065 [-0.358, 0.224]", ""])
-        _course, deck = self.page.results.tables("D2", "01")
-        self.assertEqual((deck.heads, deck.chosen), (["D1 text (chosen) · deck shares", "D2 criterion, base · deck shares"], [True, False]))
+
 
     def test_c1s_table_replaces_a_decks_and_a_topics_name_and_marks_the_model(self):
         (table,) = self.page.results.tables("C1")
@@ -1092,15 +890,6 @@ class ResultsTest(PageDriver):
         label = Page.topic_label(self.page.topic("01", "01"))
         self.assertEqual(self.page.results.by_ids("deck Alpha and Lists; x"), f"deck 01 and {label}; x")
 
-    def test_t1s_tables_are_the_course_or_the_entered_deck_with_the_stacks_the_margins_and_the_focus(self):
-        course, stacks, margins, focus = self.page.results.tables("T1")
-        self.assertEqual((course.title, course.heads, course.chosen), ("T1 next to the judges, the course", ["T1", "1-NN", "chance"], [True, False, False]))
-        self.assertEqual(dict(course.rows)["agreement"], ["0.640", "0.620", "0.220"])
-        self.assertEqual((stacks.heads, dict(stacks.rows)["cards"]), (["stack 1"], ["6"]))
-        self.assertEqual((margins.heads, dict(margins.rows)["kept_share"]), (["margin >= 0.05"], ["0.923"]))
-        self.assertEqual(focus.heads, ["focus 25 %"])
-        deck, _stacks, _margins, _focus = self.page.results.tables("T1", "01")
-        self.assertEqual((deck.title, deck.heads), ("T1 next to the judges, deck 01", ["T1", "chance"]))
 
     def test_d1s_table_has_a_column_per_row_of_the_run_and_the_entered_decks_rows_a_second_table(self):
         (table,) = self.page.results.tables("D1")
@@ -1121,17 +910,6 @@ class ResultsTest(PageDriver):
         self.assertIn("D1 within deck 01: the hand order", section)
         self.assertNotIn("within deck", str(self.page.details({**HOME, "panel": "D", "level": "D1", "details": True})))
 
-    def test_the_glossary_has_a_row_for_every_measure_column_and_none_for_the_bookkeeping(self):
-        glossary = read_glossary()
-        import evaluate  # next to the package, as the tests run
-
-        bookkeeping = {"date", "run", "model", "variant", "scope", "params", "features", "label_rule", "folds", "repeats", "seed", "seconds", "notes"}
-        for columns in (evaluate.COLUMNS, evaluate.TOPICS_COLUMNS, evaluate.DIFFICULTY_COLUMNS, evaluate.PROMPT_COLUMNS):
-            for column in columns:
-                self.assertEqual(column in glossary, column not in bookkeeping, column)
-        self.assertEqual(glossary["lift_k2"], glossary["lift_k3"])  # one row for the columns of one measure
-        table = self.page.results.tables("D1")[0]
-        self.assertEqual(table.row_columns[0], ["macro_f1", "macro_f1_sd"])  # the columns behind a row, its description's key
 
     def test_the_section_shows_the_two_numbers_and_details_the_tables_whose_rows_open_their_description(self):
         result = self.tab("S")  # S2, the newest: no S2 rows in this run
@@ -1205,13 +983,7 @@ class ResultsTest(PageDriver):
         numbers = numbers_of(self.call(None)[OUT["head"]])
         self.assertEqual([block["number-value"] for block in numbers], ["64 %", "89 %"])
 
-    def test_without_a_file_or_a_folder_the_section_says_how_to_make_one(self):
-        results = Results(self.folder / "nowhere", self.note)
-        self.assertIsNone(results.tables("S1"))
-        self.assertIn("No results.csv in", results.hint("results.csv"))
-        self.assertIn("uv run evaluate.py", results.hint("results.csv"))
-        self.assertEqual(Results(None, self.note).hint("topics.csv"), NO_FOLDER)
-        self.assertIsNone(hl.headlines(results, "S1"))
+
 
 
 class MeasuredMetricsTest(unittest.TestCase):
@@ -1315,14 +1087,6 @@ def walk_graphs(content) -> list:
     return found
 
 
-PROMPT_ROWS = (
-    "date,run,model,variant,params,self_topic_at1,hand_right,hand_wrong,hand_missed,hand_diff,hand_diff_low,hand_diff_high,judged_requests,ms_per_request,notes\n"
-    "2026-11-01,2026-11-01T09:00,P1,TF-IDF: card,routes=card,0.5,0.6,0.3,0.1,0.000,0.000,0.000,4,1.0,decks 01 to 03\n"
-    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: card,routes=card,0.7,0.75,0.2,0.05,0.000,0.000,0.000,4,1.0,decks 01 to 03\n"
-    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: all,routes=card+centroid+text,0.8,0.5,0.4,0.1,-0.250,-0.750,0.000,4,2.0,decks 01 to 03\n"
-    "2026-11-02,2026-11-02T09:00,P1,hybrid-minilm: card,routes=card,0.8,0.76,0.055,0.185,0.010,-0.100,0.120,4,2.0,decks 01 to 03\n"
-)
-
 
 class PromptPanelTest(PageDriver):
     """P's tab: the request box, a request running P1 and navigating the page's view by ids, the decision line, the
@@ -1370,12 +1134,6 @@ class PromptPanelTest(PageDriver):
         style = Path(ASSETS_DIR, "style.css").read_text(encoding="utf-8")
         self.assertIn(".prompt-box.hidden { display: none; }", style)
 
-    def test_the_hybrids_numbers_stand_against_the_tfidf_card_route(self):
-        results = Results(self.page.results.folder, self.page.results.note, chosen={"P1": "hybrid-minilm: card"})
-        right, wrong = hl.headlines(results, "P1")
-        self.assertEqual((right.shown, right.contrast_shown, right.gain, right.verdict), ("76 %", "TF-IDF 75 %", "+1.0 points", "good by generic criteria"))
-        self.assertEqual((wrong.shown, wrong.contrast_shown, wrong.verdict), ("6 %", "TF-IDF 20 %", "very good by generic criteria"))
-        self.assertEqual(hl.chosen_label(results, "P1"), "hybrid-minilm: card")
 
     def test_a_request_navigates_the_view_into_the_topic_and_selects_the_card_by_ids(self):
         self.tab("P")
@@ -1697,10 +1455,6 @@ class EmbeddingsPanelTest(unittest.TestCase):
 
     def test_s2_is_the_apps_generation_and_its_live_measures_name_the_hybrid(self):
         self.assertEqual(self.page.app_levels["S"], "S2")
-        self.assertEqual(s2_label(), "hybrid: chosen + MiniLM")
-        self.assertEqual(s2_label("minilm"), "MiniLM")
-        self.assertEqual(s2_label("hybrid-mpnet"), "hybrid: chosen + mpnet")
-        self.assertIsNone(s2_label("tfidf"))
         self.assertEqual(self.page.results.chosen["S2"], "hybrid: chosen + MiniLM")
         content = str(self.page.details({**HOME, "panel": "S", "details": True}))
         self.assertIn("hybrid: TF-IDF + MiniLM (16 dimensions)", content)

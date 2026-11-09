@@ -8,8 +8,9 @@ and stores nothing.
   Details, a results row's description, P's request).
 * `layout`: the two columns, the map figure drawn by layers with the legend's strip, the tab bar, the generation
   tabs, the section, the tag strip, the figure slot and Details.
-* `headlines`: the section's numbers from the results rows, with the verdict rule and its explanation in words.
-* `results`: the results files (the newest run per level, the tables with the app's pick marked, the glossary).
+* the parts it shares with the dashboard come from the package: `app.headlines` and `app.results` (the section's
+  numbers, the results tables, the glossary), `app.panels` (the panel names, the cut labels, the slot's helpers,
+  the app's variant labels) and `app.figures` (the connections, the map's colours and sizes, T1's margins).
 * `assets/style.css`: the viewer's tokens, written anew, and the type scale; `assets/map_side.js`: the map's side,
   the height under the top bar; `assets/panel_rows.js`: a generation tab's, a results row's or a target's click
   into the hidden input the callback reads.

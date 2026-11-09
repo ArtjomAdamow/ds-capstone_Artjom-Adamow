@@ -1,6 +1,7 @@
-"""The section's numbers of the standalone page (nothing of Dash, as results.py): each generation's two headline
-numbers from the results rows of its newest run, each with its contrast (the random floor, a baseline, or the
-generation before), one plain sentence on what it measures, and a verdict with its explanation in words.
+"""The section's numbers of the dashboard and the standalone page (nothing of Dash, as results.py): each
+generation's two headline numbers from the results rows of its newest run, each with its contrast (the random
+floor, a baseline, or the generation before), one plain sentence on what it measures, and a verdict with its
+explanation in words.
 
 * `headlines(results, level)`: the generation's two `Headline`s from the same newest run as its tables
   (results.Results.run); None without the file or the rows, the section then saying so. `outcomes(results)`: P1's

@@ -1,7 +1,7 @@
-"""The results files for the standalone page's model panels (the csv module, nothing of Dash): the rows of the
-current course, each level's newest run, its tables with one row per measure and one column per variant next to its
-floor, every deck or topic name of the course table replaced by the deck's id or the topic's label, and the glossary
-of the measure columns (app/docs/columns.md).
+"""The results files for the model panels of the dashboard and the standalone page (the csv module, nothing of
+Dash): the rows of the current course, each level's newest run, its tables with one row per measure and one
+column per variant next to its floor, every deck or topic name of the course table replaced by the deck's id or
+the topic's label, and the glossary of the measure columns (app/docs/columns.md).
 
 * `Results(folder, note, names, chosen)`: reads results.csv, topics.csv, difficulty.csv and prompt.csv of `folder`
   once; a missing file gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
@@ -11,7 +11,7 @@ of the measure columns (app/docs/columns.md).
   none. `chosen` names the variant the app runs where the file's names do not say: S2's (the hybrid with MiniLM,
   `APP_VECTORISER`), D2's (the criterion template on the large model, `NLI_MODEL`) and P1's (the level's variant
   label); their tables mark the app's column next to the reference column, and the section's numbers
-  (standalone.headlines) read the same row.
+  (app.headlines) read the same row.
 * A row's `scope` is the course ("all", or empty on older rows) or a deck ("deck 01"): the difficulty tables take
   the course's rows, and with a deck entered a second table shows the deck's rows of the same run (D1's variants'
   within-deck order on the hand labels; D2's next to D1's chosen row), as T1's deck rows do.
@@ -33,7 +33,7 @@ from typing import Mapping, Optional, Sequence, Union
 
 RESULTS, TOPICS, DIFFICULTY, PROMPT = "results.csv", "topics.csv", "difficulty.csv", "prompt.csv"
 FILES = (RESULTS, TOPICS, DIFFICULTY, PROMPT)
-GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "docs" / "columns.md"
+GLOSSARY_PATH = Path(__file__).resolve().parent / "docs" / "columns.md"
 BOOKKEEPING = ("params", "features", "folds", "repeats", "seed")  # the subtitle, where every head shares the value
 CHOSEN = "chosen"
 HINT = "No {name} in {folder} yet. The offline evaluation writes it, next to app/: uv run evaluate.py"

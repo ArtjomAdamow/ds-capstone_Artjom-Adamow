@@ -14,7 +14,7 @@ demo back to the course's card and trail, Related and the request box answering 
 reload ending the demo, the slide row the course's, the state file and the embeddings' cache the same after it); the
 dashboard without course data ("no data loaded" with the box and Go disabled, the Demo, the tiles from the newest
 runs, main on deck 00 alone reading no state file); the layout's regions and the stylesheet; the state file; the judgement's functions; and that
-nothing of the viewer or the glue is imported (a subprocess with the viewer blocked). The real course's table serves
+nothing of the viewer, the glue or the standalone page is imported (a subprocess with the viewer blocked). The real course's table serves
 a request too (skipped without it)."""
 
 import model_support
@@ -29,7 +29,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import test_standalone
+import test_panels
+import test_results
 
 from app.course_table import load_table, missing_files
 from app.dashboard import main as dashboard_main
@@ -46,9 +47,9 @@ from app.dashboard.panel_figures import A_DECK, CURRENT_DECK
 from app.dashboard.state import STATE_NAME, VERSION, DashboardState
 from app.figures import GOLD
 from app.neighbours import rank_by_confidence, shorten
-from app.standalone.app import DECK_PART
-from app.standalone.headlines import OUTCOME_COLUMNS, WHAT, outcomes
-from app.standalone.results import course_note
+from app.headlines import OUTCOME_COLUMNS, WHAT, outcomes
+from app.panels import DECK_PART
+from app.results import course_note
 
 SLICING = "201002"  # Alpha's quiz: how do you slice a list, option 0 correct
 COMMIT = "102001"  # Beta's flashcard: what does git commit do
@@ -106,7 +107,7 @@ def entries(result, prefix: str, slots: int) -> list[tuple[str, list[str]]]:
 
 
 class CallbackRecorder:
-    """An app that keeps every callback with its dependencies (test_standalone.RecordingApp keeps none)."""
+    """An app that keeps every callback with its dependencies (test_panels.RecordingApp keeps none)."""
 
     def __init__(self):
         self.callbacks: list = []
@@ -659,7 +660,7 @@ class ResultsTilesTest(Driver):
         cls._tmp = tempfile.TemporaryDirectory()
         folder = Path(cls._tmp.name)
         cls.table = load_table(write_test_table(folder))
-        test_standalone.write_results(folder / "results", course_note(cls.table.deck_ids))
+        test_results.write_results(folder / "results", course_note(cls.table.deck_ids))
         cls.board = Dashboard(cls.table, results_dir=folder / "results")
 
     @classmethod
@@ -739,7 +740,7 @@ class PromptGridTest(Driver):
         self.assertIn("3 off-course requests: no match, as no deck teaches it, right", " ".join(text for row in heatmap.text for text in row))
 
     def test_a_run_without_the_counts_says_how_to_get_them(self):
-        self.results.write_text(test_standalone.PROMPT_ROWS, encoding="utf-8")
+        self.results.write_text(test_results.PROMPT_ROWS, encoding="utf-8")
         board = Dashboard(self.table, results_dir=self.results.parent)
         self.assertIsNone(outcomes(board.results))
         self.assertTrue(board.tile("P").numbers)  # the numbers stand, the grid waits for its counts
@@ -761,7 +762,7 @@ class DemoDriver(Driver):
         cls._tmp = tempfile.TemporaryDirectory()
         folder = Path(cls._tmp.name)
         cls.table = load_table(write_test_table(folder / "course"))
-        test_standalone.write_results(folder / "results", course_note(cls.table.deck_ids))
+        test_results.write_results(folder / "results", course_note(cls.table.deck_ids))
         cls.board = Dashboard(cls.table, results_dir=folder / "results") if cls.course_board else None
         cls.demo = DemoBoard(load_table(model_support.write_demo_table(folder / "demo")), folder / "results")
 
@@ -1099,20 +1100,20 @@ from app.dashboard.app import INPUTS, OUT, Dashboard, register_callback
 from app.course_table import load_table
 with tempfile.TemporaryDirectory() as folder:
     board = Dashboard(load_table(test_dashboard.write_test_table(Path(folder))))
-update = register_callback(test_dashboard.test_standalone.RecordingApp(), board)
+update = register_callback(test_dashboard.test_panels.RecordingApp(), board)
 view = None
 for trigger, request in (("prompt-go", "how do I slice a list"), ("related-toggle", None), ("related-1", None), ("tile-D", None)):
     with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
         view = update(*([0] * INPUTS), [], request, view)[OUT["view"]]
 assert len(board.state.explored_ids) == 2 and len(board.state.trail) == 1 and view["panel"] == "D", (board.state.shown, view)
 assert not launch.viewer_available()
-loaded = sorted(name for name in sys.modules if (name == "project" or name.startswith(("project.", "app.glue"))) and sys.modules[name] is not None)
+loaded = sorted(name for name in sys.modules if (name == "project" or name.startswith(("project.", "app.glue", "app.standalone"))) and sys.modules[name] is not None)
 print("LOADED", loaded)
 """
 
 
 class NoViewerTest(unittest.TestCase):
-    def test_the_dashboard_runs_with_the_viewer_blocked_and_imports_none_of_it_or_the_glue(self):
+    def test_the_dashboard_runs_with_the_viewer_blocked_and_imports_none_of_it_the_glue_or_the_page(self):
         tests_dir, module_dir = Path(__file__).resolve().parent, model_support.MODULE_DIR
         script = NO_VIEWER.format(module_dir=str(module_dir), tests_dir=str(tests_dir))
         result = subprocess.run([sys.executable, "-B", "-c", script], capture_output=True, text=True, cwd=str(module_dir))
@@ -1128,7 +1129,7 @@ RESULTS_DIR = model_support.MODULE_DIR / "results"
 class RealTableTest(unittest.TestCase):
     def test_the_real_course_table_serves_a_request_the_related_cards_and_the_tiles(self):
         board = Dashboard(load_table(TABLE_DIR), results_dir=RESULTS_DIR)
-        update = register_callback(test_standalone.RecordingApp(), board)
+        update = register_callback(test_panels.RecordingApp(), board)
         view = None
         for trigger, request in (("prompt-go", "how do I merge two data frames in pandas"), ("related-toggle", None)):
             with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):

@@ -32,8 +32,8 @@ from typing import NamedTuple, Optional, Sequence
 
 from dash import dcc, html
 
-from ..standalone.headlines import Headline
-from ..standalone.layout import PANEL_LETTERS, PANEL_NAMES
+from ..headlines import Headline
+from ..panels import PANEL_LETTERS, PANEL_NAMES
 from . import quiz
 
 KEY_INPUT = "key-enter"  # the hidden input Enter writes (assets/keys.js)

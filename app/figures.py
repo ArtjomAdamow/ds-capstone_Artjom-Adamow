@@ -1,10 +1,15 @@
-"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the standalone page (standalone):
+"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the dashboard and the standalone
+page:
 
 * the difficulty models D1 and D2 (models.difficulty_model.DifficultyReport): the line that says what was measured
   (metrics_subtitle), the score table's rows (score_header, score_rows), the confusion matrix (confusion_figure) and
   the shares of the levels (shares_figure);
-* the sphere: its surface (sphere_surface) and the great-circle arcs along it (surface_arc), the cards view's
-  connections;
+* the sphere: its surface (sphere_surface), the great-circle arcs along it (surface_arc), the cards view's
+  connections, and the connections as one trace, straight or along the surface (links_trace); the map's colours and
+  sizes the dashboard's decks sphere shares with the page's map (GREY, DECK_COLOR, DOT_SIZE, SELECTED_SIZE,
+  DEFAULT_CAMERA, HOVER_FONT);
+* T1's margins in bins with the threshold, and the dashboard's focus line (margin_histogram), on the margins' teal
+  scale (margin_color);
 * the dendrogram of a clustering (dendrogram_figure): scipy's linkage of the same vectors the connections come from
   (models.clustering), laid out by scipy's coordinates, the real merge distances as heights, with the cut-off line
   above the last kept merge, labelled on the plot;
@@ -53,6 +58,15 @@ TRANSPARENT = "rgba(0, 0, 0, 0)"
 # Where a neighbour lies, and its bar's colour: the entered topic, the entered deck, another deck
 HERE, THIS_DECK, ELSEWHERE = "this topic", "this deck", "another deck"
 PLACE_COLORS = {HERE: "#cde2fb", THIS_DECK: "#3987e5", ELSEWHERE: "#0d366b"}
+GREY = "#7c8b99"  # the viewer's colour of a dot in no group: a flashcard, the cards' sphere
+DECK_COLOR = MUTED  # the decks in one colour
+LINK_WIDTH = 4
+DOT_SIZE = 13  # every view's dots
+SELECTED_SIZE = 20
+DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
+HOVER_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 16}
+MARGIN_PALE, MARGIN_FULL = (204, 251, 241), (20, 184, 166)  # the teal scale of a card's margin: #ccfbf1 to #14b8a6
+LABEL_BACKING = "rgba(7, 24, 39, 0.95)"  # a label on the plot over a line: the line hidden behind it
 
 Point = tuple[float, float, float]
 
@@ -229,6 +243,67 @@ def surface_arc(source: Point, target: Point, step: float = ARC_STEP, lift: floa
     points = (np.cos(thetas)[:, None] * unit_a + np.sin(thetas)[:, None] * across) * radii[:, None]
     return points[:, 0].tolist(), points[:, 1].tolist(), points[:, 2].tolist()
 
+
+def links_trace(points: Mapping, pairs, along_surface: bool, name: str = "Connections", color: str = GOLD,
+                dash: str = "dash", width: float = LINK_WIDTH, opacity: float = 1.0, legend: bool = False,
+                group: Optional[Mapping] = None) -> Optional[go.Scatter3d]:
+    """Pairs of drawn dots as one trace (None between two lines), straight or along the sphere's surface: by default
+    the model's connections, gold and dashed; the page's S's neighbour pairs solid on the blue ramp, an entry of the
+    legend by their name in the layer's group (`group`: plotly's legendgroup keys). None without a pair of two drawn
+    dots."""
+    xs: list = []
+    ys: list = []
+    zs: list = []
+    for source, target in pairs:
+        if source not in points or target not in points:
+            continue
+        if along_surface:
+            line = surface_arc(points[source], points[target])
+        else:
+            line = tuple([points[source][axis], points[target][axis]] for axis in range(3))
+        xs += list(line[0]) + [None]
+        ys += list(line[1]) + [None]
+        zs += list(line[2]) + [None]
+    if not xs:
+        return None
+    return go.Scatter3d(
+        x=xs, y=ys, z=zs, mode="lines", line={"color": color, "width": width, "dash": dash}, opacity=opacity,
+        hoverinfo="skip", showlegend=legend, name=name, **(group or {}),
+    )
+
+
+# --- T1's margins -----------------------------------------------------------------------------------------------
+
+
+def margin_color(margin: float, scale: float) -> str:
+    """A card's margin on the teal scale: pale at 0, full at `scale` (the course's 95th percentile) and above."""
+    share = 0.0 if scale <= 0 else max(0.0, min(1.0, margin / scale))
+    red, green, blue = (round(pale + (full - pale) * share) for pale, full in zip(MARGIN_PALE, MARGIN_FULL))
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
+def margin_histogram(margins: Sequence[float], threshold: float, focus: Optional[float] = None, focus_share: float = 0.25) -> go.Figure:
+    """The view's margins in bins, the threshold as a dashed line labelled on the plot: below it a card is
+    between two topics; with `focus` (the dashboard's) a second line where the `focus_share` most confident begin,
+    labelled lower on the plot."""
+    figure = go.Figure(go.Histogram(x=list(margins), nbinsx=20, marker={"color": margin_color(1.0, 1.0)}, hoverinfo="skip"))
+    figure.add_vline(x=threshold, line={"color": CUT_COLOR, "dash": "dash", "width": 2},
+                     annotation={"text": f"between two topics below {threshold:.2f}", "font": {**FONT, "color": CUT_COLOR}},
+                     annotation_position="top right")
+    if focus is not None:  # its label lower down, both on a dark backing where the lines cross a label
+        figure.add_vline(x=focus, line={"color": GOLD, "dash": "dot", "width": 2},
+                         annotation={"text": f"the {focus_share * 100:.0f} % most confident above {focus:.2f}", "font": {**FONT, "color": GOLD},
+                                     "y": 0.75, "yanchor": "top", "bgcolor": LABEL_BACKING},
+                         annotation_position="top right")
+        figure.layout.annotations[0].bgcolor = LABEL_BACKING
+    figure.update_layout(plain_layout(
+        margin={"l": 70, "r": 10, "t": 30, "b": 60},
+        xaxis={"title": {"text": "margin: best centroid's cosine − second best's", "font": LABEL_FONT}, "tickfont": FONT,
+               "gridcolor": GRID, "zeroline": False, "fixedrange": True},
+        yaxis={"title": {"text": "cards", "font": LABEL_FONT}, "tickfont": FONT, "gridcolor": GRID, "zeroline": False, "fixedrange": True},
+        bargap=0.05,
+    ))
+    return figure
 
 # --- the dendrogram ---------------------------------------------------------------------------------------------
 

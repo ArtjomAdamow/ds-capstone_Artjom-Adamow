@@ -39,7 +39,7 @@ The right column: the tab bar (the model letters S, C, T, D and P; one open at a
 store, a second click closes it), the open model's generations as tabs (layout.GENERATIONS; the newest open when
 the tab opens, the `level` key, None for the newest; the "app" mark on the one the app runs, Page.app_levels), the
 section (Page.section: the headline, the generation's two numbers with their contrast, sentence, verdict and
-explanation from the results rows, standalone.headlines; the chosen variant in plain words; with no tab open one
+explanation from the results rows, app.headlines; the chosen variant in plain words; with no tab open one
 line on the five models; on top for the live demo T's line of the view next to the course and P's request box with
 its answer: the decision line and the three nearest by label, each a click away), the selected dot's tag strip
 (Page.tag_strip: its title and tags; hidden with nothing selected) and the figure slot (Page.figure_slot: one
@@ -78,27 +78,29 @@ from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
 from ..course_table import CourseTable
-from ..figures import ELSEWHERE, HERE, THIS_DECK, confusion_figure, dendrogram_figure, neighbours_figure, number
-from ..models import clustering, embeddings, similar, zero_shot
+from ..figures import (
+    ELSEWHERE, HERE, PREDICTED_COLOR, THIS_DECK, confusion_figure, dendrogram_figure, margin_color, margin_histogram, neighbours_figure,
+    number,
+)
+from ..headlines import chosen_label, headlines, shown
+from ..models import clustering, embeddings, similar
 from ..models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel, Point, TopicLayout
 from ..models.difficulty_model import DifficultyReport, fit_difficulty, judge_tags
 from ..models.evaluation import random_directions
 from ..models.layout import as_dense, fibonacci_sphere
 from ..models.prompt_model import CARD, CENTROID, DEFAULT_ROUTES, TEXT, PromptModel, variant_label
-from .headlines import chosen_label, headlines, shown
+from ..panels import CARDS_VIEW, CUT_LABELS, DECK_PART, DECKS_VIEW, PANEL_LETTERS, TOPICS_VIEW, d2_label, empty_slot, graph, s2_label
+from ..results import LEVEL_FILES, Results, course_note, read_glossary
 from .layout import (
-    CARDS_VIEW, CROSS_SYMBOL, CUT_LABELS, DECKS_VIEW, GENERATIONS, GREY, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR,
-    MOVED_OUT_SYMBOL, NO_CARDS, NO_LINKS, OVERVIEW_HINT, PANEL_LETTERS, PREDICTED, PREDICTED_COLOR, PROMPT_HINT, PROMPT_OFF, SELECT_A_CARD,
-    STACK_NAMES, TOPICS_NOTE, TOPICS_VIEW, card_class, details_class, empty_slot, graph, layer_options, level_section, level_tabs, live_line,
-    map_figure, margin_color, margin_histogram, metrics_panel, model_readout, no_tab_line, page_layout, prompt_answer, prompt_class,
+    CROSS_SYMBOL, GENERATIONS, LEVEL_COLORS, MOVED_IN_COLOR, MOVED_IN_SYMBOL, MOVED_OUT_COLOR, MOVED_OUT_SYMBOL, NO_CARDS, NO_LINKS,
+    OVERVIEW_HINT, PREDICTED, PROMPT_HINT, PROMPT_OFF, STACK_NAMES, TOPICS_NOTE, card_class, details_class, layer_options,
+    level_section, level_tabs, live_line, map_figure, metrics_panel, model_readout, no_tab_line, page_layout, prompt_answer, prompt_class,
     section_head, tab_class, tag_class, tag_strip_body, topic_counts_of,
 )
-from .results import LEVEL_FILES, Results, course_note, read_glossary
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"  # next to evaluate.py: the capstone's root
 TITLE = "Guided learning: the models"
-DECK_PART = 5  # the decks view's preset: parts of at most five decks (as the viewer's Helper presets them)
 CARD_PART = 4  # a topic's preset: parts of at most four cards
 TOPIC_HASH_BYTES = 3  # a topic label's hash: six hex digits
 RANDOM_SEED = 42  # the random positions of the scripted topics: one draw per view, the same in every state
@@ -160,7 +162,6 @@ DESCRIPTIONS = {
           "evaluation and D1 stays the app's. The page reads the tags from the launcher's cache; D's layer draws its "
           "levels as rings, a ring behind a quiz where it disagrees with D1.",
 }
-ENCODER_SHORT = {embeddings.MINILM: "MiniLM", embeddings.MPNET: "mpnet"}  # as evaluate.py names S2's rows
 
 
 def merges_of(vectors) -> np.ndarray:
@@ -178,22 +179,6 @@ def _mean(values: list[float]) -> str:
     if not values:
         return "–"
     return f"{number(sum(values) / len(values))} ({len(values)} topic{'' if len(values) == 1 else 's'})"
-
-
-def s2_label(name: str = embeddings.APP_VECTORISER) -> Optional[str]:
-    """S2's variant label in results.csv of the vectoriser the app runs (APP_VECTORISER), as evaluate.py names its
-    rows: "MiniLM", "hybrid: chosen + MiniLM"; None for TF-IDF."""
-    if name == embeddings.TFIDF:
-        return None
-    encoder = name.removeprefix("hybrid-")
-    short = ENCODER_SHORT.get(embeddings.ENCODERS.get(encoder, ""), encoder)
-    return f"hybrid: chosen + {short}" if name.startswith("hybrid-") else short
-
-
-def d2_label(model_name: str = zero_shot.NLI_MODEL) -> str:
-    """D2's variant label in difficulty.csv of the app's D2: the criterion template on the model the app reads
-    (NLI_MODEL), as evaluate.py names its rows ("criterion, large")."""
-    return f"{zero_shot.CRITERION.name}, {zero_shot.size_of(model_name)}"
 
 
 class Page:
@@ -789,7 +774,7 @@ class Page:
 
     def section(self, state: dict) -> tuple[list, list]:
         """The section's head and its live part: with no tab open one line on the five models; else the headline,
-        the generation's two numbers (standalone.headlines) with the chosen variant in plain words, or the hint
+        the generation's two numbers (app.headlines) with the chosen variant in plain words, or the hint
         without the results; the live part T's line of the view next to the course, P's answer or its hint."""
         level = self.level_of(state)
         if level is None:

@@ -7,9 +7,14 @@
 * `glue`: the model state for the whole course with the Helper switch, the position sources, the cut-off presets,
   the difficulty groups, the related cards under the card panel, the derived course file and the model state's file:
   the models on the viewer, over its public API only.
-* `figures`: the plotly figures the glue's back of the card panel and the standalone page both draw (D1's metrics,
-  the sphere's surface and arcs, the dendrogram over scipy's coordinates); plotly only, no Dash, nothing of the
-  viewer, and out of `models`, so the model tests need no plotly.
+* `figures`: the plotly figures the glue's back of the card panel, the dashboard and the standalone page draw (D1's
+  metrics, the sphere's surface and arcs, the connections, the map's colours and sizes, T1's margins, the dendrogram
+  over scipy's coordinates); plotly only, no Dash, nothing of the viewer, and out of `models`, so the model tests
+  need no plotly.
+* `headlines`, `results`: the results files of the offline evaluation and each generation's two numbers with their
+  verdicts, read by the dashboard and the standalone page; nothing of Dash.
+* `panels`: the model panels' names and letters, the cut labels, the figure slot's helpers and the app's variant
+  labels, shared by the dashboard and the standalone page.
 * `course_table`: the course table (cards.csv, decks.csv, topics.csv), the models' input without the viewer's
   parser, read with the csv module; the flashcards workspace's export writes it with the parser.
 * `launch`: the launcher's mode question, full (the viewer with the models on from the start) or standalone, the

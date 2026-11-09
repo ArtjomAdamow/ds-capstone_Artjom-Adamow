@@ -31,7 +31,7 @@ model's topics as the full app gives every deck from the start; the topics keep 
   a deck or a topic leaves the card as it is. A selection in any way opens the shown card's deck and topic again.
 * The slide row: five tiles, S, C, T, D and P, each the generation the app runs (S2 with the encoder, else S1; C1,
   T1, D1, P1) with its headline and its two numbers with their verdict words from the results files
-  (standalone.headlines, the same numbers and words as the models view), one line where a results file is missing;
+  (app.headlines, the same numbers and words as the models view), one line where a results file is missing;
   nothing live. A click on a tile opens the model's panel over the two columns, the tiles staying visible; another
   tile shows that model in its place, a second click on the open tile closes it; Enter does nothing while it is open.
   The panel holds the numbers on its left and the model's figure on its right (panel_figure), the whole course's
@@ -66,17 +66,16 @@ from typing import Optional, Sequence
 from dash import Dash, Input, Output, State
 
 from ..course_table import CourseTable, DeckRow
-from ..figures import ELSEWHERE, HERE, confusion_figure
+from ..figures import ELSEWHERE, HERE, confusion_figure, margin_histogram
 from ..figures import THIS_DECK as SAME_DECK
+from ..headlines import WHAT, headlines, outcomes
 from ..models import clustering, embeddings, similar
 from ..models.course_model import CourseModel, TopicLayout
 from ..models.difficulty_model import DifficultyReport, fit_difficulty
 from ..models.prompt_model import PromptModel, variant_label
 from ..neighbours import rank_by_confidence, shorten
-from ..standalone.app import DECK_PART, d2_label, s2_label
-from ..standalone.headlines import WHAT, headlines, outcomes
-from ..standalone.layout import CUT_LABELS, DECKS_VIEW, empty_slot, graph, margin_histogram
-from ..standalone.results import LEVEL_FILES, Results, course_note
+from ..panels import CUT_LABELS, DECK_PART, DECKS_VIEW, d2_label, empty_slot, graph, s2_label
+from ..results import LEVEL_FILES, Results, course_note
 from . import quiz
 from .layout import (
     BEGIN_HINT, DEMO_BUTTON, DIAGRAM_INPUT, DIAGRAM_ROWS, GO_SLOTS, KEY_INPUT, NO_DATA_HINT, PANEL_LETTERS, PANEL_NAMES, RELATED_SLOTS, THIS_DECK,

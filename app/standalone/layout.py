@@ -44,17 +44,14 @@ from dash import dcc, html
 
 from ..cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE
 from ..figures import (
-    CUT_COLOR, FONT, GOLD, GRID, INK, LABEL_FONT, MUTED, PREDICTED_COLOR, SEQUENTIAL, TRANSPARENT, confusion_figure, metrics_subtitle,
-    plain_layout, score_header, score_rows, shares_figure, sphere_surface, surface_arc,
+    DECK_COLOR, DEFAULT_CAMERA, DOT_SIZE, GOLD, GREY, HOVER_FONT, INK, MUTED, PREDICTED_COLOR, SELECTED_SIZE, SEQUENTIAL, TRANSPARENT,
+    links_trace, margin_color, metrics_subtitle, score_header, score_rows, shares_figure, sphere_surface,
 )
-from .headlines import NO_TAB, WHAT, Headline, plain_words
-from .results import Table, glossary_entry
+from ..headlines import NO_TAB, WHAT, Headline, plain_words
+from ..panels import CARDS_VIEW, DECKS_VIEW, PANEL_LETTERS, PANEL_NAMES, TOPICS_VIEW, graph
+from ..results import Table, glossary_entry
 
-CARDS_VIEW = "cards"
-TOPICS_VIEW = "topics"
-DECKS_VIEW = "decks"
 BACKGROUND = "#102a43"
-GREY = "#7c8b99"  # the viewer's colour of a dot in no group: a flashcard, the cards' sphere
 LEVEL_COLORS = {"easy": "#4f7fcf", "medium": "#b8956a", "hard": "#ff5349"}  # blue, beige-brown, red-orange
 # The quizzes D1 predicted: the viewer's "Quiz difficulty: predicted" group (glue.difficulty_groups, the oldest group,
 # so its colour decides there too) and the predicted series of the shares figure share this amber
@@ -63,12 +60,8 @@ DISAGREE_SYMBOL = "circle-open"
 DISAGREE_SIZE = 24
 PREDICTED = "predicted"
 NOT_RATED = "not rated"  # a flashcard, or an unrated quiz without a prediction: grey, one entry
-DECK_COLOR = MUTED  # the decks in one colour
 TOPIC_COLOR = MUTED
-LINK_WIDTH = 4
-DOT_SIZE = 13  # every view's dots
 TOPIC_GROWTH = 8  # a topic's dot grows by this many px at a share of 1 of its cards below the threshold (T)
-SELECTED_SIZE = 20
 SELECTED_RING = "rgba(255, 255, 255, 0.55)"
 RING_WIDTH = 3  # D's ring around a card's dot
 TARGET_SIZE = 28  # P1's target: a gold ring behind the dot
@@ -77,7 +70,6 @@ EMPTIED_SYMBOL = "circle-open"  # a topic the model left without cards
 CROSS_SYMBOL = "cross"  # a card below the threshold, between two topics (T)
 MOVED_IN_SYMBOL, MOVED_IN_COLOR = "diamond", "#c084fc"  # a card T1 moved into the topic from another scripted topic
 MOVED_OUT_SYMBOL, MOVED_OUT_COLOR = "diamond-open", "#f472b6"  # a card scripted here that T1 moved elsewhere
-MARGIN_PALE, MARGIN_FULL = (204, 251, 241), (20, 184, 166)  # the teal scale of a card's margin: #ccfbf1 to #14b8a6
 # S: the neighbour pairs' lines on the figures' blue ramp, the selected card's bright, the others faint
 SHARE_LOW, SHARE_HIGH = SEQUENTIAL[1][1], SEQUENTIAL[2][1]
 NEIGHBOUR_LINE = {"color": SHARE_LOW, "width": 3, "opacity": 0.5}
@@ -86,12 +78,9 @@ NEIGHBOUR_PAIRS, SELECTED_PAIRS = "neighbour pairs", "the selected card's pairs"
 CENTROID_GLOW = (16, 10, 4)  # the sizes of the centroid's stacked markers, outside in
 CENTROID_ALPHA = 0.4  # the centroid's opacity at its core, where all its markers overlap
 AXIS_RANGE = [-1.15, 1.15]
-DEFAULT_CAMERA = {"eye": {"x": 1.25, "y": 1.25, "z": 1.25}, "up": {"x": 0, "y": 0, "z": 1}, "center": {"x": 0, "y": 0, "z": 0}}
 MAP_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 18}  # the legend and the colour bar
-HOVER_FONT = {"color": INK, "family": "DM Mono, monospace", "size": 16}
 LEGEND_STRIP = 0.16  # the share of the map's height under the sphere for the legend's strip
 BAR_WIDTH = 0.1  # the share of the map's width at the right edge for the colour bar
-LABEL_BACKING = "rgba(7, 24, 39, 0.95)"  # a label on the plot over a line: the line hidden behind it
 # The classes of the cards view with D, in legend order: (name, colour, symbol); a ring in the class's colour around
 # a circle, as the dots are drawn (a predicted quiz too: its amber ring, no symbol of its own)
 LEGEND = (
@@ -104,8 +93,6 @@ T_TOPIC_LEGEND = ((EMPTIED, TOPIC_COLOR, EMPTIED_SYMBOL), (GROWN, TOPIC_COLOR, "
 LEGEND_TITLES = {"S": "Similar cards", "T": "Topic fit", "D": "Difficulty", "P": "Prompt"}  # plain, per layer
 QUIZ_STACKS = (STACK_QUIZ, STACK_DIFFICULTY)
 STACK_NAMES = {STACK_PLAIN: "Q&A flashcard", STACK_QUIZ: "unrated quiz", STACK_DIFFICULTY: "rated quiz", STACK_SOURCE: "quiz-file flashcard"}
-PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty", "P": "Prompt"}
-PANEL_LETTERS = tuple(PANEL_NAMES)
 # The model generations of each tab, in their tabs' fixed order, the oldest first; the newest is open when its tab opens
 GENERATIONS = {"S": ("S1", "S2"), "C": ("C1",), "T": ("T1",), "D": ("D1", "D2"), "P": ("P1",)}
 GENERATION_NAMES = {
@@ -132,7 +119,6 @@ OVERVIEW_HINT = {
 }
 TOPICS_NOTE = "The topic connections are not drawn on the map: the topics stand at random, so a line would say nothing; the dendrogram shows the deck's tree."
 MACRO_F1_NOTE = "With the deck shares every level keeps its true count, so macro-F1 equals the balanced accuracy."
-CUT_LABELS = {DECKS_VIEW: "groups of ≤ {size} decks", CARDS_VIEW: "groups of ≤ {size} cards", TOPICS_VIEW: "the full tree"}
 SELECT_A_CARD = "Select a card to see its neighbours; until then the dendrogram."
 NO_CARDS = "No cards in this view."
 ROW_HINT = "Click a row for what the measure is."
@@ -155,33 +141,6 @@ def _anchor() -> go.Scatter3d:
     return go.Scatter3d(
         x=AXIS_RANGE, y=AXIS_RANGE, z=AXIS_RANGE, mode="markers", marker={"size": 0.001, "opacity": 0},
         hoverinfo="skip", showlegend=False, name="AnchorBounds",
-    )
-
-
-def links_trace(points: Mapping, pairs, along_surface: bool, name: str = "Connections", color: str = GOLD,
-                dash: str = "dash", width: float = LINK_WIDTH, opacity: float = 1.0, legend: bool = False,
-                group: Optional[str] = None) -> Optional[go.Scatter3d]:
-    """Pairs of drawn dots as one trace (None between two lines), straight or along the sphere's surface: by default
-    the model's connections, gold and dashed; S's neighbour pairs solid on the blue ramp, an entry of the legend by
-    their name in the layer's group. None without a pair of two drawn dots."""
-    xs: list = []
-    ys: list = []
-    zs: list = []
-    for source, target in pairs:
-        if source not in points or target not in points:
-            continue
-        if along_surface:
-            line = surface_arc(points[source], points[target])
-        else:
-            line = tuple([points[source][axis], points[target][axis]] for axis in range(3))
-        xs += list(line[0]) + [None]
-        ys += list(line[1]) + [None]
-        zs += list(line[2]) + [None]
-    if not xs:
-        return None
-    return go.Scatter3d(
-        x=xs, y=ys, z=zs, mode="lines", line={"color": color, "width": width, "dash": dash}, opacity=opacity,
-        hoverinfo="skip", showlegend=legend, name=name, **_group(group),
     )
 
 
@@ -319,13 +278,6 @@ def centroid_traces() -> list[go.Scatter3d]:
     ]
 
 
-def margin_color(margin: float, scale: float) -> str:
-    """A card's margin on the teal scale: pale at 0, full at `scale` (the course's 95th percentile) and above."""
-    share = 0.0 if scale <= 0 else max(0.0, min(1.0, margin / scale))
-    red, green, blue = (round(pale + (full - pale) * share) for pale, full in zip(MARGIN_PALE, MARGIN_FULL))
-    return f"#{red:02x}{green:02x}{blue:02x}"
-
-
 def margin_scale() -> list:
     """The teal scale as a colour scale: pale at 0, full at 1."""
     return [[0.0, margin_color(0.0, 1.0)], [1.0, margin_color(1.0, 1.0)]]
@@ -411,8 +363,8 @@ def map_figure(page, state: dict) -> go.Figure:
         if s_on:
             pairs, own = page.neighbour_pairs(points, state)
             extra += [trace for trace in (
-                links_trace(points, own, True, SELECTED_PAIRS, dash="solid", legend=True, group="S", **SELECTED_LINE),
-                links_trace(points, pairs, True, NEIGHBOUR_PAIRS, dash="solid", legend=True, group="S", **NEIGHBOUR_LINE),
+                links_trace(points, own, True, SELECTED_PAIRS, dash="solid", legend=True, group=_group("S"), **SELECTED_LINE),
+                links_trace(points, pairs, True, NEIGHBOUR_PAIRS, dash="solid", legend=True, group=_group("S"), **NEIGHBOUR_LINE),
             ) if trace is not None]
     if p_draws:
         target = page.target_dot(state)
@@ -485,41 +437,6 @@ def model_readout(scope: str, sections) -> list:
 
 
 # --- the figures of the slot and of Details -------------------------------------------------------------------
-
-
-def graph(figure: go.Figure, class_name: str) -> dcc.Graph:
-    """A graph of the page, without plotly's bar, following its slot's size."""
-    return dcc.Graph(figure=figure, config={"displayModeBar": False, "responsive": True}, responsive=True, className=class_name,
-                     style={"height": "100%", "width": "100%"})
-
-
-def empty_slot(text: str) -> html.Div:
-    """The figure slot, or a part of Details, with a line instead of a figure."""
-    return html.Div(html.P(text, className="empty-state"), className="slot-note")
-
-
-def margin_histogram(margins: Sequence[float], threshold: float, focus: Optional[float] = None, focus_share: float = 0.25) -> go.Figure:
-    """The view's margins in bins, the threshold as a dashed line labelled on the plot: below it a card is
-    between two topics; with `focus` (the dashboard's) a second line where the `focus_share` most confident begin,
-    labelled lower on the plot."""
-    figure = go.Figure(go.Histogram(x=list(margins), nbinsx=20, marker={"color": margin_color(1.0, 1.0)}, hoverinfo="skip"))
-    figure.add_vline(x=threshold, line={"color": CUT_COLOR, "dash": "dash", "width": 2},
-                     annotation={"text": f"between two topics below {threshold:.2f}", "font": {**FONT, "color": CUT_COLOR}},
-                     annotation_position="top right")
-    if focus is not None:  # its label lower down, both on a dark backing where the lines cross a label
-        figure.add_vline(x=focus, line={"color": GOLD, "dash": "dot", "width": 2},
-                         annotation={"text": f"the {focus_share * 100:.0f} % most confident above {focus:.2f}", "font": {**FONT, "color": GOLD},
-                                     "y": 0.75, "yanchor": "top", "bgcolor": LABEL_BACKING},
-                         annotation_position="top right")
-        figure.layout.annotations[0].bgcolor = LABEL_BACKING
-    figure.update_layout(plain_layout(
-        margin={"l": 70, "r": 10, "t": 30, "b": 60},
-        xaxis={"title": {"text": "margin: best centroid's cosine − second best's", "font": LABEL_FONT}, "tickfont": FONT,
-               "gridcolor": GRID, "zeroline": False, "fixedrange": True},
-        yaxis={"title": {"text": "cards", "font": LABEL_FONT}, "tickfont": FONT, "gridcolor": GRID, "zeroline": False, "fixedrange": True},
-        bargap=0.05,
-    ))
-    return figure
 
 
 def score_table(report) -> html.Table:
