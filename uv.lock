@@ -610,18 +610,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dash-daq"
-version = "0.6.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "dash" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/21/3d/36bc0bece8d8a9bafc26997d915b3f4c5d44f9289cc6ce07987837c015ca/dash_daq-0.6.0.tar.gz", hash = "sha256:ae2568aca470b186d6805ff2317a932a6c1a5ed879fe33e525e43810fc354dce", size = 650917, upload-time = "2025-03-11T13:38:16.661Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8d/0f/8dd4776d5ca5b7f76d998a326d5caec722d896a3e1982cbef44fbb74e4f5/dash_daq-0.6.0-py3-none-any.whl", hash = "sha256:d155b5586f164d5d4379d5999275759c525b764a1eb5313a34abce13c50aa856", size = 675957, upload-time = "2025-03-11T13:38:13.942Z" },
-]
-
-[[package]]
 name = "debugpy"
 version = "1.8.21"
 source = { registry = "https://pypi.org/simple" }
@@ -674,9 +662,6 @@ embeddings-gpu = [
     { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(sys_platform != 'linux' and sys_platform != 'win32' and extra == 'extra-11-ds-capstone-embeddings-gpu') or (sys_platform == 'linux' and extra == 'extra-11-ds-capstone-embeddings' and extra == 'extra-11-ds-capstone-embeddings-gpu') or (sys_platform == 'win32' and extra == 'extra-11-ds-capstone-embeddings' and extra == 'extra-11-ds-capstone-embeddings-gpu')" },
     { name = "torch", version = "2.15.0+cu132", source = { registry = "https://download.pytorch.org/whl/cu132" }, marker = "(sys_platform == 'linux' and extra == 'extra-11-ds-capstone-embeddings-gpu') or (sys_platform == 'win32' and extra == 'extra-11-ds-capstone-embeddings-gpu') or (extra == 'extra-11-ds-capstone-embeddings' and extra == 'extra-11-ds-capstone-embeddings-gpu')" },
 ]
-viewer = [
-    { name = "sputnik" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -699,13 +684,12 @@ requires-dist = [
     { name = "seaborn" },
     { name = "sentence-transformers", marker = "extra == 'embeddings'", specifier = ">=6.2" },
     { name = "sentence-transformers", marker = "extra == 'embeddings-gpu'", specifier = ">=6.2" },
-    { name = "sputnik", marker = "extra == 'viewer'", git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.10.0" },
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'embeddings'", specifier = ">=2.15", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "ds-capstone", extra = "embeddings" } },
     { name = "torch", marker = "(sys_platform == 'linux' and extra == 'embeddings-gpu') or (sys_platform == 'win32' and extra == 'embeddings-gpu')", specifier = ">=2.15", index = "https://download.pytorch.org/whl/cu132", conflict = { package = "ds-capstone", extra = "embeddings-gpu" } },
     { name = "torch", marker = "sys_platform != 'linux' and extra == 'embeddings'", specifier = ">=2.15" },
     { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'embeddings-gpu'", specifier = ">=2.15" },
 ]
-provides-extras = ["viewer", "embeddings", "embeddings-gpu"]
+provides-extras = ["embeddings", "embeddings-gpu"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2839,18 +2823,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/69/99/a6ca3beb3ccacb41fb3321d8a60e5566f9e6467601ef8eba6a17e1b89778/soupsieve-2.9.2.tar.gz", hash = "sha256:4a55d8cf158a9c2e587fa4922f1bbb91d68ac829e2d6f25403a85747c71daf74", size = 122445, upload-time = "2026-08-07T00:57:24.801Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/dc/ad025c1ee131eba60c69f4dd5779b18fcf1e6b21a343e2162a84d5d133c7/soupsieve-2.9.2-py3-none-any.whl", hash = "sha256:8089a26fd974ca7a1f30276d3d8492ab266ab15af581642dfe8aa162e0c1c823", size = 37370, upload-time = "2026-08-07T00:57:23.524Z" },
-]
-
-[[package]]
-name = "sputnik"
-version = "0.10.0"
-source = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git?tag=v0.10.0#ddbfa0f4df879d50e25afe3e397c897fbb8713ef" }
-dependencies = [
-    { name = "dash" },
-    { name = "dash-daq" },
-    { name = "numpy" },
-    { name = "plotly" },
-    { name = "pyyaml" },
 ]
 
 [[package]]

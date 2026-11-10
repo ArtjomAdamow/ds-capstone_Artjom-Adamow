@@ -149,8 +149,7 @@ what you found.
 ## The guided learning app
 
 The app lives in `app/`, with its launcher `start.py` and its tests in `tests/app/`. They are
-developed in a separate workspace and arrive here as a whole with every update (a "train"), so
-don't edit them here: a fix comes with a later train. The course data the app reads
+developed in a separate workspace and arrive here as a whole with every update (a "train", not to confuse with model train), so don't edit them here: a fix comes with a later train. The course data the app reads
 (`data/topics.json`, `data/course/`, `data/images/`, `data/jupyter/`) comes the same way, and like
 the state it writes to `data/state/` it is ignored by Git.
 
@@ -160,24 +159,14 @@ Start it with:
 uv run start.py
 ```
 
-- **Without the viewer** the standalone page starts: the models on a page of their own, from the
-  decks to their topics to the cards, with the dendrogram of the connections and the difficulty
-  model's metrics.
-- **With the viewer** it asks "Launch Sputnik? (y/n)": `y` (or just Enter) starts sputnik's 3D map
-  with the models behind its Helper button, `n` the standalone page. Delete `data/state/` for a
-  fresh start of the map.
-
-The viewer is an optional extra. You only need it for the map. Everything else works without it:
+Refresh the app with:
 
 ```bash
-uv sync --all-groups                 # the capstone and the standalone page, without the viewer
-uv sync --all-groups --extra viewer  # with the viewer (needs read access to the sputnik repository)
+uv sync --all-groups
 ```
 
 Code in `src/` and the notebooks may use `app.models`, `app.course_table` and `app.figures`.
 `app.glue` needs the viewer.
 
 **Licences.** `app/` and `start.py` are Artjom Adamow's code under the MIT licence in
-[LICENSE](LICENSE). The viewer, **sputnik**, is a separate private package by Artjom Adamow with
-its own licence. None of its code is in this repository. It is installed as an optional extra from its own repository,
-pinned to a release tag in `pyproject.toml`.
+[LICENSE](LICENSE).

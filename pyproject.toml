@@ -17,8 +17,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The flashcards viewer: a separately licensed private package, see README "Third-party".
-viewer = ["sputnik"]
 embeddings = ["sentence-transformers>=6.2", "torch>=2.15"]   # torch listed directly so the source below applies
 # The same on an NVIDIA GPU (CUDA 13.0+ driver): torch from the CUDA index, 3 GB instead of 0.5 GB. Opt-in, and
 # conflicting with `embeddings`, so every sync names one of the two.
@@ -37,7 +35,6 @@ package = false
 conflicts = [[{ extra = "embeddings" }, { extra = "embeddings-gpu" }]]
 
 [tool.uv.sources]
-sputnik = { git = "ssh://git@github.com/ArtjomAdamow/sputnik.git", tag = "v0.10.0" }
 torch = [
   { index = "pytorch-cpu", extra = "embeddings", marker = "sys_platform == 'linux'" },
   { index = "pytorch-cu132", extra = "embeddings-gpu", marker = "sys_platform == 'win32' or sys_platform == 'linux'" },
