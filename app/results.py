@@ -15,8 +15,8 @@ variant next to its floor, and the glossary of the measure columns (results/colu
   the course's rows, and with a deck entered a second table shows the deck's rows of the same run (D1's variants'
   within-deck order on the hand labels; D2's next to D1's chosen row), as T1's deck rows do.
 * `Table`: the heads (one per variant, the floor among them), the rows (a measure and its value per head; a measure
-  with its sd reads "mean ± sd", a difference with its interval "diff [low, high]", a share with its count
-  "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
+  with its sd reads "mean ± sd", a difference with its interval "diff [low, high]", a share at rank 1 and at rank 3
+  "at1 / at3", a share with its count "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
   (the run and the bookkeeping the heads share), the measure columns shown and the columns behind each row, for the
   row's description, and the file it comes from.
 * `read_glossary`: the rows of results/columns.md by column name, what a row of a table means;
@@ -40,6 +40,7 @@ NO_ROWS = "No {level} rows of this course in {name} yet. The offline evaluation 
 LEVEL_FILES = {"S1": RESULTS, "S2": RESULTS, "C1": RESULTS, "T1": TOPICS, "D1": DIFFICULTY, "D2": DIFFICULTY, "P1": PROMPT}
 NO_FOLDER = "No results folder. The offline evaluation writes one, next to app/: uv run evaluate.py"
 Measure = Union[str, tuple[str, ...]]  # a column, or the columns of one measure (a value with its sd or interval)
+AT3 = "_at3"  # the second column of a measure at rank 1 and 3, read "at1 / at3"
 S1_MEASURES: tuple[Measure, ...] = (
     "precision_at_5", "kept_precision", "coverage", "distinct", "min_score", "hand_precision", "hand_p1", "hand_p3",
     ("hand_diff", "hand_diff_low", "hand_diff_high"), "judged_cards",
@@ -71,8 +72,8 @@ P1_MEASURES: tuple[Measure, ...] = (
     "hand_right", "hand_wrong", "hand_missed", ("hand_diff", "hand_diff_low", "hand_diff_high"),
     ("hand_tfidf_diff", "hand_tfidf_diff_low", "hand_tfidf_diff_high"),
     ("hand_tfidf_wrong_diff", "hand_tfidf_wrong_diff_low", "hand_tfidf_wrong_diff_high"), "hand_topic_at1", "hand_topic_at3",
-    "hand_card_at1", "judged_requests", "self_topic_at1", "self_topic_at3", "self_navigated", "min_card", "min_centroid",
-    "min_text", "ms_per_request",
+    "hand_card_at1", "judged_requests", "self_topic_at1", "self_topic_at3", "self_navigated", ("label_at1", "label_at3"),
+    "min_card", "min_centroid", "min_text", "ms_per_request",
 )
 MARGIN_SCOPE = "margin >= "
 FOCUS_SCOPE = "focus "  # the share scale's marks: the share of the course's cards kept
@@ -126,7 +127,8 @@ def course_row(row: Mapping[str, str]) -> bool:
 
 
 def cell(row: Mapping[str, str], measure: Measure) -> str:
-    """A row's value of a measure: the column, or its columns joined ("mean ± sd", "diff [low, high]", "share (count)")."""
+    """A row's value of a measure: the column, or its columns joined ("mean ± sd", "diff [low, high]", "at1 / at3",
+    "share (count)")."""
     if isinstance(measure, str):
         return row.get(measure) or ""
     values = [row.get(name) or "" for name in measure]
@@ -136,6 +138,8 @@ def cell(row: Mapping[str, str], measure: Measure) -> str:
         return f"{values[0]} [{values[1]}, {values[2]}]" if values[1] and values[2] else values[0]
     if measure[1].endswith("_sd"):
         return f"{values[0]} ± {values[1]}" if values[1] else values[0]
+    if measure[1].endswith(AT3):
+        return f"{values[0]} / {values[1]}" if values[1] else values[0]
     return f"{values[0]} ({values[1]})" if values[1] else values[0]
 
 
@@ -147,6 +151,8 @@ def label(measure: Measure) -> str:
         return f"{measure[0]} [low, high]"
     if measure[1].endswith("_sd"):
         return f"{measure[0]} ± sd"
+    if measure[1].endswith(AT3):
+        return f"{measure[0]} / {AT3.lstrip('_')}"
     return f"{measure[0]} ({measure[1].split('_')[-1]})"
 
 

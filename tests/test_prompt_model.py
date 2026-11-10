@@ -2,8 +2,9 @@
 every term (min_df 1: on 13 cards the baseline's min_df 2 drops "slice" and "merge", each in one card): the floors
 as percentiles over the self set, the three routes' scores per topic, the decision (the few-shot route gates, the
 mean ranks, the nearest card selected inside the entered topic and only there), "no match" with the three nearest, the self set with
-the card held out and its Source: line cut, the demo's deck 00 alone with its own floors, and the same code on S2's
-hybrid (a stand-in encoder, no torch)."""
+the card held out and its Source: line cut, the demo's deck 00 alone with its own floors, the label of a set of cards
+(the nearest three topics by its centroid against the headings, their names within the target length), and the same
+code on S2's hybrid (a stand-in encoder, no torch)."""
 
 import model_support  # noqa: F401  (the package on the path, the test course as card records)
 
@@ -15,11 +16,12 @@ from pathlib import Path
 
 import numpy as np
 
+from models.cards import CardRecord
 from app.course_table import load_table
 from models import embeddings, similar
 from models.prompt_model import (
-    CARD, CENTROID, DEFAULT_ROUTES, ENTERED, NEAREST, NO_MATCH, ROUTES, SELECTED, TEXT, PromptModel, checked, gate_of,
-    request_text,
+    CARD, CENTROID, CUT_MARK, DEFAULT_ROUTES, ENTERED, LABEL_SEPARATOR, LABEL_TARGET, NEAREST, NO_MATCH, ROUTES, SELECTED,
+    TEXT, Label, PromptModel, checked, first_heading, gate_of, label_text, request_text,
 )
 from models.topic_model import TopicModel, unit
 
@@ -251,6 +253,74 @@ class DeckZeroTest(unittest.TestCase):
         self.assertTrue(all(scored.key[0] == "How to use" for scored in self.model.find("a confidence interval").ranking))
 
 
+class LabelTest(unittest.TestCase):
+    """The label of a set of cards: their centroid against the topics' headings, the nearest three topics with a
+    cosine above 0, their names each its first heading, cut to the target length."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.index = index_of()
+        cls.model = model_of(cls.index)
+
+    def test_three_distinct_topics_by_the_centroid_against_the_headings(self):
+        label = self.model.label(model_support.ALL_CARDS)
+        self.assertEqual(len(label.keys), NEAREST)
+        self.assertEqual(len(set(label.keys)), NEAREST)
+        rows = [self.index.row(card_id) for card_id in model_support.ALL_CARDS]
+        centroid = unit(np.asarray(self.index.vectors[rows].sum(axis=0)).ravel())
+        texts = {seed.key: unit(self.index.query(" | ".join(seed.headings))) for seed in model_support.SEEDS if seed.headings}
+        scores = {key: float(centroid @ vector) for key, vector in texts.items()}
+        self.assertEqual(list(label.keys), sorted(scores, key=lambda key: -scores[key])[:NEAREST])  # the nearest three
+        self.assertEqual(label.text, LABEL_SEPARATOR.join(first_heading(self.name(key)) for key in label.keys))
+
+    def name(self, key):
+        return next(seed.name for seed in model_support.SEEDS if seed.key == key)
+
+    def test_a_topics_own_members_are_labelled_with_it_among_the_three(self):
+        members = self.model.topic_model.members
+        for key, card_ids in members.items():
+            if key in (EMPTY, BRANCHES):
+                continue  # Empty has no card; Branches' headings share no word with its cards (no stemming)
+            with self.subTest(key=key):
+                self.assertIn(key, self.model.label(card_ids).keys)
+        self.assertEqual(self.model.label(members[TESTS]).keys[0], TESTS)  # the p value and the null hypothesis
+        self.assertNotIn(BRANCHES, self.model.label(members[BRANCHES]).keys)  # "branch" and "merge" against "Branches | Merging"
+
+    def test_no_label_without_a_known_card_or_a_word_in_common(self):
+        self.assertEqual(self.model.label([]), Label())
+        self.assertEqual(self.model.label(["999999"]).text, "")  # a card the index does not hold
+        self.assertEqual(self.model.label(["999999", "103002", "103002"]), self.model.label(["103002"]))  # left out, once
+        cards = CARDS + [CardRecord("109001", "Delta", "Zebra?", "Quokka.")]
+        model = model_of(index_of(cards), cards=cards)
+        self.assertEqual(model.label(["109001"]), Label())  # nothing in common with any topic's headings
+
+    def test_the_text_is_within_the_target_with_the_short_names_whole(self):
+        self.assertEqual(LABEL_TARGET, 70)
+        for card_ids in ([card.id for card in CARDS[:3]], model_support.GAMMA_CARDS, model_support.ALL_CARDS):
+            self.assertLessEqual(len(self.model.label(card_ids).text), LABEL_TARGET)
+        names = ["Accuracy", "Why do we make data visualisation", "Gestalt Principles of Visual Perception"]
+        text = label_text(names)
+        self.assertEqual(len(text), LABEL_TARGET)
+        first, second, third = text.split(LABEL_SEPARATOR)
+        self.assertEqual(first, "Accuracy")  # the short one whole
+        self.assertTrue(second.endswith(CUT_MARK) and third.endswith(CUT_MARK))  # the long ones cut to one length
+        self.assertEqual(len(second), len(third))
+        self.assertEqual(label_text(["Lists", "Tests"]), "Lists · Tests")  # within the target: nothing cut
+        self.assertEqual(label_text([]), "")
+        self.assertLessEqual(len(label_text(names, 30)), 30)
+        self.assertEqual(label_text(names, 4), " · ".join([CUT_MARK] * 3))  # too small: the marks alone
+        long_label = self.model.label(model_support.ALL_CARDS, target=12)
+        self.assertLessEqual(len(long_label.text), 12)
+
+    def test_a_names_first_heading(self):
+        self.assertEqual(first_heading("Large Language Models (LLMs); Prompt structure …"), "Large Language Models (LLMs)")
+        self.assertEqual(first_heading("Git; Using Git Locally"), "Git")
+        self.assertEqual(first_heading("GitHub"), "GitHub")
+        self.assertEqual(first_heading("  Lists  "), "Lists")
+        self.assertEqual(first_heading(""), "")
+        self.assertEqual(self.model.label_names, [first_heading(seed.name) for seed in model_support.SEEDS])
+
+
 class EncoderTest(unittest.TestCase):
     def test_the_same_code_runs_on_the_hybrid_with_one_encode_per_request(self):
         encoder = embeddings.SentenceEncoder(embeddings.MINILM, loader=model_support.fake_loader)
@@ -262,6 +332,9 @@ class EncoderTest(unittest.TestCase):
         self.assertEqual(encoder.load().calls, calls + 1)
         self.assertEqual(len(answer.ranking), len(model_support.SEEDS))
         self.assertEqual(len(model.self_set(ROUTES["all"])), len(CARDS))
+        label = model.label(model_support.GAMMA_CARDS)
+        self.assertEqual(encoder.load().calls, calls + 1)  # the label encodes nothing
+        self.assertTrue(label.keys and len(label.text) <= LABEL_TARGET)
 
 
 if __name__ == "__main__":

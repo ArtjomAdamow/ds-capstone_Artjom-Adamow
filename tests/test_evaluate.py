@@ -4,8 +4,9 @@ judging form, the merge of its marks) and the hand columns of D1's rows and the 
 similarity part (the marks file, the judging form, the merge, a rewrite with a variant removed); the measures (the
 random draw, the hand precision per card, the paired bootstrap, the fixed-k overlap and the lift on a hand-made
 layout); the rows of the similarity part; D2's rows per model and template with the deck rows; P1's part (every
-variant's rows, the request file read against T1's membership and protected, the review form and its marks, the file
-alone, the paired difference to the card route); and a run on the test course's table, with and without the hand
+variant's rows, the label's two columns on every topic's parts at the preset, the request file read against T1's
+membership and protected, the review form and its marks, the file alone, the paired difference to the card route); and
+a run on the test course's table, with and without the hand
 files, in a process of its own, the demo's deck 00 next to it never read."""
 
 import model_support  # noqa: F401  (the package on the path, and the folder next to it with evaluate.py)
@@ -26,7 +27,7 @@ import numpy as np
 import evaluate
 from models import evaluation, similar
 from models.difficulty_model import LEVELS
-from models.prompt_model import ENTERED, NO_MATCH, ROUTES, SELECTED, Answer, TopicScore
+from models.prompt_model import ENTERED, NO_MATCH, ROUTES, SELECTED, Answer, PromptModel, TopicScore
 
 TODAY = "2026-11-01"
 TESTS_DIR = Path(__file__).resolve().parent
@@ -735,11 +736,35 @@ class PromptPartTest(unittest.TestCase):
             hand = [column for column in evaluate.PROMPT_COLUMNS if column.startswith("hand") or column == "judged_requests"]
             self.assertTrue(all(row[column] == "" for column in hand))
         self.assertEqual(len({(row["min_card"], row["min_centroid"]) for row in rows[:5]}), 1)  # one model per vectoriser
+        for row in rows:
+            self.assertLessEqual(float(row["label_at1"]), float(row["label_at3"]))
+        self.assertEqual(len({(row["label_at1"], row["label_at3"]) for row in rows[:5]}), 1)  # the label reads no route
+        self.assertIn("the label on 6 parts of at most 4 cards in 6 topics", output)
         self.assertNotIn("card_bar", evaluate.PROMPT_COLUMNS)  # no second threshold for the card
         self.assertIn("routes=card+text, gate=card", rows[3]["params"])
         self.assertIn("prompt_requests.md is not written", output)
         self.assertFalse(self.files.prompt_form.exists())  # no form without the file
         self.assertFalse(self.files.prompt_requests.exists())
+
+    def test_the_labels_parts_are_every_topics_cards_cut_at_the_preset(self):
+        cards = model_support.CARDS
+        index, t1 = evaluate.prompt_membership(cards, model_support.SEEDS)
+        parts = evaluate.label_parts(index, t1)
+        members = {key: ids for key, ids in t1.members.items() if len(ids) >= 2}
+        self.assertEqual([key for key, _ in parts], list(members))  # every topic of two cards or more, one part each here
+        self.assertEqual([sorted(part) for _, part in parts], [sorted(members[key]) for key, _ in parts])
+        cut = evaluate.label_parts(index, t1, size=2)  # Lists' three cards: a pair and one left alone
+        lists = [part for key, part in cut if key == ("Alpha", "01")]
+        self.assertEqual(len(lists), 1)
+        self.assertEqual(len(lists[0]), 2)
+        self.assertTrue(set(lists[0]) <= set(t1.members[("Alpha", "01")]))
+        self.assertEqual(evaluate.label_parts(index, t1, size=1), [])  # no merge kept: no part
+        model = PromptModel(index, t1, cards)
+        at1, at3 = evaluate.label_measures(model, parts)
+        own = [(key, model.label(part).keys) for key, part in parts]
+        self.assertEqual(at1, sum(keys[0] == key for key, keys in own) / len(own))
+        self.assertEqual(at3, sum(key in keys for key, keys in own) / len(own))
+        self.assertTrue(math.isnan(evaluate.label_measures(model, [])[0]))
 
     def test_the_request_file_is_protected_and_the_form_written(self):
         self.results.mkdir()

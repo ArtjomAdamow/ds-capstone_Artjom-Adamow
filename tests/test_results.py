@@ -11,7 +11,7 @@ from pathlib import Path
 
 from app.headlines import headlines
 from app.panels import d2_label, s2_label
-from app.results import NO_FOLDER, Results, course_note, read_glossary
+from app.results import NO_FOLDER, Results, cell, course_note, read_glossary
 
 
 def write_results(folder: Path, note: str) -> None:
@@ -90,14 +90,15 @@ def write_results(folder: Path, note: str) -> None:
 
 
 PROMPT_ROWS = (
-    "date,run,model,variant,params,self_topic_at1,hand_right,hand_wrong,hand_missed,hand_diff,hand_diff_low,hand_diff_high,"
-    "hand_tfidf_diff,hand_tfidf_diff_low,hand_tfidf_diff_high,hand_tfidf_wrong_diff,hand_tfidf_wrong_diff_low,hand_tfidf_wrong_diff_high,"
-    "judged_requests,ms_per_request,notes\n"
-    "2026-11-01,2026-11-01T09:00,P1,TF-IDF: card,routes=card,0.5,0.6,0.3,0.1,0.000,0.000,0.000,,,,,,,4,1.0,decks 01 to 03\n"
-    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: card,routes=card,0.7,0.75,0.2,0.05,0.000,0.000,0.000,,,,,,,4,1.0,decks 01 to 03\n"
-    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: all,routes=card+centroid+text,0.8,0.5,0.4,0.1,-0.250,-0.750,0.000,,,,,,,4,2.0,decks 01 to 03\n"
-    "2026-11-02,2026-11-02T09:00,P1,hybrid-minilm: card,routes=card,0.8,0.76,0.055,0.185,0.010,-0.100,0.120,0.010,-0.090,0.110,"
-    "-0.145,-0.250,-0.040,4,2.0,decks 01 to 03\n"
+    "date,run,model,variant,params,self_topic_at1,label_at1,label_at3,hand_right,hand_wrong,hand_missed,hand_diff,hand_diff_low,"
+    "hand_diff_high,hand_tfidf_diff,hand_tfidf_diff_low,hand_tfidf_diff_high,hand_tfidf_wrong_diff,hand_tfidf_wrong_diff_low,"
+    "hand_tfidf_wrong_diff_high,judged_requests,ms_per_request,notes\n"
+    "2026-11-01,2026-11-01T09:00,P1,TF-IDF: card,routes=card,0.5,0.300,0.500,0.6,0.3,0.1,0.000,0.000,0.000,,,,,,,4,1.0,decks 01 to 03\n"
+    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: card,routes=card,0.7,0.410,0.620,0.75,0.2,0.05,0.000,0.000,0.000,,,,,,,4,1.0,decks 01 to 03\n"
+    "2026-11-02,2026-11-02T09:00,P1,TF-IDF: all,routes=card+centroid+text,0.8,0.410,0.620,0.5,0.4,0.1,-0.250,-0.750,0.000,,,,,,,4,2.0,"
+    "decks 01 to 03\n"
+    "2026-11-02,2026-11-02T09:00,P1,hybrid-minilm: card,routes=card,0.8,0.450,0.660,0.76,0.055,0.185,0.010,-0.100,0.120,0.010,-0.090,"
+    "0.110,-0.145,-0.250,-0.040,4,2.0,decks 01 to 03\n"
 )
 
 
@@ -150,6 +151,18 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(focus.heads, ["focus 25 %"])
         deck, _stacks, _margins, _focus = self.results.tables("T1", "01")
         self.assertEqual((deck.title, deck.heads), ("T1 next to the judges, deck 01", ["T1", "chance"]))
+
+    def test_p1s_label_is_one_row_at1_over_at3_the_same_on_every_route_of_a_vectoriser(self):
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / "prompt.csv").write_text(PROMPT_ROWS, encoding="utf-8")
+            (table,) = Results(Path(folder), self.note, chosen={"P1": "TF-IDF: card"}).tables("P1")
+        self.assertEqual(table.heads, ["TF-IDF: card", "TF-IDF: all", "hybrid-minilm: card"])
+        rows = dict(table.rows)
+        self.assertEqual(rows["label_at1 / at3"], ["0.410 / 0.620", "0.410 / 0.620", "0.450 / 0.660"])  # the newest run's
+        self.assertIn(["label_at1", "label_at3"], table.row_columns)  # its description: label_at1's row of the glossary
+        labels = [label for label, _ in table.rows]
+        self.assertEqual(labels.index("label_at1 / at3"), labels.index("self_topic_at1") + 1)  # after the self set
+        self.assertEqual(cell({"label_at1": "0.4"}, ("label_at1", "label_at3")), "0.4")  # without its second column
 
     def test_the_glossary_has_a_row_for_every_measure_column_and_none_for_the_bookkeeping(self):
         glossary = read_glossary()

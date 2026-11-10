@@ -32,10 +32,26 @@ against the topics by three routes over the index's vectors and answered with a 
   the evaluation fits one on character n-grams for the card route's eleventh row.
 * Deterministic: the same index, membership and request give the same answer; ties go to the topic first in the
   file, and among a topic's cards to the first in deck order.
+
+The label of a set of cards (`label`), the text route turned around:
+
+    card ids ──→ their unit rows in the index's space ──→ the full centroid (their mean, at unit length)
+                 │
+                 the cosine to every topic's headings (the text route's vectors) ──→ the nearest three topics
+                 │
+                 the label: the three topics' names, each its first heading, the longer ones cut with "…" to one
+                 length until the three fit LABEL_TARGET, joined by LABEL_SEPARATOR
+
+* A topic counts only with a cosine above 0, so a set that shares nothing with any topic's headings gets no label
+  (an empty text), and one that shares something with one or two topics gets one or two names. Cards the index
+  does not hold are left out; none left, no label. Ties go to the topic first in the file.
+* A name's first heading is the part before its first ";" (a topic's name is made of its headings, two at most
+  joined by "; ", a " …" where it has more), `first_heading`. The cut (`label_text`) gives every name the room of
+  the longest length all three can keep, so a short name stays whole and only the longer ones lose their ends.
 """
 
 from dataclasses import dataclass, field
-from typing import Mapping, Optional, Sequence
+from typing import Iterable, Mapping, Optional, Sequence
 
 import numpy as np
 from scipy import sparse
@@ -57,6 +73,10 @@ FLOOR_PERCENTILE = 10  # every route's floor: this percentile of its own scores 
 NEAREST = 3  # the targets an answer lists, the decision's own first
 HEADING_SEPARATOR = " | "  # a topic's text: its headings joined, as the course table's cell holds them
 MODEL_NAME = "P1 navigation prompt"
+LABEL_TARGET = 70  # the label's length at most, in characters: the three names cut until they fit
+LABEL_SEPARATOR = " · "  # between the label's names
+CUT_MARK = "…"  # the end of a cut name
+NAME_PARTS = ";"  # between the headings of a topic's name
 
 SELECTED = "card selected"
 ENTERED = "topic entered"
@@ -96,6 +116,45 @@ def checked(routes: Sequence[str]) -> tuple[str, ...]:
 def request_text(question: str) -> str:
     """A card's question as a proxy request: its `Source:` line cut (it names the notebook, a template shortcut)."""
     return SOURCE_LINE.sub("", question or "").strip()
+
+
+def first_heading(name: str) -> str:
+    """A topic's name to its first heading: the part before its first ";", without the " …" that marks more
+    headings; the whole name, stripped, where that part is empty."""
+    name = " ".join((name or "").split())
+    first = name.split(NAME_PARTS, 1)[0].rstrip(f" {CUT_MARK}").strip()
+    return first or name
+
+
+def cut(text: str, length: int) -> str:
+    """The text, or its start with CUT_MARK at its end where it is longer than `length` (at least the mark)."""
+    if len(text) <= length:
+        return text
+    return text[: max(length - 1, 0)].rstrip() + CUT_MARK
+
+
+def label_text(names: Sequence[str], target: int = LABEL_TARGET) -> str:
+    """The names joined by LABEL_SEPARATOR within `target` characters: every name keeps at most the longest length
+    all of them can keep together, so the short ones stay whole and the longer ones are cut with CUT_MARK; empty
+    without names. A target too small for a mark per name gives every name its mark alone."""
+    names = [name for name in names if name]
+    if not names:
+        return ""
+    room = target - len(LABEL_SEPARATOR) * (len(names) - 1)
+    longest = max(len(name) for name in names)
+    length = next(
+        (length for length in range(longest, 0, -1) if sum(min(len(name), length) for name in names) <= room), 1
+    )
+    return LABEL_SEPARATOR.join(cut(name, length) for name in names)
+
+
+@dataclass(frozen=True)
+class Label:
+    """The label of a set of cards: the nearest topics in rank order (three at most, none without a cosine above
+    0) and the text, their names within the target length; no keys and an empty text for no label."""
+
+    keys: tuple[Key, ...] = ()
+    text: str = ""
 
 
 @dataclass(frozen=True)
@@ -173,8 +232,8 @@ class _Scores:
 
 class PromptModel:
     """P1 fitted on the index and T1's membership: the topics' full centroids and texts, the floors from the
-    self set; `find` answers a request, `self_set` the cards' own questions for the evaluation. `cards` are
-    the index's cards (their questions make the self set)."""
+    self set; `find` answers a request, `self_set` the cards' own questions for the evaluation, `label` names a set
+    of cards by the nearest three topics. `cards` are the index's cards (their questions make the self set)."""
 
     def __init__(self, index: similar.SimilarityIndex, topic_model: TopicModel, cards: Sequence[Card]) -> None:
         self.index = index
@@ -197,6 +256,7 @@ class PromptModel:
         self.centroids = self._sums / np.where(lengths > 0, lengths, 1.0)[:, None]  # a topic without members: zeros
         self.texts = [HEADING_SEPARATOR.join(seed.headings) for seed in self.seeds]
         self.text_vectors = index.queries(self.texts) if self.keys else sparse.csr_matrix((0, width))
+        self.label_names = [first_heading(seed.name) for seed in self.seeds]  # the names a label is made of
         # The self set: every card of T1's membership whose question is not empty without its Source: line
         by_id = {card.id: card for card in cards}
         self.self_ids = [
@@ -305,6 +365,24 @@ class PromptModel:
             for place in order
         )
         return Answer(text, routes, decision, ranking, card)
+
+    def label(self, card_ids: Iterable[str], target: int = LABEL_TARGET) -> Label:
+        """The label of a set of cards: their full centroid (the mean of their unit rows at unit length) against
+        every topic's headings, the nearest three topics with a cosine above 0 (ties in file order) and their names,
+        each its first heading, cut to fit `target` (label_text). Cards the index does not hold are left out; none
+        left, or no topic above 0, is no label."""
+        rows = [self._row_of[card_id] for card_id in dict.fromkeys(card_ids) if card_id in self._row_of]
+        if not rows or not self.keys:
+            return Label()
+        centroid = np.asarray(self.index.vectors[rows].sum(axis=0), dtype=float).ravel()
+        length = float(np.linalg.norm(centroid))
+        if length <= 1e-12:
+            return Label()
+        scores = np.asarray(self.text_vectors @ (centroid / length), dtype=float).ravel()
+        order = [int(place) for place in np.argsort(-scores, kind="stable") if scores[place] > 0][:NEAREST]
+        return Label(
+            tuple(self.keys[place] for place in order), label_text([self.label_names[place] for place in order], target)
+        )
 
     def self_set(self, routes: Sequence[str] = DEFAULT_ROUTES) -> list[SelfCase]:
         """Every card's question (its Source: line cut) as a request with the card held out, for the evaluation."""

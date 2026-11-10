@@ -41,9 +41,11 @@ What it measures:
   * P1, the navigation prompt: the five route sets on S1's
     TF-IDF and on the app's vectoriser, and the card route on character n-grams, every one on T1's membership of the
     app's vectoriser: over the self set (every card's question with the card held out) the topic@1 and @3 and the
-    share navigated, the floors; over the judged requests of decks 17 and 24 the share served right,
-    wrong and missed, their counts on and off the course (the dashboard's grid), the ranking's topic@1, @3 and
-    card@1, and the paired difference of the share right to the
+    share navigated, the floors; the label of every topic's parts at the cut-off preset (the topic's cards joined
+    along their clustering's merges until a part would hold more than four, LABEL_PART), the part's own topic first
+    among the label's three or anywhere in them, per vectoriser; over the judged requests of decks 17 and 24 the share
+    served right, wrong and missed, their counts on and off the course (the dashboard's grid), the ranking's topic@1,
+    @3 and card@1, and the paired difference of the share right to the
     vectoriser's card route (the character n-grams' to S1's) and, of the share right and of the share wrong, to the
     same route on S1's TF-IDF, each with its bootstrap interval; the time of a request.
 
@@ -97,7 +99,7 @@ if str(MODULE_DIR) not in sys.path:
 
 from app import course_table  # noqa: E402
 from app.launch import CACHE_FOLDER, data_dir  # noqa: E402
-from models import embeddings, evaluation, layout, similar, zero_shot  # noqa: E402
+from models import clustering, embeddings, evaluation, layout, similar, zero_shot  # noqa: E402
 from models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel  # noqa: E402
 from models.difficulty_model import (  # noqa: E402
     DEFAULT_FEATURES, FEATURE_SETS, LEVEL_OF, LEVELS, DifficultyReport, fit_difficulty, judge_tags, measure, split,
@@ -155,7 +157,7 @@ HEADING = re.compile(r"^## (\S+) \(")
 NOT_JUDGED = "not judged yet"  # the tag of a candidate without a row in the marks file under a judged card
 PROMPT_COLUMNS = [
     "date", "run", "model", "variant", "params", "self_topic_at1", "self_topic_at3", "self_navigated",
-    "min_card", "min_centroid", "min_text", "hand_right", "hand_wrong", "hand_missed",
+    "label_at1", "label_at3", "min_card", "min_centroid", "min_text", "hand_right", "hand_wrong", "hand_missed",
     "hand_course_right", "hand_course_wrong", "hand_course_missed", "hand_off_right", "hand_off_wrong",
     "hand_topic_at1", "hand_topic_at3", "hand_card_at1", "hand_diff", "hand_diff_low", "hand_diff_high",
     "hand_tfidf_diff", "hand_tfidf_diff_low", "hand_tfidf_diff_high",
@@ -167,6 +169,7 @@ OFF_COURSE = "off-course"  # the kind of a request no deck teaches: its right an
 PROMPT_TRANSFER_DECKS = ("18",)  # the transfer deck's requests: out of the hand columns, read once after the choice
 CHAR_NGRAMS = "char n-grams"  # the card route's index on character n-grams, the code names' and typos' row
 PROMPT_TIMED = 55  # without requests, ms_per_request is timed over this many of the self set's questions
+LABEL_PART = 4  # the label's parts: a topic's cards joined along their merges, at most four in a part (the preset)
 PROMPT_HEADING = re.compile(r"^## \d+\. (.*)$")
 PROMPT_CANDIDATE = re.compile(r"^- \[([xX ])\] (\d{2}:\d{2}|\d+) ")
 
@@ -772,12 +775,50 @@ def prompt_membership(cards, seeds, vectoriser=None) -> tuple[similar.Similarity
     return index, TopicModel(index, seeds)
 
 
+def label_parts(index: similar.SimilarityIndex, t1: TopicModel, size: int = LABEL_PART) -> list[tuple[tuple[str, str], list[str]]]:
+    """Every topic's parts at the cut-off preset, the label's truth with them: per topic of T1's membership (in file
+    order) its cards' clustering on the index's vectors (clustering.merge_links, in merge order) cut where the next
+    merge would make a part larger than `size` (clustering.preset_rank), each part of two cards or more with its
+    topic's key; a topic with fewer than two cards has none. The parts in the order of their first card."""
+    row_of = {card_id: row for row, card_id in enumerate(index.ids)}
+    parts: list[tuple[tuple[str, str], list[str]]] = []
+    for seed in t1.seeds:
+        ids = [card_id for card_id in t1.members.get(seed.key, []) if card_id in row_of]
+        if len(ids) < 2:
+            continue
+        links = clustering.merge_links(ids, layout.as_dense(index.vectors[[row_of[card_id] for card_id in ids]]))
+        parent = {card_id: card_id for card_id in ids}
+
+        def find(card_id: str) -> str:
+            while parent[card_id] != card_id:
+                parent[card_id] = parent[parent[card_id]]
+                card_id = parent[card_id]
+            return card_id
+
+        for source, target in links[: clustering.preset_rank(links, size)]:
+            parent[find(target)] = find(source)
+        groups: dict[str, list[str]] = {}
+        for card_id in ids:
+            groups.setdefault(find(card_id), []).append(card_id)
+        parts += [(seed.key, group) for group in groups.values() if len(group) >= 2]
+    return parts
+
+
+def label_measures(model: PromptModel, parts: list[tuple[tuple[str, str], list[str]]]) -> tuple[float, float]:
+    """(label_at1, label_at3): the share of the parts whose own topic is the label's first topic, and among its
+    three; NaN without parts."""
+    keys = [(key, model.label(card_ids).keys) for key, card_ids in parts]
+    return share_of(nearest[:1] == (key,) for key, nearest in keys), share_of(key in nearest for key, nearest in keys)
+
+
 def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, request_rows: list[dict],
                     app_index: similar.SimilarityIndex, t1: TopicModel) -> tuple[list[dict], dict[str, list[Answer]]]:
     """P1's variants: the five route sets on S1's TF-IDF and on the
     app's vectoriser where it is another, and the card route on character n-grams, every one on T1's membership of
-    the app's vectoriser (the membership in force, the requests' truth). Every row carries the self-set columns and
-    its floors; with judged requests the hand columns over those of decks 17 and 24 (the transfer deck's apart) and
+    the app's vectoriser (the membership in force, the requests' truth). Every row carries the self-set columns,
+    its floors and the label's two columns, its vectoriser's (the label reads no route), measured on the parts of
+    the app's vectoriser (label_parts: every topic's cards cut at the preset, the truth the part's topic); with judged
+    requests the hand columns over those of decks 17 and 24 (the transfer deck's apart) and
     the paired difference of `hand_right` to its vectoriser's card route (the character n-grams' to S1's) and, off
     S1's TF-IDF, of `hand_right` and of `hand_wrong` to the same route on it (the hand_tfidf_diff and
     hand_tfidf_wrong_diff columns: the app's vectoriser against words alone); the
@@ -796,6 +837,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
     if app_family != "TF-IDF":
         families.append((app_family, app_index, tuple(ROUTES)))
     families.append((CHAR_NGRAMS, similar.SimilarityIndex.fit(cards, char_ngram_vectoriser()), ("card",)))
+    parts = label_parts(app_index, t1)  # the same parts for every vectoriser: the app's, as the app cuts them
     rows: list[dict] = []
     answers: dict[str, list[Answer]] = {}
     right_of: dict[str, list[float]] = {}
@@ -805,6 +847,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
         model = PromptModel(index, t1, cards)
         seconds = time.perf_counter() - started
         floors = model.floors
+        label_at1, label_at3 = label_measures(model, parts)
         for name in names:
             routes = ROUTES[name]
             label = f"{family}: {name}"
@@ -827,7 +870,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
                 "self_topic_at1": fmt(share_of(case.nearest[0] == case.key for case in cases)),
                 "self_topic_at3": fmt(share_of(case.key in case.nearest for case in cases)),
                 "self_navigated": fmt(share_of(case.decision != NO_MATCH for case in cases)),
-                "min_card": fmt(floors.card), "min_centroid": fmt(floors.centroid),
+                "label_at1": fmt(label_at1), "label_at3": fmt(label_at3), "min_card": fmt(floors.card), "min_centroid": fmt(floors.centroid),
                 "min_text": fmt(floors.text), "ms_per_request": f"{1000 * float(np.median(times)):.1f}" if times else "",
                 "seconds": f"{seconds:.2f}", "notes": f"T1's membership on {app_family}; {note}",
             }
@@ -850,7 +893,8 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
                 )
             rows.append(row)
     print(f"P1 on T1's membership of {app_family}: {len(requests)} requests, {len(counted)} judged of decks 17 and 24 "
-          f"({len(counted) - len(in_course)} off-course), {sum(request.transfer for request in requests)} of the transfer deck printed apart")
+          f"({len(counted) - len(in_course)} off-course), {sum(request.transfer for request in requests)} of the transfer deck printed apart; "
+          f"the label on {len(parts)} parts of at most {LABEL_PART} cards in {len({key for key, _ in parts})} topics")
     for row in rows:
         label = row["variant"]
         family = label.split(": ")[0]
@@ -872,6 +916,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
                 row.update(hand_tfidf_wrong_diff=fmt(mean), hand_tfidf_wrong_diff_low=fmt(low),
                            hand_tfidf_wrong_diff_high=fmt(high))
         print(f"   {label:24s} self topic@1 {row['self_topic_at1']}, @3 {row['self_topic_at3']}, navigated {row['self_navigated']} | "
+              f"label @1 {row['label_at1']}, @3 {row['label_at3']} | "
               f"floors card {row['min_card']}, centroid {row['min_centroid']}, text {row['min_text']}"
               + (f" | hand right {row['hand_right']}, wrong {row['hand_wrong']}, missed {row['hand_missed']}, topic@1 "
                  f"{row['hand_topic_at1']}, @3 {row['hand_topic_at3']}, card@1 {row['hand_card_at1']}; against {reference} "
