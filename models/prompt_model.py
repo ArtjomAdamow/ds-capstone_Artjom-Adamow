@@ -40,7 +40,7 @@ from typing import Mapping, Optional, Sequence
 import numpy as np
 from scipy import sparse
 
-from ..cards import Card
+from .cards import Card
 from . import embeddings, similar
 from .topic_model import Key, TopicModel
 from .zero_shot import SOURCE_LINE

@@ -1,4 +1,4 @@
-"""Offline evaluation of the models (app.models) on the course table, next to the package app/ in the capstone's
+"""Offline evaluation of the models (models) on the course table, next to the package app/ in the capstone's
 root. From the capstone's root:
 
     uv run evaluate.py [--part <part>] [--table data/course] [--results results]
@@ -6,7 +6,7 @@ root. From the capstone's root:
 It reads the course table (app.course_table: cards.csv, decks.csv and topics.csv, by default in the launcher's data
 folder, app.launch.data_dir: data/ next to this file, or in the folder above it where there is none);
 the random positions of B0 and the random layouts are the
-models' own draw (app.models.evaluation.random_directions, uniform on the sphere).
+models' own draw (models.evaluation.random_directions, uniform on the sphere).
 
 What it measures:
   * B0, the random floor: the same-deck precision@5 of the 5 nearest cards at random positions on the sphere, over
@@ -14,7 +14,7 @@ What it measures:
   * S1, the vectoriser variants (each a factory of anything with fit_transform): same-deck precision@5 (empty slots
     count as misses), the precision over the kept neighbours, the coverage and the number of distinct recommended
     cards, without and with the variant's own minimum score, the 10th percentile of its fifth neighbour's cosine;
-    S2, the sentence encoders and their hybrids with S1's chosen settings (app.models.embeddings), measured the same
+    S2, the sentence encoders and their hybrids with S1's chosen settings (models.embeddings), measured the same
     way where sentence-transformers is installed, their embeddings cached in `--cache`;
   * C1, the chosen model's map: trustworthiness and top-3 overlap of the deck positions; of the card positions per
     model topic the within-topic overlap at k = min(5, n - 1), at the fixed k = 2 and k = 3 (over the topics with
@@ -29,7 +29,7 @@ What it measures:
     agreement with the
     authored levels of the rated quizzes judged blind; the within-deck order of every row per deck as rows of
     their own (`scope` "deck <id>"; the course's rows "all"), paired against D1's chosen row over the deck's
-    quizzes; D2, the zero-shot tags (app.models.zero_shot, where transformers and the NLI models are there, the
+    quizzes; D2, the zero-shot tags (models.zero_shot, where transformers and the NLI models are there, the
     tags cached in `--cache`): D2 alone per model and template, judged the same way without folds (model D2, the
     variant naming the template and the model's size, the model in `params`), built on D1's frame and supplying
     no feature to it;
@@ -97,15 +97,15 @@ if str(MODULE_DIR) not in sys.path:
 
 from app import course_table  # noqa: E402
 from app.launch import CACHE_FOLDER, data_dir  # noqa: E402
-from app.models import embeddings, evaluation, layout, similar, zero_shot  # noqa: E402
-from app.models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel  # noqa: E402
-from app.models.difficulty_model import (  # noqa: E402
+from models import embeddings, evaluation, layout, similar, zero_shot  # noqa: E402
+from models.course_model import CARD_NEIGHBOURS, DECK_NEIGHBOURS, CourseModel  # noqa: E402
+from models.difficulty_model import (  # noqa: E402
     DEFAULT_FEATURES, FEATURE_SETS, LEVEL_OF, LEVELS, DifficultyReport, fit_difficulty, judge_tags, measure, split,
 )
-from app.models.prompt_model import (  # noqa: E402
+from models.prompt_model import (  # noqa: E402
     CARD, FLOOR_PERCENTILE, NO_MATCH, ROUTES, Answer, PromptModel, family_of, gate_of,
 )
-from app.models.topic_model import FOCUS_MARGIN, TopicModel  # noqa: E402
+from models.topic_model import FOCUS_MARGIN, TopicModel  # noqa: E402
 from sklearn.feature_extraction.text import TfidfVectorizer  # noqa: E402
 
 RESULTS_DIR = MODULE_DIR / "results"

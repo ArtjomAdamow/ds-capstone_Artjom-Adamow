@@ -8,7 +8,7 @@ import unittest
 
 import numpy as np
 
-from app.models.course_model import CourseModel
+from models.course_model import CourseModel
 
 SCRIPTED = model_support.SCRIPTED
 NAME_OF = model_support.NAME_OF
@@ -95,7 +95,7 @@ class CourseModelTest(unittest.TestCase):
             self.assertIn(target, {"01", "02", "03"})
 
     def test_a_decks_topics_are_connected_by_their_vectors_one_merge_per_pair_none_for_an_emptied_topic(self):
-        from app.models import clustering
+        from models import clustering
 
         names, vectors = self.model.topic_vectors("01")
         self.assertEqual(names, ["01", "02"])  # Lists and Dictionaries; the empty topic has no vector

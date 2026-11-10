@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from app.models import clustering
+from models import clustering
 
 
 class CosineDistancesTest(unittest.TestCase):

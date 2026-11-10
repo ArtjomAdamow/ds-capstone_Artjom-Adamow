@@ -1,4 +1,4 @@
-"""The navigation prompt P1 (app.models.prompt_model) on the test course of model_support, on an index that keeps
+"""The navigation prompt P1 (models.prompt_model) on the test course of model_support, on an index that keeps
 every term (min_df 1: on 13 cards the baseline's min_df 2 drops "slice" and "merge", each in one card): the floors
 as percentiles over the self set, the three routes' scores per topic, the decision (the few-shot route gates, the
 mean ranks, the nearest card selected inside the entered topic and only there), "no match" with the three nearest, the self set with
@@ -16,12 +16,12 @@ from pathlib import Path
 import numpy as np
 
 from app.course_table import load_table
-from app.models import embeddings, similar
-from app.models.prompt_model import (
+from models import embeddings, similar
+from models.prompt_model import (
     CARD, CENTROID, DEFAULT_ROUTES, ENTERED, NEAREST, NO_MATCH, ROUTES, SELECTED, TEXT, PromptModel, checked, gate_of,
     request_text,
 )
-from app.models.topic_model import TopicModel, unit
+from models.topic_model import TopicModel, unit
 
 CARDS = model_support.CARDS
 LISTS, DICTIONARIES, EMPTY = ("Alpha", "01"), ("Alpha", "02"), ("Alpha", "03")

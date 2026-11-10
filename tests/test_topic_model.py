@@ -10,9 +10,9 @@ import unittest
 
 import numpy as np
 
-from app.cards import CardRecord
-from app.models import evaluation, similar
-from app.models.topic_model import FOCUS_MARGIN, FULL_MARGIN, TopicModel, TopicSeed, unit
+from models.cards import CardRecord
+from models import evaluation, similar
+from models.topic_model import FOCUS_MARGIN, FULL_MARGIN, TopicModel, TopicSeed, unit
 
 
 class FixedRows:
@@ -123,7 +123,7 @@ class NearestCentroidTest(unittest.TestCase):
         self.assertEqual((share, agreement), (0.8, 1.0))  # m is the only card below 0.5
 
     def test_the_share_threshold_keeps_the_highest_margins(self):
-        from app.models.topic_model import share_threshold
+        from models.topic_model import share_threshold
 
         margins = [0.3, 0.1, 0.5, 0.2, 0.4]
         self.assertEqual(share_threshold(margins, 1.0), 0.0)  # every card

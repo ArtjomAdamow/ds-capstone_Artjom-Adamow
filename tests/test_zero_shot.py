@@ -1,4 +1,4 @@
-"""D2's zero-shot tags (app.models.zero_shot): the premise, the two templates, the tagger with a fake pipeline and
+"""D2's zero-shot tags (models.zero_shot): the premise, the two templates, the tagger with a fake pipeline and
 the cache, the tags of a course's quizzes with the skip lines, and the real model, which skips without the library
 or the cached model."""
 
@@ -14,11 +14,11 @@ from unittest import mock
 
 import numpy as np
 
-from app.cards import CardRecord
-from app.models import zero_shot
-from app.models.difficulty_model import LEVELS
-from app.models.embeddings import CACHE_FOLDER, EmbeddingCache
-from app.models.zero_shot import (
+from models.cards import CardRecord
+from models import zero_shot
+from models.difficulty_model import LEVELS
+from models.embeddings import CACHE_FOLDER, EmbeddingCache
+from models.zero_shot import (
     BASE_MODEL, CRITERION, LARGE_MODEL, LEVEL_NAMES, NLI_MODEL, NLI_MODELS, TEMPLATES, Tags, ZeroShotTagger, cached_tags, premise,
     size_of, tagger_available, tags_of,
 )
@@ -109,7 +109,7 @@ class TaggerTest(unittest.TestCase):
     def test_the_tagger_runs_on_s2s_device_handed_to_the_loader(self):
         tagger = ZeroShotTagger(loader=model_support.fake_classifier_loader, device="cpu")
         self.assertEqual(tagger.load().device, "cpu")
-        with mock.patch("app.models.embeddings.cuda_available", return_value=True), \
+        with mock.patch("models.embeddings.cuda_available", return_value=True), \
                 mock.patch.dict(os.environ, {"APP_DEVICE": "auto"}):
             tagger = ZeroShotTagger(loader=model_support.fake_classifier_loader)
             tagger.scores(self.cards)

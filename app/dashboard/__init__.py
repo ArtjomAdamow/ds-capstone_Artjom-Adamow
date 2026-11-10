@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..course_table import load_table, missing_files
-from ..models.embeddings import app_vectoriser, uncached_copy
+from models.embeddings import app_vectoriser, uncached_copy
 from .app import RESULTS_DIR, Dashboard, DemoBoard, create_app
 from .state import STATE_NAME, DashboardState
 

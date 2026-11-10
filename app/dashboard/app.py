@@ -69,10 +69,10 @@ from ..course_table import CourseTable, DeckRow
 from ..figures import ELSEWHERE, HERE, confusion_figure, margin_histogram
 from ..figures import THIS_DECK as SAME_DECK
 from ..headlines import WHAT, headlines, outcomes
-from ..models import clustering, embeddings, similar
-from ..models.course_model import CourseModel, TopicLayout
-from ..models.difficulty_model import DifficultyReport, fit_difficulty
-from ..models.prompt_model import PromptModel, variant_label
+from models import clustering, embeddings, similar
+from models.course_model import CourseModel, TopicLayout
+from models.difficulty_model import DifficultyReport, fit_difficulty
+from models.prompt_model import PromptModel, variant_label
 from ..neighbours import rank_by_confidence, shorten
 from ..panels import CUT_LABELS, DECK_PART, DECKS_VIEW, d2_label, empty_slot, graph, s2_label
 from ..results import LEVEL_FILES, Results, course_note

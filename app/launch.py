@@ -156,7 +156,7 @@ def choose_port(
 
 DATA_FOLDER = "data"
 STATE_FOLDER = "state"  # in the data folder: the state files
-CACHE_FOLDER = "cache"  # in the data folder: the embeddings' cache (app.models.embeddings), a derived file, no state
+CACHE_FOLDER = "cache"  # in the data folder: the embeddings' cache (models.embeddings), a derived file, no state
 # What start.py's backup question backs up: the dashboard's state file (app.dashboard.state.STATE_NAME, not imported:
 # the dashboard's package imports dash)
 STATE_NAMES = ("dashboard_state.json",)

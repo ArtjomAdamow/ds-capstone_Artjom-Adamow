@@ -9,7 +9,7 @@ from typing import Optional
 import plotly.graph_objects as go
 from dash import dcc, html
 
-from .models import embeddings, zero_shot
+from models import embeddings, zero_shot
 
 CARDS_VIEW = "cards"
 TOPICS_VIEW = "topics"

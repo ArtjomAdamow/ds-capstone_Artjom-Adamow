@@ -1,4 +1,4 @@
-"""S2 (app.models.embeddings) on the fixtures, with a fake encoder in place of the model: the embeddings' cache, the
+"""S2 (models.embeddings) on the fixtures, with a fake encoder in place of the model: the embeddings' cache, the
 encoder as a vectoriser, the device, the hybrid's blocks and weights, the app's vectoriser by name, and the tests on
 the real encoder, which skip without the library or the cached model, the GPU's without CUDA."""
 
@@ -13,7 +13,7 @@ from unittest import mock
 
 import numpy as np
 
-from app.models import embeddings, similar
+from models import embeddings, similar
 
 CARDS = model_support.CARDS
 TEXTS = [similar.card_text(card) for card in CARDS]

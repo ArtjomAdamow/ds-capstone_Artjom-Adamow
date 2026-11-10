@@ -1,4 +1,4 @@
-"""The offline evaluation (evaluate.py, next to the package) and its measures (app.models.evaluation), on the
+"""The offline evaluation (evaluate.py, next to the package) and its measures (models.evaluation), on the
 fixtures: a results file whose columns grew; the hand labels of D1 (the labels file, the
 judging form, the merge of its marks) and the hand columns of D1's rows and the `hand` row; the hand marks of the
 similarity part (the marks file, the judging form, the merge, a rewrite with a variant removed); the measures (the
@@ -24,9 +24,9 @@ from unittest import mock
 import numpy as np
 
 import evaluate
-from app.models import evaluation, similar
-from app.models.difficulty_model import LEVELS
-from app.models.prompt_model import ENTERED, NO_MATCH, ROUTES, SELECTED, Answer, TopicScore
+from models import evaluation, similar
+from models.difficulty_model import LEVELS
+from models.prompt_model import ENTERED, NO_MATCH, ROUTES, SELECTED, Answer, TopicScore
 
 TODAY = "2026-11-01"
 TESTS_DIR = Path(__file__).resolve().parent

@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from .cards import CardRecord
-from .models.topic_model import TopicSeed
+from models.cards import CardRecord
+from models.topic_model import TopicSeed
 
 CARDS_NAME = "cards.csv"
 DECKS_NAME = "decks.csv"

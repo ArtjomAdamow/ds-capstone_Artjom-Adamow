@@ -1,4 +1,4 @@
-"""A quiz's judgement on the dashboard, as plain functions over the card record (app.cards: the options, their
+"""A quiz's judgement on the dashboard, as plain functions over the card record (models.cards: the options, their
 feedback and the indices of the correct ones).
 
 The rule: an answer is right only when exactly the correct options are checked, so a missing

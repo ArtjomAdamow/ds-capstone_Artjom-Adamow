@@ -1,8 +1,5 @@
-"""The guided learning app's package: the models, the course table they read and the dashboard.
+"""The guided learning app's package: the course table and the dashboard over the models (`models`, next to it).
 
-* `cards`: the card record the models read (a card's seven fields and a quiz's answer options, as a protocol).
-* `models`: the similarity pipeline, the layout step, the clustering, the topic model T1, the course model, the
-  difficulty models D1 and D2 and the navigation prompt P1, with the offline measures; no Dash and no state.
 * `figures`: the models' plotly figures (D1's metrics, the sphere's surface and arcs, the connections, the map's
   colours and sizes, T1's margins, the dendrogram over scipy's coordinates); plotly only, no Dash, and out of
   `models`, so the model tests need no plotly.

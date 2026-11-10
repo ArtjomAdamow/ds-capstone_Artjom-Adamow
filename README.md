@@ -21,8 +21,19 @@ The sentence encoder of S2 and the tagger of D2 are optional: `uv sync --all-gro
 ```text
 ├── start.py                   # the launcher: the dashboard (below)
 ├── evaluate.py                # the offline evaluation of the models (below)
-├── app/
-│   ├── cards.py               # the card record the models read: a card's seven fields and a quiz's answer options, the stacks
+├── models/                    # the models: numpy, scipy, scikit-learn; sentence-transformers and transformers where installed (S2, D2)
+│   ├── cards.py                    # the card record the models read: a card's seven fields and a quiz's answer options, the stacks
+│   ├── similar.py                  # card text, vectoriser, unit vectors, the own minimum, neighbours, deck vectors
+│   ├── embeddings.py               # S2: the sentence encoder, the embeddings' cache, the hybrid with TF-IDF, the app's vectoriser
+│   ├── topic_model.py              # T1: nearest centroid over the scripted topics (TopicSeed, TopicModel)
+│   ├── layout.py                   # the layout step: SVD start, force layout on the sphere, measures
+│   ├── clustering.py               # connections from scipy's clustering, in merge order; the cut-off preset's rank
+│   ├── course_model.py             # C1, the fitted model: deck points and connections, the topics' layouts and connections
+│   ├── difficulty_model.py         # D1: the difficulty of the unrated quizzes, measured out of fold; D2 alone judged the same way
+│   ├── zero_shot.py                # D2: the zero-shot difficulty tags of the quizzes by an NLI model, cached like the embeddings, read back alone
+│   ├── prompt_model.py             # P1: a request scored against the topics by three routes at their self-set floors, a target or "no match"
+│   └── evaluation.py               # the offline measures and the judges of the topic model, for evaluate.py
+├── app/                       # the app over the models
 │   ├── course_table.py        # the course table: cards.csv, decks.csv, topics.csv, read with the csv module
 │   ├── figures.py             # the models' plotly figures (plotly only)
 │   ├── headlines.py           # each generation's two numbers from the results rows, with the verdict rule and its words
@@ -30,17 +41,6 @@ The sentence encoder of S2 and the tagger of D2 are optional: `uv sync --all-gro
 │   ├── neighbours.py          # the related cards' order (the next card) and labels
 │   ├── panels.py              # the model panels' names and letters, the cut labels, the slot's helpers, the app's variant labels
 │   ├── results.py             # the results files: each generation's newest run, the tables, the glossary
-│   ├── models/                # numpy, scipy, scikit-learn; sentence-transformers and transformers where installed (S2, D2)
-│   │   ├── similar.py              # card text, vectoriser, unit vectors, the own minimum, neighbours, deck vectors
-│   │   ├── embeddings.py           # S2: the sentence encoder, the embeddings' cache, the hybrid with TF-IDF, the app's vectoriser
-│   │   ├── topic_model.py          # T1: nearest centroid over the scripted topics (TopicSeed, TopicModel)
-│   │   ├── layout.py               # the layout step: SVD start, force layout on the sphere, measures
-│   │   ├── clustering.py           # connections from scipy's clustering, in merge order; the cut-off preset's rank
-│   │   ├── course_model.py         # C1, the fitted model: deck points and connections, the topics' layouts and connections
-│   │   ├── difficulty_model.py     # D1: the difficulty of the unrated quizzes, measured out of fold; D2 alone judged the same way
-│   │   ├── zero_shot.py            # D2: the zero-shot difficulty tags of the quizzes by an NLI model, cached like the embeddings, read back alone
-│   │   ├── prompt_model.py         # P1: a request scored against the topics by three routes at their self-set floors, a target or "no match"
-│   │   └── evaluation.py           # the offline measures and the judges of the topic model, for evaluate.py
 │   └── dashboard/             # the dashboard: one card at a time
 │       ├── __init__.py             # main(course_dir, results_dir, state_dir, demo_dir): the dashboard on the course table, the results and its state file, its Demo on deck 00
 │       ├── app.py                  # Dashboard (the fitted models, the state, what the regions show), DemoBoard (deck 00's), Boards (the one the view names), the app and its one callback
@@ -49,7 +49,7 @@ The sentence encoder of S2 and the tagger of D2 are optional: `uv sync --all-gro
 │       ├── state.py                # the state file dashboard_state.json: the read and explored flags, the shown card, the trail
 │       ├── quiz.py                 # a quiz's judgement as plain functions
 │       └── assets/                 # style.css: the theme's tokens and the type scale; keys.js: Enter into the hidden input; diagram.js: a click in the diagram into another
-├── tests/app/                 # the model tests, the shared parts', the dashboard's, the launcher's and the evaluation's tests on model_support.py
+├── tests/                     # the model tests, the shared parts', the dashboard's, the launcher's and the evaluation's tests on model_support.py
 ├── results/                   # the hand files hand_marks.csv, hand_labels.csv and prompt_requests.csv; evaluate.py writes results.csv, difficulty.csv, topics.csv, prompt.csv;
 │                              # columns.md: what their columns mean
 └── data/                      # git-ignored: topics.json, course/, images/, jupyter/, the dashboard's state in state/, S2's embeddings and D2's tags in cache/;
@@ -60,7 +60,7 @@ The sentence encoder of S2 and the tagger of D2 are optional: `uv sync --all-gro
 
 A generation is a model's letter with its number: S1 and S2 the similarity, C1 the course model, T1 the topic model, D1 and D2 the difficulty, P1 the navigation prompt.
 
-- **The similarity model S1** is one TF-IDF over the course's card texts (the question, the answer and the explanation), unit rows and the cosine: every card's five nearest cards above the index's own minimum score (the 10th percentile of the fifth neighbour's cosine), and the vectors every other model reads. **S2** is a sentence encoder in the same slot (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`), alone or hybrid with S1's TF-IDF (the two halves' unit rows side by side, each at its own minimum, so the cosine ranks pairs as the sum of the two scores): it needs `sentence-transformers` (the `embeddings` extra below) and caches the course's embeddings in `data/cache/embeddings/` (a derived file, keyed by the model and the texts; nothing to back up). Which one the app runs is `APP_VECTORISER` in `app/models/embeddings.py`, set by the hand check; without the library or the model the app and the evaluation run on TF-IDF and say so in one line.
+- **The similarity model S1** is one TF-IDF over the course's card texts (the question, the answer and the explanation), unit rows and the cosine: every card's five nearest cards above the index's own minimum score (the 10th percentile of the fifth neighbour's cosine), and the vectors every other model reads. **S2** is a sentence encoder in the same slot (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`), alone or hybrid with S1's TF-IDF (the two halves' unit rows side by side, each at its own minimum, so the cosine ranks pairs as the sum of the two scores): it needs `sentence-transformers` (the `embeddings` extra below) and caches the course's embeddings in `data/cache/embeddings/` (a derived file, keyed by the model and the texts; nothing to back up). Which one the app runs is `APP_VECTORISER` in `models/embeddings.py`, set by the hand check; without the library or the model the app and the evaluation run on TF-IDF and say so in one line.
 - **The course model C1** (`models/course_model.py`) is the pipeline fitted once on all cards. One unit vector per deck, the mean of its cards' unit rows, and the layout step (`models/layout.py`: an SVD start refined by a force layout on the sphere) place the decks on the unit sphere; each topic's cards are laid out the same way on their topic's sphere. The points are deterministic: the same course gives the same layout.
 - **The connections and their cut** (`models/clustering.py`): one connection per merge of the hierarchical clustering, in merge order, and `preset_rank`, the last merge whose connected parts stay within a size (five decks, four cards), which the dashboard uses. A deck's topics are clustered the same way on their vectors (`course_model.topic_links`), 2 to 6 merges per deck.
 - **The topic model T1** takes the scripted topics as its input (a script's grouping of each deck's cards by the lectures' headings and sources) and decides every card's topic: the nearest of the deck's topic centroids by cosine, each centroid the mean of the topic's cards' vectors (leave-one-out, so a card never votes for itself). On the course 351 of the 1,064 cards (33 %) get another topic than the script; 2 topics end up empty.
@@ -111,7 +111,7 @@ uv run start.py
 - **The dashboard** runs on the course table in `data/course/`, the results next to `evaluate.py` and its state file in `data/state/`, with its Demo on deck 00's table in `data/demo/dashboard/`, without the reloader and with no process next to it (`run_dashboard`). Without the course table it starts empty, with the Demo, and says so; without deck 00's table either it stops.
 - **The data folder** is `data/` next to `start.py`, or the one in the folder above it where there is none (`launch.data_dir`). `evaluate.py` and `model_support.py` take it by the same rule.
 - **It stops with what fixes it:** the command when a library is missing (`uv sync --all-groups`), the data hint when neither table is there.
-- **S2's encoder is optional:** an extra `embeddings` of `pyproject.toml` with `sentence-transformers` (`uv sync --all-groups --extra embeddings`; it brings torch and transformers; on Linux torch comes from the CPU index, `https://download.pytorch.org/whl/cpu`, since the Linux wheel pulls the CUDA libraries). The models are fetched once from the Hugging Face hub into its cache (`HF_HOME`), D2's NLI models with them (`app/models/zero_shot.py`, `NLI_MODELS`: the base and the large model, both read by `evaluate.py`, the large one by the app, `NLI_MODEL`; `evaluate.py` prints the fetching command for a missing one and skips its rows); set `HF_HUB_OFFLINE=1` afterwards. Without the extra the dashboard and `evaluate.py` run on TF-IDF, the S2 and D2 rows are skipped with one line each and the encoder and tagger tests skip. **On an NVIDIA GPU** the extra `embeddings-gpu` takes torch from the CUDA index instead (`uv sync --all-groups --extra embeddings-gpu`; 3 GB instead of 0.5 GB, a driver for CUDA 13.0 or newer; the two extras conflict, so every sync names one): the encoder and D2's model run on the GPU where torch sees one, else on the CPU. `APP_DEVICE` (`auto`, the default, `cpu` or `cuda`) chooses; the S panel names the device next to the encoding time and the evaluation's S2 rows carry it in `params`. fp32 on the GPU gives the CPU's vectors, so the cache serves both.
+- **S2's encoder is optional:** an extra `embeddings` of `pyproject.toml` with `sentence-transformers` (`uv sync --all-groups --extra embeddings`; it brings torch and transformers; on Linux torch comes from the CPU index, `https://download.pytorch.org/whl/cpu`, since the Linux wheel pulls the CUDA libraries). The models are fetched once from the Hugging Face hub into its cache (`HF_HOME`), D2's NLI models with them (`models/zero_shot.py`, `NLI_MODELS`: the base and the large model, both read by `evaluate.py`, the large one by the app, `NLI_MODEL`; `evaluate.py` prints the fetching command for a missing one and skips its rows); set `HF_HUB_OFFLINE=1` afterwards. Without the extra the dashboard and `evaluate.py` run on TF-IDF, the S2 and D2 rows are skipped with one line each and the encoder and tagger tests skip. **On an NVIDIA GPU** the extra `embeddings-gpu` takes torch from the CUDA index instead (`uv sync --all-groups --extra embeddings-gpu`; 3 GB instead of 0.5 GB, a driver for CUDA 13.0 or newer; the two extras conflict, so every sync names one): the encoder and D2's model run on the GPU where torch sees one, else on the CPU. `APP_DEVICE` (`auto`, the default, `cpu` or `cuda`) chooses; the S panel names the device next to the encoding time and the evaluation's S2 rows carry it in `params`. fp32 on the GPU gives the CPU's vectors, so the cache serves both.
 - Until the models are needed it imports only the standard library and `launch.py`, so it starts on any interpreter.
 
 ## The offline evaluation: evaluate.py
@@ -133,7 +133,7 @@ Every row carries its date and the run's start time to the minute (`run`), and t
 
 ## The tests
 
-The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `test_topic_model.py`, `test_course_model.py`, `test_difficulty_model.py`, `test_embeddings.py`, `test_zero_shot.py`, `test_prompt_model.py`) are plain `unittest.TestCase` classes. They import `tests/app/model_support.py` only: the package on the path, the test course as a table of card records (three decks, 13 cards in seven scripted topics, one of them empty and one the rest topic; T1 keeps its scripted topics, so `moving_cards()` adds a card that makes T1 move another), a course for the difficulty model (`difficulty_course()`, three decks of 12 rated quizzes with their unrated quizzes' options, and `difficulty_report()`), and the stand-ins for S2's encoder and D2's pipeline (`FakeEncoder`, `FakeClassifier`), so the tests of both run without torch; the real models' tests skip without the library or the cached model.
+The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `test_topic_model.py`, `test_course_model.py`, `test_difficulty_model.py`, `test_embeddings.py`, `test_zero_shot.py`, `test_prompt_model.py`) are plain `unittest.TestCase` classes. They import `tests/model_support.py` only: the packages on the path, the test course as a table of card records (three decks, 13 cards in seven scripted topics, one of them empty and one the rest topic; T1 keeps its scripted topics, so `moving_cards()` adds a card that makes T1 move another), a course for the difficulty model (`difficulty_course()`, three decks of 12 rated quizzes with their unrated quizzes' options, and `difficulty_report()`), and the stand-ins for S2's encoder and D2's pipeline (`FakeEncoder`, `FakeClassifier`), so the tests of both run without torch; the real models' tests skip without the library or the cached model.
 
 The tests of the dashboard's shared parts import `model_support.py` too: `test_figures.py` (the figures, the connections, T1's margins), `test_results.py` (the results files, the tables, the glossary; it writes the small results files the dashboard's tests read), `test_headlines.py` (the verdict rule, each generation's two numbers) and `test_panels.py` (the panels' names, the cut labels, the slot's helpers, the variant labels).
 
@@ -141,15 +141,15 @@ The dashboard's tests (`test_dashboard.py`): the closed start and a restart from
 
 The launcher's tests import `model_support.py` too: `test_launch.py` the launcher's part (`launch.py`): the option reader and the port argument, the port check (a socket the test binds, the scan upwards, the holder from faked `netstat` and `lsof` output, the hint), the data folder and the backup question on a temporary folder with the state files; `test_start.py` the launcher with its run and the backup question mocked: the start after the backup question, the port check before it (the next free port with the printed URL, a held `--port` stopping it), the backup question over the dashboard's state file alone, the folders by the data folder's rule, the stops with their commands, and a process without the models' libraries in which it loads and stops.
 
-The evaluation's tests (`test_evaluate.py`) import `model_support.py` and `evaluate.py` next to the package: the results files, the hand marks and labels with their forms on the fixtures, the measures on a hand-made layout, the rows of the similarity part, D2's rows per model and template with their deck rows with the fake pipeline, and a run on the test course's table, with and without the hand files, in a process of its own.
+The evaluation's tests (`test_evaluate.py`) import `model_support.py` and `evaluate.py` next to the packages: the results files, the hand marks and labels with their forms on the fixtures, the measures on a hand-made layout, the rows of the similarity part, D2's rows per model and template with their deck rows with the fake pipeline, and a run on the test course's table, with and without the hand files, in a process of its own.
 
-`model_support.py` finds the package from where it lies (the nearest folder above it that holds `app/`) and the real course table in `data/course/` next to it. None of the tests needs the course data. Run them under either runner:
+`model_support.py` finds the packages from where it lies (the nearest folder above it that holds `app/`, with `models/` beside it) and the real course table in `data/course/` next to it. None of the tests needs the course data. Run them under either runner:
 
 ```bash
-uv run python -m pytest tests/app
-uv run python -m unittest discover -s tests/app
+uv run python -m pytest tests
+uv run python -m unittest discover -s tests
 ```
 
 ## Licence
 
-MIT, in [LICENSE](LICENSE): `app/`, `start.py`, `evaluate.py` and their tests are Artjom Adamow's code; the template the repository started from is neuefische GmbH's.
+MIT, in [LICENSE](LICENSE): `app/`, `models/`, `start.py`, `evaluate.py` and their tests are Artjom Adamow's code; the template the repository started from is neuefische GmbH's.

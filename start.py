@@ -16,7 +16,7 @@ The port is checked before anything serves or asks (app.launch.choose_port): a p
 answers on it. The dashboard takes the next free port from Dash's default and prints the URL it serves on; a port
 named by `--port N` and held stops it.
 
-The app's vectoriser runs the models (app.models.embeddings.app_vectoriser): S2's sentence encoder with the course's
+The app's vectoriser runs the models (models.embeddings.app_vectoriser): S2's sentence encoder with the course's
 embeddings cached in data/cache/embeddings/ where sentence-transformers is installed (the embeddings extra), TF-IDF
 otherwise, with one line that says so.
 
@@ -41,7 +41,7 @@ TABLE_DIR = DATA_DIR / "course"  # the course table: the dashboard's input
 DEMO_TABLE_DIR = DATA_DIR / "demo" / "dashboard"  # deck 00's table, 00-deck-dashboard: the dashboard's Demo
 RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the dashboard's tiles read them
 STATE_DIR = DATA_DIR / STATE_FOLDER  # the dashboard's state file dashboard_state.json
-CACHE_DIR = DATA_DIR / CACHE_FOLDER  # the embeddings' cache of S2 (app.models.embeddings), a derived file, no state
+CACHE_DIR = DATA_DIR / CACHE_FOLDER  # the embeddings' cache of S2 (models.embeddings), a derived file, no state
 
 # The commands it prints
 INSTALL = "uv sync --all-groups"

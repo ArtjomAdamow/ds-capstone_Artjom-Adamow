@@ -46,7 +46,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.preprocessing import StandardScaler
 
-from ..cards import STACK_QUIZ, Card
+from .cards import STACK_QUIZ, Card
 from . import similar
 
 LEVELS = ("easy", "medium", "hard")

@@ -13,9 +13,9 @@ sys.dont_write_bytecode = True
 if not any(Path(entry or ".").resolve() == MODULE_DIR for entry in sys.path):
     sys.path.insert(0, str(MODULE_DIR))  # the package app, as the launcher puts it on the path
 
-from app.cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE, CardRecord  # noqa: E402
-from app.models.course_model import CourseModel  # noqa: E402
-from app.models.topic_model import TopicSeed  # noqa: E402
+from models.cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE, CardRecord  # noqa: E402
+from models.course_model import CourseModel  # noqa: E402
+from models.topic_model import TopicSeed  # noqa: E402
 
 # The real course table (git-ignored data, the tests that read it skip without it), in the launcher's data folder
 # (app.launch.data_dir's rule, written out here: the fixtures import the models' part of the package alone): data/
@@ -285,8 +285,8 @@ def difficulty_report(predictions=None):
     """A D1 report measured on difficulty_course(), with other predictions if given (card id -> level)."""
     import dataclasses
 
-    from app.models import similar
-    from app.models.difficulty_model import fit_difficulty
+    from models import similar
+    from models.difficulty_model import fit_difficulty
 
     cards = difficulty_course()
     report = fit_difficulty(cards, similar.SimilarityIndex.fit(cards))
@@ -338,7 +338,7 @@ class FakeEncoder:
 
 
 def fake_loader(model_name: str, device: str = "cpu") -> FakeEncoder:
-    """A loader for app.models.embeddings.SentenceEncoder: the fake model under the asked name, on the asked device."""
+    """A loader for models.embeddings.SentenceEncoder: the fake model under the asked name, on the asked device."""
     return FakeEncoder(model_name=model_name, device=device)
 
 
@@ -384,5 +384,5 @@ class FakeClassifier:
 
 
 def fake_classifier_loader(model_name: str, device: str = "cpu") -> FakeClassifier:
-    """A loader for app.models.zero_shot.ZeroShotTagger: the fake pipeline under the asked name, on the asked device."""
+    """A loader for models.zero_shot.ZeroShotTagger: the fake pipeline under the asked name, on the asked device."""
     return FakeClassifier(model_name=model_name, device=device)

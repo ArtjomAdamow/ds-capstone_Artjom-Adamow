@@ -23,7 +23,7 @@ from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
 
-from ..cards import Card
+from .cards import Card
 
 TOP_K = 5
 # A neighbour below this cosine is dropped: a card without a good match gets fewer (or no) neighbours rather than

@@ -880,7 +880,7 @@ class DemoTest(DemoDriver):
         self.assertEqual(self.state.shown, COMMIT)
 
     def test_the_embeddings_cache_is_the_same_after_the_demo_as_before(self):
-        from app.models.embeddings import EmbeddingCache, SentenceEncoder, uncached_copy
+        from models.embeddings import EmbeddingCache, SentenceEncoder, uncached_copy
 
         with tempfile.TemporaryDirectory() as folder:
             cache = Path(folder) / "embeddings"

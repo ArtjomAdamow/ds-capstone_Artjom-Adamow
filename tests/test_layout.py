@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from app.models import layout
+from models import layout
 
 
 def clustered_vectors(groups: int = 3, size: int = 5, dimensions: int = 12) -> np.ndarray:

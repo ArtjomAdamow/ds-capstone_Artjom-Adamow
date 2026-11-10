@@ -30,7 +30,7 @@ import numpy as np
 import plotly.graph_objects as go
 from scipy.cluster.hierarchy import dendrogram
 
-from .models.difficulty_model import LEVELS, DifficultyReport
+from models.difficulty_model import LEVELS, DifficultyReport
 
 INK = "#f7f2e8"
 MUTED = "#9fb3c8"

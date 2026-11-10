@@ -1,5 +1,6 @@
 """The models (no Dash, no state): numpy, scipy and scikit-learn only.
 
+* `cards`: the card record the models read (a card's seven fields and a quiz's answer options, as a protocol).
 * `similar`: card text, a swappable vectoriser, unit rows, neighbours, deck vectors (SimilarityIndex).
 * `layout`: the layout step, an SVD start refined by a force layout on the sphere, with its measures.
 * `clustering`: one connection per merge of scipy's hierarchical clustering, in merge order; the cut-off preset's
@@ -15,6 +16,6 @@
 * `evaluation`: the offline measures (the hand precision and its paired bootstrap, the random draw and the random
   floor, the fixed-k overlap of the layouts) and the judges of T1, for evaluate.py next to the package.
 
-The input is a sequence of cards (app.cards.Card), the deck ids by deck name and the scripted topics
+The input is a sequence of cards (models.cards.Card), the deck ids by deck name and the scripted topics
 (TopicSeed), read from the course table (app.course_table).
 """

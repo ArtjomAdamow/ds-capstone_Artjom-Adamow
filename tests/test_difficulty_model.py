@@ -9,9 +9,9 @@ import unittest
 
 import numpy as np
 
-from app.cards import CardRecord
-from app.models import similar
-from app.models.difficulty_model import (
+from models.cards import CardRecord
+from models import similar
+from models.difficulty_model import (
     COURSE_SHARES, FEATURE_SETS, LEVELS, OPTION_FEATURES, TEXT_FEATURES, band, band_labels, features, fit_difficulty, judge_tags,
     option_statistics, share_labels, split,
 )

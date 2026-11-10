@@ -26,7 +26,7 @@ from typing import Collection, Mapping, Optional, Sequence
 
 import numpy as np
 
-from ..cards import Card
+from .cards import Card
 from . import clustering, layout, similar
 from .topic_model import FOCUS_MARGIN, TopicModel, TopicSeed
 

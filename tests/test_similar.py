@@ -7,8 +7,8 @@ import unittest
 
 import numpy as np
 
-from app.cards import CardRecord
-from app.models import similar
+from models.cards import CardRecord
+from models import similar
 
 
 class CardTextTest(unittest.TestCase):
