@@ -32,10 +32,11 @@ judged precision@1, a hit rate); S2's app row (judged precision@5 with its paire
 interval; judged precision@1 against S1's, a hit rate); C1's model row (the trustworthiness of the card layouts and of
 the decks against the random row, floors); T1's row of scope all in topics.csv (agreement against chance, the floor,
 1-NN beside it) and its row of the 25 % most confident (against all cards, in the floor's place); D1's chosen row
-of difficulty.csv by the deck shares (the within-deck order on Claude's levels against a coin, the floor; weighted
-kappa against the baseline always easy); D2's app row (both against D1's chosen row: an interval and a kappa);
-P1's app row of prompt.csv (the share served right, a hit rate, and the share landed wrong, lower better, against
-the TF-IDF card route; none where the app runs on TF-IDF).
+of difficulty.csv by the deck shares (the within-deck order on Claude's levels against a coin, the floor, with its
+paired difference to the coin and the interval; weighted kappa against the baseline always easy); D2's app row (both
+against D1's chosen row: an interval and a kappa); P1's app row of prompt.csv (the share served right, a hit rate,
+and the share landed wrong, lower better, each against the TF-IDF card route with its paired difference and the
+interval; none where the app runs on TF-IDF).
 """
 
 from dataclasses import dataclass
@@ -269,8 +270,9 @@ def _first(run: Sequence[Mapping[str, str]], test: Callable[[Mapping[str, str]],
     return next((row for row in run if test(row)), None)
 
 
-def _interval(row: Mapping[str, str]) -> tuple[Optional[float], Optional[float], Optional[float]]:
-    return _number(row, "hand_diff"), _number(row, "hand_diff_low"), _number(row, "hand_diff_high")
+def _interval(row: Mapping[str, str], column: str = "hand_diff") -> tuple[Optional[float], Optional[float], Optional[float]]:
+    """A paired difference with its interval: the column and its `_low` and `_high` columns."""
+    return _number(row, column), _number(row, f"{column}_low"), _number(row, f"{column}_high")
 
 
 def _s1(run, chosen) -> list[Headline]:
@@ -368,11 +370,12 @@ def _d1(run, chosen) -> list[Headline]:
     order = _number(row, "hand_within_deck")
     if order is not None:
         pairs = _number(row, "hand_within_pairs")
+        diff, low, high = _interval(row, "hand_coin_diff")
         found.append(Headline(
             ORDER_LABEL, order, FLOOR,
             "Of the pairs of quizzes in a deck that Claude put at different levels, the share D1 puts in the same order.", "a coin", COIN,
-            floor_name="a coin", top_name="every pair in order", count=int(pairs) if pairs else None,
-            columns=("hand_within_deck", "hand_within_pairs"),
+            diff, low, high, floor_name="a coin", top_name="every pair in order", count=int(pairs) if pairs else None,
+            columns=("hand_within_deck", "hand_within_pairs", "hand_coin_diff", "hand_coin_diff_low", "hand_coin_diff_high"),
         ))
     kappa = _number(row, "kappa")
     if kappa is not None:
@@ -414,17 +417,23 @@ def _p1(run, chosen) -> list[Headline]:
     found = []
     right = _number(row, "hand_right")
     if right is not None:
+        diff, low, high = _interval(row, "hand_tfidf_diff") if tfidf is not None else (None, None, None)
         found.append(Headline(
             "share served right", right, RATE,
             "Of the judged requests, the share taken into an acceptable topic, or told no match on an off-course request.",
-            "TF-IDF", _number(tfidf, "hand_right"), columns=("hand_right",),
+            "TF-IDF", _number(tfidf, "hand_right"), diff, low, high,
+            columns=("hand_right", "hand_tfidf_diff", "hand_tfidf_diff_low", "hand_tfidf_diff_high"),
         ))
     wrong = _number(row, "hand_wrong")
     if wrong is not None:
         missed = _number(row, "hand_missed")
         sentence = "The share taken into a wrong topic, where lower is better"
         sentence += f"; the rest ({shown(missed, True)}) got no match." if missed is not None else "; the rest got no match."
-        found.append(Headline("share landed wrong", wrong, RATE_LOW, sentence, "TF-IDF", _number(tfidf, "hand_wrong"), columns=("hand_wrong",)))
+        diff, low, high = _interval(row, "hand_tfidf_wrong_diff") if tfidf is not None else (None, None, None)
+        found.append(Headline(
+            "share landed wrong", wrong, RATE_LOW, sentence, "TF-IDF", _number(tfidf, "hand_wrong"), diff, low, high,
+            columns=("hand_wrong", "hand_tfidf_wrong_diff", "hand_tfidf_wrong_diff_low", "hand_tfidf_wrong_diff_high"),
+        ))
     return found
 
 

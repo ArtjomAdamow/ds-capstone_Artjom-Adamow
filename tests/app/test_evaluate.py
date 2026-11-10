@@ -156,6 +156,7 @@ class HandLabelsTest(unittest.TestCase):
             self.assertEqual((row["label_rule"], row["hand_judged"], row["rated"], row["unrated"]), ("deck shares", 2, 12, 2))
             self.assertEqual((row["hand_within_deck"], row["hand_within_pairs"]), ("1.000", 1))  # the deck's long quiz above its short one
             self.assertTrue(float(row["hand_diff_low"]) <= float(row["hand_diff"]) <= float(row["hand_diff_high"]))
+            self.assertEqual((row["hand_coin_diff"], row["hand_coin_diff_low"], row["hand_coin_diff_high"]), ("0.500",) * 3)  # the deck's one pair
             for column in ("hand_accuracy", "hand_kappa", "predicted_easy", "macro_f1"):
                 self.assertNotIn(column, row)  # a readout of the order, nothing else
         chosen = [row for row in decks if row["variant"] == "text (chosen)"]
@@ -188,6 +189,8 @@ class HandLabelsTest(unittest.TestCase):
             self.assertEqual((row["hand_diff"], row["hand_diff_low"], row["hand_diff_high"]),
                              ("0.000", "0.000", "0.000") if row["variant"] == "text (chosen)" else (row["hand_diff"], row["hand_diff_low"], row["hand_diff_high"]))
             self.assertTrue(-1.0 <= float(row["hand_diff_low"]) <= float(row["hand_diff"]) <= float(row["hand_diff_high"]) <= 1.0)
+            # every pair in order against a coin's half, in every draw
+            self.assertEqual((row["hand_coin_diff"], row["hand_coin_diff_low"], row["hand_coin_diff_high"]), ("0.500",) * 3)
         # D1 calls the short quiz easy and the long one medium (test_difficulty_model): half of the hand levels met
         shares = [row for row in d1 if row["label_rule"] == "deck shares"]
         self.assertEqual({row["hand_accuracy"] for row in shares}, {"0.500"})
@@ -205,7 +208,7 @@ class HandLabelsTest(unittest.TestCase):
     def test_without_labels_the_rows_have_no_hand_columns(self):
         rows = evaluate.evaluate_difficulty(self.cards, TODAY, "test")
         self.assertFalse(any("hand_judged" in row for row in rows))
-        self.assertFalse(any("hand_diff" in row for row in rows))
+        self.assertFalse(any("hand_diff" in row or "hand_coin_diff" in row for row in rows))
         self.assertFalse(any(row["model"] == "hand" for row in rows))
         self.assertTrue(all(row["scope"] == evaluate.COURSE_SCOPE for row in rows))  # no deck rows without labels
 
@@ -221,6 +224,12 @@ class HandLabelsTest(unittest.TestCase):
         self.assertEqual(evaluate.paired_order_bootstrap(labels, right, right, deck_of, draws=50), (0.0, 0.0, 0.0))
         self.assertTrue(all(math.isnan(value) for value in evaluate.paired_order_bootstrap(labels, right, {"a1": 0.1}, deck_of)))
         self.assertTrue(all(math.isnan(value) for value in evaluate.paired_order_bootstrap({}, right, half, deck_of)))
+        # against a coin: every pair a tie, counted half, so the coin is 0.5 in every draw
+        self.assertEqual(evaluate.coin_order_bootstrap(labels, right, deck_of, draws=50), (0.5, 0.5, 0.5))
+        diff, low, high = evaluate.coin_order_bootstrap(labels, half, deck_of, draws=200)
+        self.assertAlmostEqual(diff, 0.0)  # 3 of 6 in order: a coin's share
+        self.assertTrue(low <= 0.0 <= high)
+        self.assertTrue(all(math.isnan(value) for value in evaluate.coin_order_bootstrap({}, half, deck_of)))
 
     def test_the_order_per_deck(self):
         labels = {card: {"level": level} for card, level in (("a1", "easy"), ("a2", "hard"), ("b1", "easy"), ("b2", "medium"), ("c1", "easy"))}
@@ -799,6 +808,34 @@ class PromptPartTest(unittest.TestCase):
         char_line = next(line for line in output.splitlines() if line.strip().startswith(f"{evaluate.CHAR_NGRAMS}: card"))
         self.assertIn("against TF-IDF: card", char_line)  # the character n-grams against S1's card route
         self.assertIn("hand_right by kind", output)
+        # against words alone: the same route on S1's TF-IDF, none on TF-IDF's own rows; the n-grams' card route the same pairing
+        self.assertTrue(all(row["hand_tfidf_diff"] == row["hand_tfidf_wrong_diff"] == ""
+                            for label, row in rows.items() if label.startswith("TF-IDF: ")))
+        char = rows[f"{evaluate.CHAR_NGRAMS}: card"]
+        self.assertEqual([char[f"hand_tfidf_diff{end}"] for end in ("", "_low", "_high")], [char[f"hand_diff{end}"] for end in ("", "_low", "_high")])
+        self.assertAlmostEqual(float(char["hand_tfidf_wrong_diff"]),
+                               float(char["hand_wrong"]) - float(rows["TF-IDF: card"]["hand_wrong"]), places=2)
+
+    def test_on_the_hybrid_every_route_is_paired_against_the_same_route_on_words_alone(self):
+        self.results.mkdir()
+        self.files.prompt_requests.write_text(REQUESTS, encoding="utf-8")
+        hybrid = evaluate.embeddings.app_vectoriser(name="hybrid-minilm", loader=model_support.fake_loader)
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            evaluate.run(self.table, self.results, "prompt", "", TODAY, vectoriser=hybrid)
+        rows = {row["variant"]: row for row in read_csv(self.files.prompt)}
+        self.assertEqual([label for label in rows if label.startswith("hybrid-minilm: ")], [f"hybrid-minilm: {name}" for name in ROUTES])
+        for name in ROUTES:
+            mine, words = rows[f"hybrid-minilm: {name}"], rows[f"TF-IDF: {name}"]
+            self.assertAlmostEqual(float(mine["hand_tfidf_diff"]), float(mine["hand_right"]) - float(words["hand_right"]), places=2)
+            self.assertTrue(float(mine["hand_tfidf_diff_low"]) <= float(mine["hand_tfidf_diff"]) <= float(mine["hand_tfidf_diff_high"]))
+            # the share wrong the same way, lower better
+            self.assertAlmostEqual(float(mine["hand_tfidf_wrong_diff"]), float(mine["hand_wrong"]) - float(words["hand_wrong"]), places=2)
+            self.assertTrue(float(mine["hand_tfidf_wrong_diff_low"]) <= float(mine["hand_tfidf_wrong_diff"])
+                            <= float(mine["hand_tfidf_wrong_diff_high"]))
+            self.assertEqual(words["hand_tfidf_diff"], "")
+            self.assertEqual(words["hand_tfidf_wrong_diff"], "")
+        self.assertIn("against TF-IDF's card ", output.getvalue())
+        self.assertRegex(output.getvalue(), r"against TF-IDF's card \S+ \[\S+, \S+\], wrong ")
 
     def test_the_transfer_decks_numbers_are_printed_apart_and_never_written(self):
         self.results.mkdir()

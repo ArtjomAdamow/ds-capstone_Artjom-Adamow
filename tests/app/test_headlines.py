@@ -115,6 +115,7 @@ class HeadlinesTest(unittest.TestCase):
     def test_d1s_numbers_are_the_within_deck_order_against_a_coin_and_the_weighted_kappa(self):
         order, kappa = hl.headlines(self.results, "D1")
         self.assertEqual((order.shown, order.contrast_shown, order.of), ("75 %", "a coin 50 %", "of 77 pairs"))
+        self.assertEqual(order.gain, "+25.3 points (+13.0 to +37.0)")  # its paired difference to the coin, with the interval
         self.assertEqual(order.verdict, "well above the floor by generic criteria")
         self.assertEqual(order.explanation, "about half of the way from a coin (50 %) to every pair in order")
         self.assertEqual((kappa.label, kappa.shown, kappa.contrast_shown, kappa.verdict), ("weighted kappa", "0.41", "always easy 0.00", "moderate"))
@@ -156,8 +157,9 @@ class PromptHeadlinesTest(unittest.TestCase):
     def test_the_hybrids_numbers_stand_against_the_tfidf_card_route(self):
         results = Results(self.results.folder, self.results.note, chosen={"P1": "hybrid-minilm: card"})
         right, wrong = hl.headlines(results, "P1")
-        self.assertEqual((right.shown, right.contrast_shown, right.gain, right.verdict), ("76 %", "TF-IDF 75 %", "+1.0 points", "good by generic criteria"))
-        self.assertEqual((wrong.shown, wrong.contrast_shown, wrong.verdict), ("6 %", "TF-IDF 20 %", "very good by generic criteria"))
+        self.assertEqual((right.shown, right.contrast_shown, right.gain, right.verdict), ("76 %", "TF-IDF 75 %", "+1.0 points (−9.0 to +11.0)", "good by generic criteria"))
+        self.assertEqual((wrong.shown, wrong.contrast_shown, wrong.gain, wrong.verdict),
+                         ("6 %", "TF-IDF 20 %", "−14.5 points (−25.0 to −4.0)", "very good by generic criteria"))
         self.assertEqual(hl.chosen_label(results, "P1"), "hybrid-minilm: card")
 
 

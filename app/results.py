@@ -58,15 +58,19 @@ T1_MARGIN_MEASURES: tuple[Measure, ...] = ("cards", "margin", "kept_share", "agr
 COURSE_SCOPE = "all"  # evaluate.COURSE_SCOPE: a row over the course; a deck's rows read "deck <id>"
 D1_DECK_MEASURES: tuple[Measure, ...] = (
     "rated", "unrated", "hand_judged", ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
+    ("hand_coin_diff", "hand_coin_diff_low", "hand_coin_diff_high"),
 )
 D1_MEASURES: tuple[Measure, ...] = (
     ("macro_f1", "macro_f1_sd"), ("balanced_accuracy", "balanced_accuracy_sd"), ("kappa", "kappa_sd"), ("accuracy", "accuracy_sd"),
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated", "predicted_easy", "predicted_medium",
     "predicted_hard", "hand_judged", "hand_macro_f1", "hand_kappa", "hand_accuracy", "hand_spearman",
     ("hand_within_deck", "hand_within_pairs"), ("hand_diff", "hand_diff_low", "hand_diff_high"),
+    ("hand_coin_diff", "hand_coin_diff_low", "hand_coin_diff_high"),
 )
 P1_MEASURES: tuple[Measure, ...] = (
-    "hand_right", "hand_wrong", "hand_missed", ("hand_diff", "hand_diff_low", "hand_diff_high"), "hand_topic_at1", "hand_topic_at3",
+    "hand_right", "hand_wrong", "hand_missed", ("hand_diff", "hand_diff_low", "hand_diff_high"),
+    ("hand_tfidf_diff", "hand_tfidf_diff_low", "hand_tfidf_diff_high"),
+    ("hand_tfidf_wrong_diff", "hand_tfidf_wrong_diff_low", "hand_tfidf_wrong_diff_high"), "hand_topic_at1", "hand_topic_at3",
     "hand_card_at1", "judged_requests", "self_topic_at1", "self_topic_at3", "self_navigated", "min_card", "min_centroid",
     "min_text", "ms_per_request",
 )

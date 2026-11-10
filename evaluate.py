@@ -25,7 +25,8 @@ What it measures:
     by the deck shares and by the cut points of the rated cards; and, on the quizzes labelled by hand, the
     predictions' accuracy, macro-F1 and weighted kappa, the score's Spearman against the hand levels and the share
     of a deck's pairs the score orders as the hand levels do, with every row's paired difference of that share to
-    D1's chosen row and its bootstrap interval over the judged quizzes, next to the hand levels' agreement with the
+    D1's chosen row and to a coin, each with its bootstrap interval over the judged quizzes, next to the hand levels'
+    agreement with the
     authored levels of the rated quizzes judged blind; the within-deck order of every row per deck as rows of
     their own (`scope` "deck <id>"; the course's rows "all"), paired against D1's chosen row over the deck's
     quizzes; D2, the zero-shot tags (app.models.zero_shot, where transformers and the NLI models are there, the
@@ -43,7 +44,8 @@ What it measures:
     share navigated, the floors; over the judged requests of decks 17 and 24 the share served right,
     wrong and missed, their counts on and off the course (the dashboard's grid), the ranking's topic@1, @3 and
     card@1, and the paired difference of the share right to the
-    vectoriser's card route (the character n-grams' to S1's) with its bootstrap interval; the time of a request.
+    vectoriser's card route (the character n-grams' to S1's) and, of the share right and of the share wrong, to the
+    same route on S1's TF-IDF, each with its bootstrap interval; the time of a request.
 
 Every run appends one row per model and variant to the results folder (`--results`, by default results/ next to
 this file): results.csv (B0, S1, C1), difficulty.csv (D1, D2), topics.csv (T1) and prompt.csv (P1). A results file
@@ -129,7 +131,7 @@ DIFFICULTY_COLUMNS = [
     "spearman", "recall_easy", "recall_medium", "recall_hard", "rated", "unrated",
     "predicted_easy", "predicted_medium", "predicted_hard",
     "hand_judged", "hand_macro_f1", "hand_kappa", "hand_accuracy", "hand_spearman", "hand_within_deck", "hand_within_pairs",
-    "hand_diff", "hand_diff_low", "hand_diff_high",
+    "hand_diff", "hand_diff_low", "hand_diff_high", "hand_coin_diff", "hand_coin_diff_low", "hand_coin_diff_high",
     "seconds", "notes",
 ]
 LABEL_COLUMNS = ["card", "level", "judged", "judge", "note"]
@@ -155,8 +157,10 @@ PROMPT_COLUMNS = [
     "date", "run", "model", "variant", "params", "self_topic_at1", "self_topic_at3", "self_navigated",
     "min_card", "min_centroid", "min_text", "hand_right", "hand_wrong", "hand_missed",
     "hand_course_right", "hand_course_wrong", "hand_course_missed", "hand_off_right", "hand_off_wrong",
-    "hand_topic_at1", "hand_topic_at3", "hand_card_at1", "hand_diff", "hand_diff_low", "hand_diff_high", "judged_requests",
-    "ms_per_request", "seconds", "notes",
+    "hand_topic_at1", "hand_topic_at3", "hand_card_at1", "hand_diff", "hand_diff_low", "hand_diff_high",
+    "hand_tfidf_diff", "hand_tfidf_diff_low", "hand_tfidf_diff_high",
+    "hand_tfidf_wrong_diff", "hand_tfidf_wrong_diff_low", "hand_tfidf_wrong_diff_high",
+    "judged_requests", "ms_per_request", "seconds", "notes",
 ]
 REQUEST_COLUMNS = ["request", "kind", "deck_id", "topic_id", "card", "also", "judged", "judge", "note"]
 OFF_COURSE = "off-course"  # the kind of a request no deck teaches: its right answer is "no match"
@@ -405,10 +409,17 @@ def paired_order_bootstrap(labels: dict[str, dict], reference: Mapping[str, floa
     return whole, float(np.percentile(resampled, tail)), float(np.percentile(resampled, 100 - tail))
 
 
+def coin_order_bootstrap(labels: dict[str, dict], scores: Mapping[str, float], deck_of: Mapping[str, str],
+                         draws: int = evaluation.BOOTSTRAP_DRAWS, seed: int = 42) -> tuple[float, float, float]:
+    """The within-deck order of `scores` minus a coin's, with its interval: paired_order_bootstrap against one score
+    for every quiz, so every pair is a tie, counted half, and the coin is 0.5 in every draw."""
+    return paired_order_bootstrap(labels, {card_id: 0.0 for card_id in scores}, scores, deck_of, draws, seed)
+
+
 def with_hand_columns(row: dict, measures: dict, judged: int, within: tuple[float, int] = (float("nan"), 0),
-                      diff: Optional[tuple[float, float, float]] = None) -> dict:
+                      diff: Optional[tuple[float, float, float]] = None, coin: Optional[tuple[float, float, float]] = None) -> dict:
     """The row with the hand columns, when any of its cards is judged; the within-deck order when there is a pair,
-    and its paired difference to D1's chosen row with the interval (`diff`) where given."""
+    its paired difference to D1's chosen row (`diff`) and to a coin (`coin`), each with its interval, where given."""
     if judged:
         row.update(hand_judged=judged, hand_macro_f1=fmt(measures["macro_f1"]), hand_kappa=fmt(measures["kappa"]),
                    hand_accuracy=fmt(measures["accuracy"]), hand_spearman=fmt(measures["spearman"]))
@@ -416,6 +427,8 @@ def with_hand_columns(row: dict, measures: dict, judged: int, within: tuple[floa
         row.update(hand_within_deck=fmt(within[0]), hand_within_pairs=within[1])
         if diff is not None and not math.isnan(diff[0]):
             row.update(hand_diff=fmt(diff[0]), hand_diff_low=fmt(diff[1]), hand_diff_high=fmt(diff[2]))
+        if coin is not None and not math.isnan(coin[0]):
+            row.update(hand_coin_diff=fmt(coin[0]), hand_coin_diff_low=fmt(coin[1]), hand_coin_diff_high=fmt(coin[2]))
     return row
 
 
@@ -459,10 +472,10 @@ def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | 
     the predicted levels of the unrated quizzes by the deck shares and by the cut points. With hand labels, the
     predictions of both rules and the always-easy baseline are scored on the judged quizzes (the hand columns),
     every row's within-deck order is paired against D1's chosen row (the hand_diff columns, bootstrapped over the
-    judged quizzes) and printed per deck, and a `hand` row gives the hand levels' agreement with the authored levels
+    judged quizzes) and against a coin (the hand_coin_diff columns, the same way) and printed per deck, and a `hand` row gives the hand levels' agreement with the authored levels
     of the rated quizzes judged blind; every deck-shares row with judged quizzes gets a row per deck with a pair
     (`scope` "deck <id>", by `deck_ids`; the course's rows "all"): the deck's within-deck order and its paired
-    difference to D1's chosen row over the deck's quizzes, a readout and no verdict. With D2's tags (`tags`, by
+    differences to D1's chosen row and to a coin over the deck's quizzes, a readout and no verdict. With D2's tags (`tags`, by
     variant; difficulty_tags), D2 alone gets its rows per variant (model D2, the model in `params`), judged the
     same way without folds; without them they are skipped with one line. D2 supplies no feature to D1."""
     labels = labels or {}
@@ -491,14 +504,15 @@ def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | 
         cut_hand, _ = hand_measures(labels, report.cut_point_predictions, report.scores)
         within = within_deck_concordance(labels, report.scores, deck_of)
         diff = paired_order_bootstrap(labels, reference, report.scores, deck_of) if judged else None
+        coin = coin_order_bootstrap(labels, report.scores, deck_of) if judged else None
         rows.append(with_hand_columns(
             difficulty_rows(report, today, model, variant, report.metrics, "deck shares", note, report.predictions, params),
-            shares_hand, judged, within, diff))
+            shares_hand, judged, within, diff, coin))
         rows.append(difficulty_rows(report, today, model, variant, report.most_likely, "most likely class", note, params=params))
         if model == "D1":
             rows.append(with_hand_columns(
                 difficulty_rows(report, today, model, variant, {}, "cut points of the rated cards", note, report.cut_point_predictions),
-                cut_hand, judged, within, diff))
+                cut_hand, judged, within, diff, coin))
         if judged:  # the deck rows: the order within each deck with a pair, paired over the deck's quizzes alone
             for deck, pair_share in sorted(within_deck_by_deck(labels, report.scores, deck_of).items()):
                 deck_labels = {card_id: labels[card_id] for card_id in report.scores if deck_of[card_id] == deck and card_id in labels}
@@ -507,7 +521,8 @@ def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | 
                                       scope=f"deck {deck_ids.get(deck, deck)}")
                 row.update(rated=part.rated if part else 0, unrated=part.unrated if part else 0,
                            hand_judged=sum(entry.get("level") in LEVEL_OF for entry in deck_labels.values()))
-                rows.append(with_hand_columns(row, {}, 0, pair_share, paired_order_bootstrap(deck_labels, reference, report.scores, deck_of)))
+                rows.append(with_hand_columns(row, {}, 0, pair_share, paired_order_bootstrap(deck_labels, reference, report.scores, deck_of),
+                                              coin_order_bootstrap(deck_labels, report.scores, deck_of)))
         f1, kappa = report.metrics["macro_f1"], report.metrics["kappa"]
         print(f"{model} {variant:20s} deck shares: macro-F1 {f1[0]:.3f} ± {f1[1]:.3f}, weighted kappa {kappa[0]:.3f} ± {kappa[1]:.3f}, "
               f"accuracy {report.metrics['accuracy'][0]:.3f}, recall {report.metrics['recall_easy'][0]:.2f} / "
@@ -528,7 +543,8 @@ def evaluate_difficulty(cards, today: str, note: str, labels: dict[str, dict] | 
                   f"cut points macro-F1 {cut_hand['macro_f1']:.3f}, weighted kappa {cut_hand['kappa']:.3f}, accuracy {cut_hand['accuracy']:.3f} | "
                   f"within a deck {within[0]:.3f} of {within[1]} pairs in the hand order"
                   + (f" | paired difference to {DEFAULT_FEATURES} {diff[0]:+.3f} [{diff[1]:+.3f}, {diff[2]:+.3f}]"
-                     if diff is not None and not math.isnan(diff[0]) else ""))
+                     if diff is not None and not math.isnan(diff[0]) else "")
+                  + (f" | to a coin {coin[0]:+.3f} [{coin[1]:+.3f}, {coin[2]:+.3f}]" if coin is not None and not math.isnan(coin[0]) else ""))
             per_deck = within_deck_by_deck(labels, report.scores, deck_of)
             print("   within a deck, per deck: " + ", ".join(f"{deck} {share:.2f} ({pairs})" for deck, (share, pairs) in sorted(per_deck.items())))
     if chosen is not None:
@@ -762,7 +778,9 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
     app's vectoriser where it is another, and the card route on character n-grams, every one on T1's membership of
     the app's vectoriser (the membership in force, the requests' truth). Every row carries the self-set columns and
     its floors; with judged requests the hand columns over those of decks 17 and 24 (the transfer deck's apart) and
-    the paired difference of `hand_right` to its vectoriser's card route (the character n-grams' to S1's); the
+    the paired difference of `hand_right` to its vectoriser's card route (the character n-grams' to S1's) and, off
+    S1's TF-IDF, of `hand_right` and of `hand_wrong` to the same route on it (the hand_tfidf_diff and
+    hand_tfidf_wrong_diff columns: the app's vectoriser against words alone); the
     transfer deck's judged requests get their share right, wrong and missed and their card@1 per variant printed
     after the hand columns, never written. Returns the rows and every variant's answers to every request (the
     form's)."""
@@ -781,6 +799,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
     rows: list[dict] = []
     answers: dict[str, list[Answer]] = {}
     right_of: dict[str, list[float]] = {}
+    wrong_of: dict[str, list[float]] = {}
     for family, index, names in families:
         started = time.perf_counter()
         model = PromptModel(index, t1, cards)
@@ -799,6 +818,7 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
             answers[label] = given
             outcomes = {number: request_outcome(requests[number], given[number]) for number in counted}
             right_of[label] = [float(outcomes[number][0]) for number in counted]
+            wrong_of[label] = [float(outcomes[number][1]) for number in counted]
             row = {
                 "date": today, "model": "P1", "variant": label,
                 "params": f"routes={'+'.join(routes)}, gate={gate_of(routes)}, vectoriser={embeddings.describe(index.vectoriser)}"
@@ -840,11 +860,25 @@ def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, requ
                 [mine - theirs for mine, theirs in zip(right_of[label], right_of[reference])]
             )
             row.update(hand_diff=fmt(mean), hand_diff_low=fmt(low), hand_diff_high=fmt(high))
+            words = f"TF-IDF: {label.split(': ', 1)[1]}"  # the same route on S1's TF-IDF
+            if family != "TF-IDF" and words in right_of:
+                mean, low, high = evaluation.paired_bootstrap(
+                    [mine - theirs for mine, theirs in zip(right_of[label], right_of[words])]
+                )
+                row.update(hand_tfidf_diff=fmt(mean), hand_tfidf_diff_low=fmt(low), hand_tfidf_diff_high=fmt(high))
+                mean, low, high = evaluation.paired_bootstrap(
+                    [mine - theirs for mine, theirs in zip(wrong_of[label], wrong_of[words])]
+                )
+                row.update(hand_tfidf_wrong_diff=fmt(mean), hand_tfidf_wrong_diff_low=fmt(low),
+                           hand_tfidf_wrong_diff_high=fmt(high))
         print(f"   {label:24s} self topic@1 {row['self_topic_at1']}, @3 {row['self_topic_at3']}, navigated {row['self_navigated']} | "
               f"floors card {row['min_card']}, centroid {row['min_centroid']}, text {row['min_text']}"
               + (f" | hand right {row['hand_right']}, wrong {row['hand_wrong']}, missed {row['hand_missed']}, topic@1 "
                  f"{row['hand_topic_at1']}, @3 {row['hand_topic_at3']}, card@1 {row['hand_card_at1']}; against {reference} "
                  f"{row['hand_diff']} [{row['hand_diff_low']}, {row['hand_diff_high']}]" if counted else "")
+              + (f"; against TF-IDF's {label.split(': ', 1)[1]} {row['hand_tfidf_diff']} [{row['hand_tfidf_diff_low']}, "
+                 f"{row['hand_tfidf_diff_high']}], wrong {row['hand_tfidf_wrong_diff']} [{row['hand_tfidf_wrong_diff_low']}, "
+                 f"{row['hand_tfidf_wrong_diff_high']}]" if row.get("hand_tfidf_diff") and family != CHAR_NGRAMS else "")
               + f" | {row['ms_per_request']} ms per request, fit {row['seconds']}s")
     if counted:
         kinds = list(dict.fromkeys(requests[number].kind for number in counted))
