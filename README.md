@@ -6,7 +6,7 @@ The course data is git-ignored and never presented online. Deck 00, `data/demo/`
 
 ## Getting started
 
-The one tool to install is [uv](https://docs.astral.sh/uv/); `TOOLS.md` and `UV_SETUP.md` explain it and the other tools of the repository. Run the commands below from the repository's root.
+The one tool to install is [uv](https://docs.astral.sh/uv/). Run the commands below from the repository's root.
 
 ```bash
 uv sync --all-groups     # Python 3.13 and the libraries, into .venv/
@@ -52,10 +52,8 @@ The sentence encoder of S2 and the tagger of D2 are optional: `uv sync --all-gro
 ├── tests/app/                 # the model tests, the shared parts', the dashboard's, the launcher's and the evaluation's tests on model_support.py
 ├── results/                   # the hand files hand_marks.csv, hand_labels.csv and prompt_requests.csv; evaluate.py writes results.csv, difficulty.csv, topics.csv, prompt.csv;
 │                              # columns.md: what their columns mean
-├── data/                      # git-ignored: topics.json, course/, images/, jupyter/, the dashboard's state in state/, S2's embeddings and D2's tags in cache/;
-│                              # tracked: demo/, deck 00 (dashboard.json and its table dashboard/)
-├── src/, notebooks/, tests/test_features.py   # the course template's example pipeline, apart from the app
-└── Makefile, TOOLS.md, UV_SETUP.md            # the template's shortcuts (make test, make lint) and its notes on the tools
+└── data/                      # git-ignored: topics.json, course/, images/, jupyter/, the dashboard's state in state/, S2's embeddings and D2's tags in cache/;
+                               # tracked: demo/, deck 00 (dashboard.json and its table dashboard/)
 ```
 
 ## The models
