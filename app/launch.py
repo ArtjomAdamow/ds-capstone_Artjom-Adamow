@@ -1,5 +1,5 @@
-"""The launcher's part of the package: start.py, the launcher exported with the package, starts the dashboard alone
-with it; the flashcards workspace's launchers take the same calls. The standard library only, so a launcher starts
+"""The launcher's part of the package: start.py, the launcher next to the package, starts the dashboard
+with it. The standard library only, so a launcher starts
 on any interpreter and stops with the fix.
 
 The port argument (requested_port, over option_value): `--port N` or `--port=N`.
@@ -11,13 +11,13 @@ takes the next free port from Dash's default (free_port) and prints the URL it s
 the hint (port_hint: the PID and the command line of the process listening there, port_holder) when its port is held.
 `--port N` names the port and stops when it is held.
 
-The folders (data_dir): the data folder lies next to the launcher (the capstone), else in the folder above it (the
-flashcards workspace's root): the course table, the state in data/state/ and the embeddings' cache in data/cache/.
+The folders (data_dir): the data folder lies next to the launcher, else in the folder above it:
+the course table, the state in data/state/ and the embeddings' cache in data/cache/.
 
 The backup question (prepare_state), asked before an app that stores state starts, by the launcher's first process:
 with a state file of the given names in the state folder, y backs them up (backup_path: dashboard_state.json_01.bak,
 _02.bak, ...) and starts fresh, n or no input keeps them. start.py asks it over the dashboard's state file
-(STATE_NAMES); the flashcards workspace's launchers pass their own names.
+(STATE_NAMES); another launcher passes its own names.
 """
 
 import socket
@@ -137,8 +137,8 @@ def choose_port(
     holder: Optional[Callable] = None, output: Callable = print,
 ) -> int:
     """The port an app serves on, taken before it serves: the requested one (`--port N`) when free, else the stop
-    with the hint; without one `start` (Dash's default) when free, else, where the app `moves` (the dashboard, the
-    models view), the next free port with the URL printed, or the stop with the hint (the viewer). `in_use` and
+    with the hint; without one `start` (Dash's default) when free, else, where the app `moves` (the dashboard), the
+    next free port with the URL printed, or the stop with the hint (an app that does not move). `in_use` and
     `holder` are looked up at the call (port_in_use, port_holder) unless given."""
     in_use = in_use or port_in_use
     holder = holder or port_holder
@@ -155,7 +155,7 @@ def choose_port(
 # --- the folders and the state ---------------------------------------------------------------------------------
 
 DATA_FOLDER = "data"
-STATE_FOLDER = "state"  # in the data folder: the state files, the derived course file and the episodes' log
+STATE_FOLDER = "state"  # in the data folder: the state files
 CACHE_FOLDER = "cache"  # in the data folder: the embeddings' cache (app.models.embeddings), a derived file, no state
 # What start.py's backup question backs up: the dashboard's state file (app.dashboard.state.STATE_NAME, not imported:
 # the dashboard's package imports dash)
@@ -163,15 +163,15 @@ STATE_NAMES = ("dashboard_state.json",)
 
 
 def data_dir(folder: Path) -> Path:
-    """The data folder of a launcher in `folder`: data/ next to it (the capstone), else the one in the folder above
-    it (the flashcards workspace's root); data/ next to it where neither exists."""
+    """The data folder of a launcher in `folder`: data/ next to it, else the one in the folder above it; data/ next to
+    it where neither exists."""
     folder = Path(folder)
     candidates = (folder / DATA_FOLDER, folder.parent / DATA_FOLDER)
     return next((candidate for candidate in candidates if candidate.is_dir()), candidates[0])
 
 
 def backup_path(state_file: Path) -> Path:
-    """The next free backup name next to the state file: user_state.json_01.bak, _02.bak, ..."""
+    """The next free backup name next to the state file: dashboard_state.json_01.bak, _02.bak, ..."""
     for number in range(1, 100):
         candidate = state_file.parent / f"{state_file.name}_{number:02d}.bak"
         if not candidate.exists():

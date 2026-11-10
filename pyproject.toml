@@ -52,8 +52,7 @@ explicit = true
 
 [tool.ruff]
 line-length = 100
-# The app's files come from the export workspace with every train and keep its style, so they are
-# never linted or formatted here.
+# The app keeps its own style (its lines run past 100), so it is never linted or formatted.
 extend-exclude = [".claude", "app", "start.py", "tests/app", "evaluate.py"]
 
 [tool.ruff.lint]

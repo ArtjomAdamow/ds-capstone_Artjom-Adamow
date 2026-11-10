@@ -1,13 +1,12 @@
-"""Connections from a hierarchical clustering (no Dash, no state, nothing of the viewer).
+"""Connections from a hierarchical clustering (no Dash, no state).
 
 scipy's average-linkage clustering on the cosine distances of a set of unit vectors gives a tree of merges. Each
-merge becomes one connection between the two closest members of the two merged clusters, in merge order. The
-viewer's dendrogram replays stored connections in that order (project.services.dendrogram.build_forest): a connection
-joins the two trees its ends belong to, which at that point are exactly the two clusters scipy merged. So the
-connections give the same tree as scipy's, with the merge ranks as heights, and the project needs no scipy itself.
+merge becomes one connection between the two closest members of the two merged clusters, in merge order. Replayed
+in that order, a connection joins the two trees its ends belong to, which at that point are exactly the two
+clusters scipy merged. So the connections give the same tree as scipy's, with the merge ranks as heights.
 
-The cut-off preset (preset_rank): where a cut of those connections leaves parts small enough to read. The plugin's
-preset of the viewer's cut-off line and the models view both measure it over the model's pairs alone.
+The cut-off preset (preset_rank): where a cut of those connections leaves parts small enough to read, measured over
+the model's pairs alone.
 """
 
 from typing import Iterable, Sequence

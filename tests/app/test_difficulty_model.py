@@ -1,8 +1,8 @@
 """The difficulty model D1: the split, features that ignore the course order, the deck shares, the out-of-fold metrics
 with their spread, the predictions of the unrated quizzes, the feature set with the answer options' statistics, and
-D2 alone judged the same way without folds, on D1's frame and supplying no feature (nothing of the viewer)."""
+D2 alone judged the same way without folds, on D1's frame and supplying no feature."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import random
 import unittest

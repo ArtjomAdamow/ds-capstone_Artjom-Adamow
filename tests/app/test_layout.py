@@ -1,7 +1,6 @@
-"""The layout step: the even spread, the SVD start, the force layout on the sphere, and the two measures (nothing
-of the viewer)."""
+"""The layout step: the even spread, the SVD start, the force layout on the sphere, and the two measures."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import unittest
 

@@ -1,4 +1,4 @@
-"""D2: zero-shot difficulty tags (docs/models/difficulty.md, "D2"): the demand on a
+"""D2: zero-shot difficulty tags: the demand on a
 learner read off the quiz with its resolution by natural language inference, nothing trained.
 
     the question, its options, the correct feedback, the explanation ─→ NLI model, three hypotheses, one softmax
@@ -19,7 +19,7 @@ learner read off the quiz with its resolution by natural language inference, not
   the file named by the model and the template, keyed by the premises in order).
 * `tags_of`: the tags of a course's quizzes (the rated and the unrated ones; flashcards are not tagged) for the
   evaluation and the app, as `Tags`; None with one printed line without the library or the model. `cached_tags`:
-  the same from the cache alone, for the models view, which loads no model.
+  the same from the cache alone, with no model loaded.
 """
 
 from __future__ import annotations
@@ -37,10 +37,10 @@ from .difficulty_model import LEVELS, split
 from .embeddings import CACHE_FOLDER, EmbeddingCache, resolve_device
 
 # The models: trained for zero-shot classification with a hypothesis template, an 8,192-token window, so no premise
-# is cut (difficulty.md, "D2", "Decisions"): the base model (299 MB) and the large one of the same family
+# is cut: the base model (299 MB) and the large one of the same family
 # (792 MB), both measured by the evaluation. NLI_MODEL is the app's D2: the large one, with
 # which alone the criterion template reads above chance on the hand labels (53 against 41 of 77 pairs; a choice
-# between two on the labels, declared in difficulty.md, "D2", "Decisions"); the page reads its tags from the cache
+# between two on the labels, declared as one); cached_tags reads its tags from the cache
 BASE_MODEL = "MoritzLaurer/ModernBERT-base-zeroshot-v2.0"
 LARGE_MODEL = "MoritzLaurer/ModernBERT-large-zeroshot-v2.0"
 NLI_MODELS = (BASE_MODEL, LARGE_MODEL)
@@ -214,7 +214,7 @@ def tags_of(cards: Sequence, cache_dir: Optional[Path] = None, template: Templat
 def cached_tags(cards: Sequence, cache_dir: Optional[Path], template: Template = CRITERION,
                 model_name: str = NLI_MODEL) -> Optional[Tags]:
     """The tags of the course's quizzes from the cache alone, as `tags_of` wrote them: no model is loaded and no
-    library is needed (the models view's D2). None without the folder or where the cache does not hold them."""
+    library is needed. None without the folder or where the cache does not hold them."""
     if cache_dir is None:
         return None
     rated, unrated = split(cards)

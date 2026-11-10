@@ -1,12 +1,12 @@
-"""The figures of the dashboard's model panels (plotly only; nothing of Dash, nothing of the viewer): each the whole
+"""The figures of the dashboard's model panels (plotly only; nothing of Dash): each the whole
 course's, whatever card is shown, but C's mark of the shown card's deck. T's histogram and D's confusion matrix are
-the models view's (figures.margin_histogram, figures.confusion_figure); the three drawn here:
+app.figures' (figures.margin_histogram, figures.confusion_figure); the three drawn here:
 
 * S, where the related cards lie (places_figure): one bar split into this topic, this deck and another deck, seen
   from each card, in the neighbours figure's colours (figures.PLACE_COLORS), each part with its share, a bracket over
   the two parts outside the card's topic with their share together, the counts under the bar;
 * C, the decks on the sphere (deck_sphere): the faint surface, the decks muted at C1's positions, the connections
-  below the preset gold and dashed, straight between decks (as the models view's decks view draws them), the shown
+  below the preset gold and dashed, straight between decks, the shown
   card's deck gold with a soft gold ring and turned to the front;
 * P, P1's outcomes (outcome_grid): the judged requests in a grid, on and off the course by where P1 took them (into
   an acceptable topic, into another topic, no match), each cell its count and its outcome (right, wrong, missed) in
@@ -30,8 +30,8 @@ SURFACE = "#071827"  # the panel's background: the gap between the bar's parts
 BAR = 0.9  # the bar's thickness on its axis of -1 to 1
 CURRENT_DECK = "this card's deck"
 A_DECK = "a deck"
-EYE = 1.3  # the camera's distance from the centre: nearer than the models view's (2.17), so the sphere fills its place
-SCENE_RANGE = [-1.05, 1.05]  # the scene's box just around the sphere (the models view's is ±1.15)
+EYE = 1.3  # the camera's distance from the centre: nearer than the default camera's (2.17), so the sphere fills its place
+SCENE_RANGE = [-1.05, 1.05]  # the scene's box just around the sphere
 RING_ALPHA = 0.3  # the soft gold ring behind the shown card's deck, as the diagram's current dot
 LEGEND_SHARE = 0.12  # the share of the sphere's height under it for the legend
 # P1's outcomes: right, wrong, missed in the card's judgement colours (style.css: --right, --coral, --muted)
@@ -96,8 +96,8 @@ def _marker_trace(ids: Sequence[str], points: Mapping[str, Point], names: Mappin
 
 
 def camera_on(point: Optional[Point]) -> dict:
-    """The camera at EYE from the centre, turned so that the point faces the viewer; without one along the models
-    view's direction. Near a pole the up direction turns to y, so the view keeps its roll."""
+    """The camera at EYE from the centre, turned so that the point faces the front; without one along the default
+    camera's direction. Near a pole the up direction turns to y, so the view keeps its roll."""
     if point is None:
         point = tuple(DEFAULT_CAMERA["eye"].values())
     length = math.dist((0, 0, 0), point) or 1.0

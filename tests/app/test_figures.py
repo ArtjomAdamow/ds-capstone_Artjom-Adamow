@@ -1,4 +1,4 @@
-"""The shared figures (app.figures; plotly only, nothing of the viewer): D1's score rows, subtitle,
+"""The models' figures (app.figures; plotly only): D1's score rows, subtitle,
 confusion matrix and shares on a measured report, the sphere's surface and its arcs, the connections as one trace,
 T1's margins on the teal scale with the threshold and the focus labelled, the dendrogram of a
 clustering over scipy's coordinates with the real merge distances and the preset's cut-off line labelled on the

@@ -1,9 +1,9 @@
-"""The model panels' shared parts (app.panels; Dash, nothing of the viewer), as the dashboard and the models
-page use them: the letters and their names, the cut labels with the decks view's preset, the figure slot's two
+"""The model panels' parts (app.panels; Dash), as the dashboard
+uses them: the letters and their names, the cut labels with the decks view's preset, the figure slot's two
 helpers, and S2's and D2's variant labels of the models the app runs. RecordingApp, the stub Dash app whose callback
-decorator returns the function, serves the dashboard's and the page's tests."""
+decorator returns the function, serves the dashboard's tests."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import unittest
 

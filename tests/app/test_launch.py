@@ -1,8 +1,8 @@
 """The launcher's part of the package (app.launch): the option reader and the port argument, the port check, the data
-folder and the backup question, start.py's and the workspace launchers'; the modes and the viewer check are gone with
-the one mode. The port check runs on a socket the test binds, the holder's lookup on faked command output."""
+folder and the backup question. The port check runs on a socket the test binds, the holder's lookup on faked command
+output."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import socket
 import subprocess
@@ -18,31 +18,24 @@ class PortArgumentTest(unittest.TestCase):
     def test_an_options_value_the_last_one_given(self):
         self.assertIsNone(launch.option_value([], "--mode"))
         self.assertEqual(launch.option_value(["--mode", "full", "--port", "8051"], "--mode"), "full")
-        self.assertEqual(launch.option_value(["--mode=viewer"], "--mode"), "viewer")
+        self.assertEqual(launch.option_value(["--mode=demo"], "--mode"), "demo")
         self.assertEqual(launch.option_value(["--mode", "full", "--mode=dashboard"], "--mode"), "dashboard")
         self.assertEqual(launch.option_value(["--mode"], "--mode"), "")
         self.assertIsNone(launch.option_value(["--model", "x"], "--mode"))
 
     def test_the_port_argument(self):
         self.assertIsNone(launch.requested_port([]))
-        self.assertEqual(launch.requested_port(["--mode", "standalone", "--port", "8051"]), 8051)
+        self.assertEqual(launch.requested_port(["--mode", "full", "--port", "8051"]), 8051)
         self.assertEqual(launch.requested_port(["--port=8052"]), 8052)
         with self.assertRaises(SystemExit):
             launch.requested_port(["--port", "eight"])
         self.assertEqual(launch.DASH_PORT, 8050)  # Dash's default
         self.assertEqual(launch.app_url(8051), "http://127.0.0.1:8051/")
 
-    def test_the_page_next_to_the_viewer_the_modes_and_the_viewer_check_are_gone(self):
-        for name in ("STANDALONE_PORT", "STANDALONE_GRACE", "MODELS_URL", "VIEWER_URL", "start_standalone", "stop_standalone",
-                     "standalone_url", "viewer_url", "FULL", "STANDALONE", "DASHBOARD", "MODES", "MODE_VARIABLE",
-                     "LAUNCH_QUESTION", "VIEWER_MISSING", "VIEWER_PORT", "choose_mode", "requested_mode", "mode_of_child",
-                     "viewer_available", "viewer_here", "VIEWER_RELEASE"):
-            self.assertFalse(hasattr(launch, name), name)
-
 
 class PortCheckTest(unittest.TestCase):
     """The port check (the ports finding): a port is held when a server answers a connect; an app that moves (the
-    dashboard, the models view) takes the next free one, the viewer and a named port stop with the holder's hint."""
+    dashboard) takes the next free one, an app that does not and a named port stop with the holder's hint."""
 
     def test_a_port_is_in_use_while_a_server_listens_on_it(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -115,10 +108,10 @@ class PortCheckTest(unittest.TestCase):
         messages = []
         self.assertEqual(launch.choose_port(None, True, in_use=held, holder=holder, output=messages.append), 8052)
         self.assertEqual(messages, ["Port 8050 is already in use (PID 4242, command line python start.py): serving on http://127.0.0.1:8052/"])
-        with self.assertRaises(SystemExit) as stop:  # the viewer
+        with self.assertRaises(SystemExit) as stop:  # an app that does not move
             launch.choose_port(None, False, in_use=held, holder=holder, output=messages.append)
         self.assertEqual(stop.exception.code, launch.port_hint(8050, (4242, "python start.py")))
-        with self.assertRaises(SystemExit):  # a named port that is held stops in every mode
+        with self.assertRaises(SystemExit):  # a named port that is held stops, moving or not
             launch.choose_port(8051, True, in_use=held, holder=holder)
         messages.clear()
         self.assertEqual(launch.choose_port(None, False, in_use=held, start=8060, holder=holder, output=messages.append), 8060)
@@ -141,18 +134,17 @@ class DataFolderTest(TempDirTest):
     def test_the_data_folder_next_to_the_launcher_comes_before_the_one_above_it(self):
         launcher_dir = self.tmp / "root" / "modules"
         launcher_dir.mkdir(parents=True)
-        self.assertEqual(launch.data_dir(launcher_dir), launcher_dir / "data")  # neither: the capstone's place
+        self.assertEqual(launch.data_dir(launcher_dir), launcher_dir / "data")  # neither: next to the launcher
         (launcher_dir.parent / "data").mkdir()
-        self.assertEqual(launch.data_dir(launcher_dir), launcher_dir.parent / "data")  # the flashcards workspace's
+        self.assertEqual(launch.data_dir(launcher_dir), launcher_dir.parent / "data")  # the one above it, where there is none next to it
         (launcher_dir / "data").mkdir()
-        self.assertEqual(launch.data_dir(launcher_dir), launcher_dir / "data")  # the capstone's, next to start.py
+        self.assertEqual(launch.data_dir(launcher_dir), launcher_dir / "data")  # next to the launcher comes first
         self.assertEqual((launch.STATE_FOLDER, launch.CACHE_FOLDER), ("state", "cache"))
 
 
 class BackupQuestionTest(TempDirTest):
-    """The backup question (prepare_state) on the state files a launcher names: start.py's the dashboard's alone, the
-    workspace launchers' the viewer's and the dashboard's (the default here); the episodes' log and the model state
-    (written at every start since roadmap step 33 of the helper) are never touched."""
+    """The backup question (prepare_state) on the state files a launcher names: start.py's the dashboard's alone, two
+    names here (PAIR); a file of the folder that is not named is never touched."""
 
     PAIR = ("user_state.json", "dashboard_state.json")
 
@@ -175,7 +167,7 @@ class BackupQuestionTest(TempDirTest):
         dashboard.write_text("{}", encoding="utf-8")
         backups = launch.prepare_state(self.tmp, mock.Mock(return_value="y"), self.messages.append)
         self.assertEqual([path.name for path in backups], ["dashboard_state.json_01.bak"])
-        self.assertTrue(self.state.exists())  # a viewer's state file is not the capstone's to touch
+        self.assertTrue(self.state.exists())  # a file start.py does not name stays
 
     def test_backup_names_count_up(self):
         self.assertEqual(launch.backup_path(self.state).name, "user_state.json_01.bak")
@@ -209,7 +201,7 @@ class BackupQuestionTest(TempDirTest):
         ask.assert_not_called()
         self.assertTrue(self.log.exists() and self.model_state.exists())
 
-    def test_the_dashboards_state_file_is_backed_up_with_the_viewers(self):
+    def test_two_named_state_files_are_backed_up_together(self):
         dashboard = self.tmp / "dashboard_state.json"
         dashboard.write_text("{}", encoding="utf-8")
         backups, ask = self.prepare("y")

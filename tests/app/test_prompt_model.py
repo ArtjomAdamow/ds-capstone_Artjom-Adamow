@@ -5,7 +5,7 @@ mean ranks, the nearest card selected inside the entered topic and only there), 
 the card held out and its Source: line cut, the demo's deck 00 alone with its own floors, and the same code on S2's
 hybrid (a stand-in encoder, no torch)."""
 
-import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
+import model_support  # noqa: F401  (the package on the path, the test course as card records)
 
 import dataclasses
 import tempfile

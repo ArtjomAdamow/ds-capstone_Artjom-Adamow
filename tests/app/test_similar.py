@@ -1,8 +1,7 @@
 """The similarity pipeline: card text, neighbours (order, minimum score, top k), a stand-in vectoriser, deck
-vectors and a request's vector (query), on the models' table fixture (nothing of the viewer; the real course's index
-is in test_course.py)."""
+vectors and a request's vector (query), on the models' table fixture."""
 
-import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
+import model_support  # noqa: F401  (the package on the path, the test course as card records)
 
 import unittest
 

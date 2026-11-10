@@ -1,7 +1,7 @@
-"""The results files (app.results; the csv module, nothing of Dash or the viewer), read as the dashboard and the
-models view read them: the current course's rows, the newest run, the transposed tables with their floor, the chosen
+"""The results files (app.results; the csv module, nothing of Dash), read as the dashboard
+reads them: the current course's rows, the newest run, the transposed tables with their floor, the chosen
 variant and the app's pick marked, the glossary, and the hints without a file or a folder. The small results files
-the dashboard's and the models view's tests read are written here too (write_results, PROMPT_ROWS)."""
+the dashboard's tests read are written here too (write_results, PROMPT_ROWS)."""
 
 import model_support
 

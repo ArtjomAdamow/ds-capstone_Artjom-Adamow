@@ -1,21 +1,19 @@
-"""The course table: the models' input without the viewer's parser (the data
-package's table). Three CSV files in one folder (data/course/), written by the flashcards workspace's export over the
-viewer's parser from the refined course file, read here with the csv module (no pandas in the module env):
+"""The course table: the models' input. Three CSV files in one folder (data/course/), the course file with its text
+cleaned, read and written here with the csv module (no pandas):
 
-* cards.csv (CARD_COLUMNS): every card the parser keeps, in its order (the decks in name order, the cards in file
+* cards.csv (CARD_COLUMNS): every card of the course (the decks in name order, the cards in file
   order): the comb_id, the deck's id and name, the scripted topic's id, name and rest flag, the stack, the authored
-  difficulty, the question, the answer and the explanation, as the parser cleaned them, and a quiz's answer
+  difficulty, the question, the answer and the explanation, cleaned, and a quiz's answer
   options, their feedback and the indices of the correct ones as JSON lists in three cells (empty for a card
   without options; the option texts carry markdown and commas);
-* decks.csv (DECK_COLUMNS): every deck in deck id order with its description (the viewer's placeholder for now);
+* decks.csv (DECK_COLUMNS): every deck in deck id order with its description (a placeholder for now);
 * topics.csv (TOPIC_COLUMNS): every deck's scripted topics in file order, the empty ones too, which cards.csv
   cannot carry: T1's seeds hold them (an emptied topic keeps its dot); with the course file's headings and sources
-  of each topic, joined by " | " (TEXT_SEPARATOR), which the parser does not keep (topic_texts reads them from the
-  course file with the json module, for the export and for plugin.course alike).
+  of each topic, joined by " | " (TEXT_SEPARATOR; topic_texts reads them from the course file with the json
+  module).
 
-load_table gives what plugin.course.load_course gives with the parser (the CardRecords, the deck ids by name, the
-TopicSeeds in deck name order and file order), plus the deck list; the ids agree because both come from the same
-parser. An empty difficulty or explanation reads as None.
+load_table gives what the models take (the CardRecords, the deck ids by name, the TopicSeeds in deck name order and
+file order), plus the deck list. An empty difficulty or explanation reads as None.
 """
 
 import csv
@@ -53,7 +51,7 @@ class DeckRow:
 
 @dataclass(frozen=True)
 class CourseTable:
-    """What the models and the models view read of the course table."""
+    """What the models read of the course table."""
 
     cards: list[CardRecord]  # every card, in the parser's order
     deck_ids: dict[str, str]  # deck name -> deck id
@@ -98,8 +96,8 @@ def split_texts(cell: str) -> tuple[str, ...]:
 
 
 def topic_texts(course_file: Path) -> dict[tuple[str, str], tuple[tuple[str, ...], tuple[str, ...]]]:
-    """Every topic's headings and sources in the course file (version 3), read with the json module, since the
-    viewer's parser keeps neither: (deck name, topic id) -> (headings, sources); a missing list reads as empty."""
+    """Every topic's headings and sources in the course file (version 3), read with the json module: (deck name,
+    topic id) -> (headings, sources); a missing list reads as empty."""
     data = json.loads(Path(course_file).read_text(encoding="utf-8"))
     return {
         (deck["name"], topic["topic_id"]): (tuple(topic.get("headings") or ()), tuple(topic.get("sources") or ()))

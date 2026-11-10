@@ -1,27 +1,23 @@
-"""The course model (no Dash, no state, nothing of the viewer): the pipeline fitted once on all cards, and from it the
-topics, positions and connections the plugin hands to the viewer's map at every start (the model state).
+"""The course model (no Dash, no state): the pipeline fitted once on all cards, and from it the
+topics, positions and connections of the whole course.
 
 * Decks view: one unit vector per deck (similar.deck_vectors); the layout step (models.layout, k = 3) places all
-  decks on the unit sphere at once. The points are keyed by deck id, the dots of the viewer's decks state. The
+  decks on the unit sphere at once. The points are keyed by deck id. The
   clustering of the deck vectors (models.clustering) gives the deck connections.
 * Topics: the topic model T1 (models.topic_model) takes the scripted topics of the course file as its input and
-  decides every card's topic and margin; the plugin writes them into the derived course file the viewer reads, every
-  deck's (the topic dots stay the viewer's own, at random around the deck's centroid; the model places none). A
+  decides every card's topic and margin, in every deck (the model places no topic). A
   deck's topic vectors (topic_vectors: per topic the mean of its members' unit rows, normalised, as a deck's vector
   is made of its cards) and their clustering give the topic connections
   (topic_links: one per merge in merge order, n - 1 for a deck's n topics with cards, none for an emptied topic), for
-  the model's membership or any other (a deck with scripted topics); the plugin writes them between the viewer's topic
-  dots, the models view draws the deck's tree from them (step 28).
+  the model's membership or any other (a deck with scripted topics).
 * Cards view, for each topic of the model: the layout step on the topic's card vectors, centred on the topic's mean
   (the start's own centring), with the neighbours within the topic (k = min(5, n - 1)), gives one unit direction per
-  card, and that direction is the position: every card sits on the surface of its topic's sphere (radius 1), as the
-  viewer's hard rule wants it. The clustering of the topic's card vectors gives its connections (n - 1). A topic
+  card, and that direction is the position: every card sits on the surface of its topic's sphere (radius 1).
+  The clustering of the topic's card vectors gives its connections (n - 1). A topic
   with fewer than two cards gets no layout and no connections. A scripted topic (in a deck without the model's
   topics) is laid out the same way on request (layout_of).
-* The points are plain (x, y, z) tuples, deterministic. The viewer's position sources with their random fallback on
-  the surface are the plugin's (plugin.positions): any id the model has no point for (a card of a one-card topic, a
-  card of a deck left out, an id that is not in the course the model was fitted on) gets the viewer's random
-  position there.
+* The points are plain (x, y, z) tuples, deterministic. The model has no point for a card of a one-card topic, a
+  card of a deck left out or an id that is not in the course it was fitted on.
 """
 
 import math
@@ -175,7 +171,7 @@ class CourseModel:
     def topic_vectors(self, deck_id: str, members=None) -> tuple[list[str], np.ndarray]:
         """(the topic ids with cards, one unit vector each): per topic the mean of its members' unit rows,
         normalised, in the membership's order; `members` is the membership, (topic id, card ids) pairs (a deck with
-        scripted topics: the viewer's), by default the model's own; a topic without cards the model was fitted on
+        scripted topics: those), by default the model's own; a topic without cards the model was fitted on
         gets no vector."""
         if members is None:
             members = [(placed.topic_id, placed.ids) for placed in self.topics_of_deck(deck_id)]

@@ -2,7 +2,7 @@
 encoder as a vectoriser, the device, the hybrid's blocks and weights, the app's vectoriser by name, and the tests on
 the real encoder, which skip without the library or the cached model, the GPU's without CUDA."""
 
-import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
+import model_support  # noqa: F401  (the package on the path, the test course as card records)
 
 import contextlib
 import io
@@ -199,7 +199,7 @@ class HybridTest(unittest.TestCase):
 class AppVectoriserTest(unittest.TestCase):
     def test_tfidf_by_name_and_an_unknown_name_refused(self):
         self.assertIsInstance(embeddings.app_vectoriser(name=embeddings.TFIDF), type(similar.tfidf_vectoriser()))
-        self.assertEqual(embeddings.APP_VECTORISER, "hybrid-minilm")  # the hand check's verdict (similarity.md, "The numbers")
+        self.assertEqual(embeddings.APP_VECTORISER, "hybrid-minilm")  # the hand check's verdict
         self.assertIn(embeddings.APP_VECTORISER, embeddings.VECTORISERS)
         with mock.patch.object(embeddings, "encoder_available", return_value=False):
             self.assertEqual(embeddings.describe(embeddings.app_vectoriser(output=lambda line: None)), "TF-IDF")  # without the library

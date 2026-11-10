@@ -2,7 +2,7 @@
 the cache, the tags of a course's quizzes with the skip lines, and the real model, which skips without the library
 or the cached model."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import contextlib
 import io

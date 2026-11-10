@@ -1,8 +1,7 @@
 """The course model: deck points on the unit sphere, the cards of every model topic on the surface of the topic's
-sphere, the points by deck, and the connections of decks and topics (nothing of the viewer; the viewer's position
-sources over the points are in test_positions.py)."""
+sphere, the points by deck, and the connections of decks and topics."""
 
-import model_support  # noqa: F401  (the helper's package on the path, the test course as card records)
+import model_support  # noqa: F401  (the package on the path, the test course as card records)
 
 import math
 import unittest

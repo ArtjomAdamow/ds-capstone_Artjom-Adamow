@@ -1,4 +1,4 @@
-"""The dashboard (app.dashboard) on the test course as a course table, with nothing of the viewer: the closed start
+"""The dashboard (app.dashboard) on the test course as a course table: the closed start
 and a restart with the explored cards and the shown card; what explores a card (Go's answer, a Related entry, a Go
 entry and a card in the diagram when clicked, Back; nothing when Related is drawn); the two sides and the turn
 marking read, a quiz judged right and wrong, Confirm disabled with nothing checked and enabled by its own callback
@@ -13,16 +13,13 @@ from the counts of the newest run and its line without them); the Demo beside th
 demo back to the course's card and trail, Related and the request box answering from deck 00 alone without D1, a
 reload ending the demo, the slide row the course's, the state file and the embeddings' cache the same after it); the
 dashboard without course data ("no data loaded" with the box and Go disabled, the Demo, the tiles from the newest
-runs, main on deck 00 alone reading no state file); the layout's regions and the stylesheet; the state file; the judgement's functions; and that
-nothing of the viewer is imported (a subprocess with the viewer blocked). The real course's table serves
+runs, main on deck 00 alone reading no state file); the layout's regions and the stylesheet; the state file; the judgement's functions. The real course's table serves
 a request too (skipped without it)."""
 
 import model_support
 
 import json
 import math
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -653,7 +650,7 @@ class DashboardTest(Driver):
 
 
 class ResultsTilesTest(Driver):
-    """The slide row on the results fixtures: the same numbers and words as the models view's section."""
+    """The slide row on the results fixtures: the numbers and words of app.headlines."""
 
     @classmethod
     def setUpClass(cls):
@@ -1085,47 +1082,11 @@ class QuizRuleTest(unittest.TestCase):
         self.assertEqual((quiz.CORRECT_LABEL, quiz.WRONG_LABEL), ("Correct answer", "Wrong answer"))
 
 
-NO_VIEWER = """
-import sys
-sys.modules["project"] = None  # the viewer is not there: any import of it fails
-sys.path.insert(0, {module_dir!r})
-sys.path.insert(0, {tests_dir!r})
-import tempfile
-from pathlib import Path
-from types import SimpleNamespace
-from unittest import mock
-import test_dashboard
-import importlib.util
-from app.dashboard.app import INPUTS, OUT, Dashboard, register_callback
-from app.course_table import load_table
-with tempfile.TemporaryDirectory() as folder:
-    board = Dashboard(load_table(test_dashboard.write_test_table(Path(folder))))
-update = register_callback(test_dashboard.test_panels.RecordingApp(), board)
-view = None
-for trigger, request in (("prompt-go", "how do I slice a list"), ("related-toggle", None), ("related-1", None), ("tile-D", None)):
-    with mock.patch("dash.ctx", SimpleNamespace(triggered_id=trigger)):
-        view = update(*([0] * INPUTS), [], request, view)[OUT["view"]]
-assert len(board.state.explored_ids) == 2 and len(board.state.trail) == 1 and view["panel"] == "D", (board.state.shown, view)
-assert importlib.util.find_spec("project") is None  # the viewer is not found
-loaded = sorted(name for name in sys.modules if (name == "project" or name.startswith("project.")) and sys.modules[name] is not None)
-print("LOADED", loaded)
-"""
-
-
-class NoViewerTest(unittest.TestCase):
-    def test_the_dashboard_runs_with_the_viewer_blocked_and_imports_none_of_it(self):
-        tests_dir, module_dir = Path(__file__).resolve().parent, model_support.MODULE_DIR
-        script = NO_VIEWER.format(module_dir=str(module_dir), tests_dir=str(tests_dir))
-        result = subprocess.run([sys.executable, "-B", "-c", script], capture_output=True, text=True, cwd=str(module_dir))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("LOADED []", result.stdout)
-
-
 TABLE_DIR = model_support.COURSE_TABLE_DIR
 RESULTS_DIR = model_support.MODULE_DIR / "results"
 
 
-@unittest.skipUnless(not missing_files(TABLE_DIR), "the course table is not there (export_course.py writes it)")
+@unittest.skipUnless(not missing_files(TABLE_DIR), "the course table is not there")
 class RealTableTest(unittest.TestCase):
     def test_the_real_course_table_serves_a_request_the_related_cards_and_the_tiles(self):
         board = Dashboard(load_table(TABLE_DIR), results_dir=RESULTS_DIR)

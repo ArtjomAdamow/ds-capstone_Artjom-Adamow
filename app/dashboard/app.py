@@ -1,26 +1,26 @@
-"""The dashboard (app.dashboard): the capstone's app without the viewer, one card at a time with what a learner
-sees of the models, on the dashboard's own state (Dash; nothing of the viewer, nothing of the viewer's plugin).
+"""The dashboard (app.dashboard): the capstone's app, one card at a time with what a learner
+sees of the models, on the dashboard's own state (Dash).
 
-Dashboard fits the course model with T1, D1 and P1 on the course table once, as the models view's Page does, and
+Dashboard fits the course model with T1, D1 and P1 on the course table once and
 reads three things of them: the shown card's related cards from the index (CourseModel.related, the five nearest),
 D1's order among the unread quizzes (the next card), and P1's answer to a request (PromptModel.find); nothing else
 of the models shows on the card: no level, no margin, no score, no tag. Where a card lies is T1's membership, the
-model's topics as the full app gives every deck from the start; the topics keep the scripted ids and names.
+model's topics in every deck; the topics keep the scripted ids and names.
 
-* The card (one at a time, as the viewer shows it): the front the question, a click on the card or Enter turns it
+* The card (one at a time): the front the question, a click on the card or Enter turns it
   to the answer; a quiz's front the question with its options and Confirm under it, Confirm disabled while nothing
   is checked (its own callback on the checks), Confirm or Enter turns it to its back, the judgement (quiz.judge),
   Enter on the back turns it to the front with the checks cleared.
   The turn marks the card read (a quiz once judged). With no card shown the card's place says how to begin.
-* The navigation: Related lists the shown card's five related cards by the viewer's rule (neighbours.rank_by_confidence
-  without the confidence: the unread first, the quizzes D1 predicted in D1's order among them, the read ones after
+* The navigation: Related lists the shown card's five related cards in the learner's order (neighbours.rank_by_confidence
+  without a confidence: the unread first, the quizzes D1 predicted in D1's order among them, the read ones after
   them in the neighbours' order), the next card first and marked and again in its place, each with where it lies
   (this topic, this deck, another deck by name), every entry a click that shows that card; nothing is explored when
   the list is drawn. Back returns to the card shown before (the trail, state.DashboardState.back), disabled on an
   empty trail. The request box is the one way in: P1's answer shows the topic's card where it navigates (the
   selected card, else the topic's nearest), else "no match" with up to three entries, the nearest topics' cards,
   each a click that shows its card and closes the answer; an empty request does nothing.
-* What explores a card (step 33's rule on the dashboard's parts): a selection in any way, Go's answer that shows a
+* What explores a card: a selection in any way, Go's answer that shows a
   card, a click on a Related entry, on one of Go's entries or on a card in the diagram, Back; nothing else and
   nothing ahead.
 * The diagram (layout.diagram): decks → topics → cards, each item a dot with its name: the explored decks, the open
@@ -31,7 +31,7 @@ model's topics as the full app gives every deck from the start; the topics keep 
   a deck or a topic leaves the card as it is. A selection in any way opens the shown card's deck and topic again.
 * The slide row: five tiles, S, C, T, D and P, each the generation the app runs (S2 with the encoder, else S1; C1,
   T1, D1, P1) with its headline and its two numbers with their verdict words from the results files
-  (app.headlines, the same numbers and words as the models view), one line where a results file is missing;
+  (app.headlines), one line where a results file is missing;
   nothing live. A click on a tile opens the model's panel over the two columns, the tiles staying visible; another
   tile shows that model in its place, a second click on the open tile closes it; Enter does nothing while it is open.
   The panel holds the numbers on its left and the model's figure on its right (panel_figure), the whole course's
@@ -42,8 +42,8 @@ model's topics as the full app gives every deck from the start; the topics keep 
 * The state: the read and explored flags, the shown card and the trail in the dashboard's own state file
   (state.DashboardState, saved at every change); the flip, Related drawn, the last request, the open tile, the
   diagram's open deck and topic and the demo flag in the `view` store (HOME's keys), runtime only. The closed start:
-  a fresh start shows nothing, a restart shows the explored cards and the shown card again. No episodes' log.
-* The demo (docs/demo/): DemoBoard, a second board over deck 00's table (data/demo/dashboard/), fitted at the start
+  a fresh start shows nothing, a restart shows the explored cards and the shown card again.
+* The demo: DemoBoard, a second board over deck 00's table (data/demo/dashboard/), fitted at the start
   and kept in memory: T1's membership as written, P1 on its own self set, no D1, its state without a file. Demo in
   the top bar sets the flag and shows deck 00 from card 001 with a fresh state; every region renders from the board
   the flag names (Boards), the slide row stays the course's. End demo clears the flag and drops the demo's state, and
@@ -228,7 +228,7 @@ class Dashboard:
         return [other for other, _score in self.model.related(card_id) if other in self.card_by_id]
 
     def next_card(self, card_id: str) -> Optional[str]:
-        """The neighbour to take next, by the viewer's rule without the confidence: the unread first, the quizzes
+        """The neighbour to take next (neighbours.rank_by_confidence without a confidence): the unread first, the quizzes
         D1 predicted in D1's order among them, the read ones after them in the neighbours' order."""
         neighbours = self.neighbours(card_id)
         if not neighbours:
@@ -360,7 +360,7 @@ class Dashboard:
         return counts
 
     def deck_links(self) -> list[tuple[str, str]]:
-        """The deck connections below the preset, as the models view draws them: the first merges, until a part would
+        """The deck connections below the preset: the first merges, until a part would
         hold more than DECK_PART decks."""
         return list(self.model.deck_links[: clustering.preset_rank(self.model.deck_links, DECK_PART)])
 
@@ -523,7 +523,7 @@ class Dashboard:
 
 
 class DemoBoard(Dashboard):
-    """The board of deck 00 (docs/demo/architecture.md, "The dashboard"): a Dashboard over deck 00's table, fitted at
+    """The board of deck 00: a Dashboard over deck 00's table, fitted at
     the start and kept in memory: the course model over deck 00's cards with T1's membership as written (no card
     moved), its index for Related, P1 over that index and those topics with its floors from deck 00's own self set; no
     D1, so Related ranks the unread first in the neighbours' order. Its vectoriser is the app's kind without the

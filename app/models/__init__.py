@@ -1,4 +1,4 @@
-"""The models (no Dash, no state, nothing of the viewer): numpy, scipy and scikit-learn only.
+"""The models (no Dash, no state): numpy, scipy and scikit-learn only.
 
 * `similar`: card text, a swappable vectoriser, unit rows, neighbours, deck vectors (SimilarityIndex).
 * `layout`: the layout step, an SVD start refined by a force layout on the sphere, with its measures.
@@ -16,6 +16,5 @@
   floor, the fixed-k overlap of the layouts) and the judges of T1, for evaluate.py next to the package.
 
 The input is a sequence of cards (app.cards.Card), the deck ids by deck name and the scripted topics
-(TopicSeed); the plugin reads them from the course file with the viewer's parser, the capstone from the data
-package's table.
+(TopicSeed), read from the course table (app.course_table).
 """

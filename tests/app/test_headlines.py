@@ -1,5 +1,5 @@
-"""The section's numbers (app.headlines; nothing of Dash or the viewer), as the dashboard's tiles and the models
-page's section show them: the verdict rule on its own cases, never a hand-written word; each generation's two numbers
+"""The section's numbers (app.headlines; nothing of Dash), as the dashboard's tiles and panels
+show them: the verdict rule on its own cases, never a hand-written word; each generation's two numbers
 from the newest run with their contrast, verdict and explanation; Claude named as the judge, never a hand."""
 
 import model_support

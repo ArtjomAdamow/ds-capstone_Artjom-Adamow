@@ -1,6 +1,6 @@
-"""The results files for the model panels of the dashboard and the models view (the csv module, nothing of Dash):
+"""The results files for the model panels of the dashboard (the csv module, nothing of Dash):
 the rows of the current course, each level's newest run, its tables with one row per measure and one column per
-variant next to its floor, and the glossary of the measure columns (app/docs/columns.md).
+variant next to its floor, and the glossary of the measure columns (results/columns.md, next to the package).
 
 * `Results(folder, note, chosen)`: reads results.csv, topics.csv, difficulty.csv and prompt.csv of `folder`
   once; a missing file gives the hint how to make one (`hint`). The course's rows are those whose note names the table's decks (`note`,
@@ -19,7 +19,7 @@ variant next to its floor, and the glossary of the measure columns (app/docs/col
   "share (count)"), which heads are the chosen variant (the word "chosen" in the name; C1's "model"), the subtitle
   (the run and the bookkeeping the heads share), the measure columns shown and the columns behind each row, for the
   row's description, and the file it comes from.
-* `read_glossary`: the rows of app/docs/columns.md by column name, what a row of a table means when it is clicked;
+* `read_glossary`: the rows of results/columns.md by column name, what a row of a table means;
   each under its file's key too ("results.csv:hand_diff"), since a column of the same name can mean another measure
   in another file (`glossary_entry`).
 """
@@ -31,7 +31,7 @@ from typing import Mapping, Optional, Sequence, Union
 
 RESULTS, TOPICS, DIFFICULTY, PROMPT = "results.csv", "topics.csv", "difficulty.csv", "prompt.csv"
 FILES = (RESULTS, TOPICS, DIFFICULTY, PROMPT)
-GLOSSARY_PATH = Path(__file__).resolve().parent / "docs" / "columns.md"
+GLOSSARY_PATH = Path(__file__).resolve().parents[1] / "results" / "columns.md"  # next to the package, with the rows
 BOOKKEEPING = ("params", "features", "folds", "repeats", "seed")  # the subtitle, where every head shares the value
 CHOSEN = "chosen"
 HINT = "No {name} in {folder} yet. The offline evaluation writes it, next to app/: uv run evaluate.py"
@@ -71,7 +71,7 @@ P1_MEASURES: tuple[Measure, ...] = (
     "min_text", "ms_per_request",
 )
 MARGIN_SCOPE = "margin >= "
-FOCUS_SCOPE = "focus "  # the share scale's marks: the share of the course's cards kept (the margin slider of step 28 ran on them; it went with step 33)
+FOCUS_SCOPE = "focus "  # the share scale's marks: the share of the course's cards kept
 STACK_SCOPE = "stack "
 T1_JUDGES = ("T1", "1-NN", "LR", "chance")
 

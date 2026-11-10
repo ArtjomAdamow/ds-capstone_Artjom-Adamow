@@ -1,4 +1,4 @@
-"""The dashboard's regions (Dash; nothing of the viewer), written anew in the one theme (assets/style.css holds the
+"""The dashboard's regions (Dash), in the one theme (assets/style.css holds the
 tokens and the type scale). Landscape only: the top bar, under it two columns at the screen's height less the slide
 row, the slide row along the bottom at the full width, a model's panel over the two columns while a tile is open.
 
@@ -264,7 +264,7 @@ def demo_controls(running: bool, has_demo: bool, no_data: bool) -> tuple:
 def number_block(headline: Headline, large: bool) -> html.Div:
     """One of a model's two numbers: on a tile the value at the heading size, its label and its verdict word; on the
     panel the value at the number size with its label, its contrast, its sentence, its verdict word and its
-    explanation, as the models view's section shows them."""
+    explanation."""
     parts = [html.Div(headline.shown, className="number-value"), html.Div(headline.label, className="number-label")]
     if large:
         contrast = []
@@ -309,7 +309,7 @@ def tile_class(is_open: bool) -> str:
 
 def model_panel(tile: Optional[Tile], figure=None) -> tuple[list, str]:
     """The open model's panel over the two columns, or hidden; its body on the left the letter and the name, the
-    headline at the heading size, the two numbers one under the other at the models view's sizes with their parts,
+    headline at the heading size, the two numbers one under the other at the number size with their parts,
     and how to close it; on the right the model's figure (app.Dashboard.panel_figure) at the panel's full height."""
     if tile is None:
         return [], "model-panel hidden"

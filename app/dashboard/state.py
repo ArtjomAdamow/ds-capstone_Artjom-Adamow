@@ -1,5 +1,5 @@
-"""The dashboard's state file (the standard library only): `dashboard_state.json` in `data/state/`, apart from the
-viewer's state file, written at every change.
+"""The dashboard's state file (the standard library only): `dashboard_state.json` in `data/state/`,
+written at every change.
 
 What it holds (version 1): the read and the explored flag per card (only the cards with a flag set), the shown
 card and the trail, the cards shown before it, oldest first. A missing file is the closed start: nothing explored,
@@ -7,13 +7,13 @@ no card shown, an empty trail. A file of another version is refused, not convert
 (app.launch.prepare_state) names the file among the state files, so a fresh start is its y. The flags of cards the
 course does not hold (an older course) are dropped at the load, and a shown card or a trail entry among them too.
 
-The rules (step 33's, on the dashboard's parts):
+The rules:
 
 * what explores a card is a selection in any way: Go's answer that shows a card, a click on a Related entry, on one
   of Go's entries or on a card in the diagram, Back; nothing else and nothing ahead (`show`);
 * the turn marks the card read, a quiz once judged (`mark_read`); explored is not turned;
 * `show` puts the card shown before onto the trail; `back` takes the last card of the trail back as the shown card
-  and drops the one left, as the viewer's Return restores the view before a navigation.
+  and drops the one left.
 """
 
 import json

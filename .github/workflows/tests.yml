@@ -1,7 +1,7 @@
 name: Tests
-# Runs on every push to main and on every pull request. The runner has no SSH key, so this also proves
-# that the capstone and the app install without the private sputnik repository (the viewer extra is
-# left out) and that the tests need no course data (data/ is not in the repository).
+# Runs on every push to main and on every pull request. The runner has the repository alone, so this also
+# proves that the app installs from the public index and that the tests need no course data (it is not in
+# the repository).
 on:
   push:
     branches: [main]
@@ -15,7 +15,7 @@ jobs:
         with:
           enable-cache: true
       # --locked: fail if uv.lock does not match pyproject.toml. Python comes from .python-version.
-      - name: Install without the viewer
+      - name: Install
         run: uv sync --all-groups --locked
       - name: Tests
         run: uv run pytest

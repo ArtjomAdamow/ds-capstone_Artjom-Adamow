@@ -1,3 +1,3 @@
 # Unix line endings for .gitignore on disk too: with core.autocrlf's CRLF, git check-ignore takes data/demo/ as
-# ignored despite !data/demo/ (the train's .gitignore check).
+# ignored despite !data/demo/.
 .gitignore text eol=lf

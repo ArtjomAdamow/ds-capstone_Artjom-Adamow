@@ -1,172 +1,157 @@
-# Data Science Capstone Template
+# Guided learning
 
-A ready-made folder structure for your capstone project, so you can start with the data science
-instead of with the setup.
+A data science capstone: guided learning on the course material of a data science bootcamp. The material is normalized into cards, flashcards (a question and its answer) and quizzes (four or more answer options, one or more of them correct, each with its feedback): 1,064 cards in 24 decks. The models read the cards' text and say which cards are related, how the decks and topics connect, which topic a card belongs to, how hard a quiz is and where a learner's request leads. The dashboard shows one card at a time with what a learner sees of the models, and the offline evaluation measures them.
 
-Everything here already works: you can install it, train an example model, and see a result in
-about five minutes. Then you swap the example out for your own project, step by step.
-
-New to the tools used here (uv, ruff, pytest, nbdime)? Read
-**[TOOLS.md](TOOLS.md)** first. It explains each one in plain language: what it is, why it is in
-this repo, and what you actually have to type.
+The course data is git-ignored and never presented online. Deck 00, `data/demo/`, is the one part of `data/` in the repository: a synthetic deck, "How to use", that the dashboard's Demo shows. A clone of this repository runs on it alone.
 
 ## Getting started
 
-You need one thing installed: **uv**. If you do not have it yet, see
-[TOOLS.md](TOOLS.md#uv-the-only-tool-you-install-yourself).
-
-**1. Make your own copy.** On GitHub, click the green **Use this template** button at the top of
-this page. That creates a fresh repository for your team.
-
-**2. Download it to your computer:**
+The one tool to install is [uv](https://docs.astral.sh/uv/); `TOOLS.md` and `UV_SETUP.md` explain it and the other tools of the repository. Run the commands below from the repository's root.
 
 ```bash
-git clone git@github.com:<your-org>/<your-repo>.git
-cd <your-repo>
+uv sync --all-groups     # Python 3.13 and the libraries, into .venv/
+uv run start.py          # the dashboard, on http://127.0.0.1:8050/ or the next free port
+uv run pytest            # the tests; none needs the course data
 ```
 
-**3. Install everything:**
+The sentence encoder of S2 and the tagger of D2 are optional: `uv sync --all-groups --extra embeddings` (below, "The launcher: start.py"). Without them the app runs on TF-IDF.
 
-```bash
-uv sync --all-groups
+## Structure
+
+```text
+├── start.py                   # the launcher: the dashboard (below)
+├── evaluate.py                # the offline evaluation of the models (below)
+├── app/
+│   ├── cards.py               # the card record the models read: a card's seven fields and a quiz's answer options, the stacks
+│   ├── course_table.py        # the course table: cards.csv, decks.csv, topics.csv, read with the csv module
+│   ├── figures.py             # the models' plotly figures (plotly only)
+│   ├── headlines.py           # each generation's two numbers from the results rows, with the verdict rule and its words
+│   ├── launch.py              # the launcher's part: the port argument and the port check, the data folder, the backup question
+│   ├── neighbours.py          # the related cards' order (the next card) and labels
+│   ├── panels.py              # the model panels' names and letters, the cut labels, the slot's helpers, the app's variant labels
+│   ├── results.py             # the results files: each generation's newest run, the tables, the glossary
+│   ├── models/                # numpy, scipy, scikit-learn; sentence-transformers and transformers where installed (S2, D2)
+│   │   ├── similar.py              # card text, vectoriser, unit vectors, the own minimum, neighbours, deck vectors
+│   │   ├── embeddings.py           # S2: the sentence encoder, the embeddings' cache, the hybrid with TF-IDF, the app's vectoriser
+│   │   ├── topic_model.py          # T1: nearest centroid over the scripted topics (TopicSeed, TopicModel)
+│   │   ├── layout.py               # the layout step: SVD start, force layout on the sphere, measures
+│   │   ├── clustering.py           # connections from scipy's clustering, in merge order; the cut-off preset's rank
+│   │   ├── course_model.py         # C1, the fitted model: deck points and connections, the topics' layouts and connections
+│   │   ├── difficulty_model.py     # D1: the difficulty of the unrated quizzes, measured out of fold; D2 alone judged the same way
+│   │   ├── zero_shot.py            # D2: the zero-shot difficulty tags of the quizzes by an NLI model, cached like the embeddings, read back alone
+│   │   ├── prompt_model.py         # P1: a request scored against the topics by three routes at their self-set floors, a target or "no match"
+│   │   └── evaluation.py           # the offline measures and the judges of the topic model, for evaluate.py
+│   └── dashboard/             # the dashboard: one card at a time
+│       ├── __init__.py             # main(course_dir, results_dir, state_dir, demo_dir): the dashboard on the course table, the results and its state file, its Demo on deck 00
+│       ├── app.py                  # Dashboard (the fitted models, the state, what the regions show), DemoBoard (deck 00's), Boards (the one the view names), the app and its one callback
+│       ├── layout.py               # the top bar with the request box, Back and Demo, the diagram, the card with its options and its Related list, the tiles and the model's panel
+│       ├── panel_figures.py        # the panels' figures of the whole course: where the related cards lie, the decks on the sphere, P1's judged requests
+│       ├── state.py                # the state file dashboard_state.json: the read and explored flags, the shown card, the trail
+│       ├── quiz.py                 # a quiz's judgement as plain functions
+│       └── assets/                 # style.css: the theme's tokens and the type scale; keys.js: Enter into the hidden input; diagram.js: a click in the diagram into another
+├── tests/app/                 # the model tests, the shared parts', the dashboard's, the launcher's and the evaluation's tests on model_support.py
+├── results/                   # the hand files hand_marks.csv, hand_labels.csv and prompt_requests.csv; evaluate.py writes results.csv, difficulty.csv, topics.csv, prompt.csv;
+│                              # columns.md: what their columns mean
+├── data/                      # git-ignored: topics.json, course/, images/, jupyter/, the dashboard's state in state/, S2's embeddings and D2's tags in cache/;
+│                              # tracked: demo/, deck 00 (dashboard.json and its table dashboard/)
+├── src/, notebooks/, tests/test_features.py   # the course template's example pipeline, apart from the app
+└── Makefile, TOOLS.md, UV_SETUP.md            # the template's shortcuts (make test, make lint) and its notes on the tools
 ```
 
-This one command installs Python (yes, Python itself, if you need it), creates the project's
-virtual environment in a `.venv/` folder, and installs pandas, scikit-learn and the rest. It
-takes a minute the first time.
+## The models
 
-**4. Check it works:**
+A generation is a model's letter with its number: S1 and S2 the similarity, C1 the course model, T1 the topic model, D1 and D2 the difficulty, P1 the navigation prompt.
 
-```bash
-uv run python -m src.train
-```
+- **The similarity model S1** is one TF-IDF over the course's card texts (the question, the answer and the explanation), unit rows and the cosine: every card's five nearest cards above the index's own minimum score (the 10th percentile of the fifth neighbour's cosine), and the vectors every other model reads. **S2** is a sentence encoder in the same slot (`all-MiniLM-L6-v2`, `all-mpnet-base-v2`), alone or hybrid with S1's TF-IDF (the two halves' unit rows side by side, each at its own minimum, so the cosine ranks pairs as the sum of the two scores): it needs `sentence-transformers` (the `embeddings` extra below) and caches the course's embeddings in `data/cache/embeddings/` (a derived file, keyed by the model and the texts; nothing to back up). Which one the app runs is `APP_VECTORISER` in `app/models/embeddings.py`, set by the hand check; without the library or the model the app and the evaluation run on TF-IDF and say so in one line.
+- **The course model C1** (`models/course_model.py`) is the pipeline fitted once on all cards. One unit vector per deck, the mean of its cards' unit rows, and the layout step (`models/layout.py`: an SVD start refined by a force layout on the sphere) place the decks on the unit sphere; each topic's cards are laid out the same way on their topic's sphere. The points are deterministic: the same course gives the same layout.
+- **The connections and their cut** (`models/clustering.py`): one connection per merge of the hierarchical clustering, in merge order, and `preset_rank`, the last merge whose connected parts stay within a size (five decks, four cards), which the dashboard uses. A deck's topics are clustered the same way on their vectors (`course_model.topic_links`), 2 to 6 merges per deck.
+- **The topic model T1** takes the scripted topics as its input (a script's grouping of each deck's cards by the lectures' headings and sources) and decides every card's topic: the nearest of the deck's topic centroids by cosine, each centroid the mean of the topic's cards' vectors (leave-one-out, so a card never votes for itself). On the course 351 of the 1,064 cards (33 %) get another topic than the script; 2 topics end up empty.
+- **The difficulty model D1** rates the flattened quizzes that have no difficulty (56 in the course; flashcards are not rated). The levels are relative to the deck: each deck's quizzes keep the course's shares (8 easy, 3 medium and 1 hard of 12). **D2** tags the same quizzes with an NLI model and no training (`models/zero_shot.py`: the quiz with its options, the correct options' feedback and the explanation against three hypotheses, the large model of the ModernBERT family, the tags cached in `data/cache/embeddings/`; it needs the `embeddings` extra below): a judge next to D1 in the evaluation, built on D1's frame and supplying no feature to it; on the hand labels it orders the extra quizzes within noise of D1 and below it, so D1 runs the app on its text statistics (the answer options' statistics add nothing D1 can learn from the rated quizzes).
+- **The navigation prompt P1** (`models/prompt_model.py`) answers a request in the learner's words. The request enters the index's vector space through the fitted vectoriser and is scored against T1's topics by up to three routes: the nearest card, the topic's centroid, the topic's headings. Each route is normalised at its own floor, set before any request from the cards' own questions with the card held out. The app runs the card route: the first topic is entered when the route clears its floor there, else the answer is "no match"; the request's nearest card is selected when it lies in the entered topic.
 
-You should see a few log lines ending with a trained model and two scores. That is the example
-pipeline running end to end. Now you know your setup is fine.
+## The course table
 
-**5. Open the notebook.** Open the project folder in VS Code, open
-`notebooks/EDA-and-modeling.ipynb`, and when VS Code asks which kernel to use, pick the one from
-`.venv`. That is the environment you just installed.
+The models' input, three CSV files in `data/course/`:
 
-## What is in this repo
+- `cards.csv`: every card of the course, the decks in name order and the cards in file order: `comb_id`, the deck's id and name, the scripted topic's id, name and rest flag, the stack (1 a flashcard of the questions' file, 2 an unrated quiz, 3 a rated quiz, 4 a flashcard of the quiz file), the authored difficulty, the question, the answer and the explanation, and a quiz's answer options, their feedback and the indices of the correct ones as JSON lists in three cells (empty for a card without options);
+- `decks.csv`: every deck in deck id order with its description;
+- `topics.csv`: every deck's scripted topics in file order, the empty ones too (T1's seeds hold them, so an emptied topic keeps its dot), each with its headings and sources of the course file, joined by ` | ` in one cell each.
 
-| Folder or file | What it is for |
-|---|---|
-| `notebooks/` | Your exploration and analysis. `EDA-and-modeling.ipynb` is an empty notebook with the sections already laid out. |
-| `src/` | Python code you want to reuse. See the table below. |
-| `tests/` | Checks that your code in `src/` does what you think. One example is included. `tests/app/` holds the app's tests. |
-| `app/`, `start.py` | The guided learning app and its launcher. See [the app section](#the-guided-learning-app). |
-| `data/` | Your data files. Git ignores what you put here, so nothing large or private ends up on GitHub. |
-| `models/` | Trained models get saved here. Also ignored by Git. |
-| `images/` | Plots you want to keep, for example for your final presentation. |
-| `pyproject.toml` | The list of packages the project uses. |
-| `Makefile` | Shortcuts for the long commands. `make train` instead of `uv run python -m src.train`. |
-| `TOOLS.md` | Plain-language explanation of every tool in here. |
-| `UV_SETUP.md` | The longer reference for uv, for when you need to add a package or something breaks. |
+`course_table.load_table(folder)` reads them with the csv module into what the models take: the card records, the deck ids by name, the scripted topics as `TopicSeed`s, and the deck list. The table is the course file `data/topics.json` with its text cleaned, one row per card; the app reads the table alone.
 
-Inside `src/`:
+## The dashboard
 
-| File | What it does |
-|---|---|
-| `config.py` | Settings in one place: folder paths, the name of the column you predict, the random seed. Change settings here, not scattered through the code. |
-| `data.py` | Loads your data and splits it into a training set and a test set. |
-| `features.py` | Cleaning and feature engineering. |
-| `train.py` | Trains the model, prints how good it is, saves it to `models/`. |
-| `predict.py` | Loads a saved model and makes predictions on new data. |
-
-## Everyday commands
-
-You can use either column. They do exactly the same thing.
-
-| Short version | Full version | What it does |
-|---|---|---|
-| `make setup` | `uv sync --all-groups` | Install or update the packages |
-| `make train` | `uv run python -m src.train` | Train the model and save it |
-| `make predict` | `uv run python -m src.predict` | Use the saved model to predict |
-| `make test` | `uv run pytest` | Run the tests |
-| `make lint` | `uv run ruff check .` | Point out mistakes and messy code |
-| `make format` | `uv run ruff format .` | Tidy up the code formatting automatically |
-| `make clean` | | Delete temporary files |
-| | `uv run start.py` | Start the guided learning app |
-
-`make help` lists them too. `make` is not installed on Windows by default, so if the command is
-not found, just use the full version. It is exactly the same command.
-
-> Why `uv run` in front of everything? Because it guarantees the command uses this project's
-> packages and not some other Python on your computer. You never have to "activate" anything.
-
-## Turning this into your project
-
-The repo ships with a small example (predicting a diabetes progression score from a built-in
-dataset) purely so that everything runs before you have your own data. Replace it in this order,
-and keep running `make train` after each step to see that nothing broke:
-
-**1. Your data.** Open `src/data.py` and change `load_data` so it returns your dataset as a
-DataFrame. Usually one line:
-
-```python
-return pd.read_csv(DATA_DIR / "my_dataset.csv")
-```
-
-Then open `src/config.py` and set `TARGET` to the name of the column you want to predict.
-
-**2. Your cleaning and features.** Put your cleaning steps into `engineer_features` in
-`src/features.py`. There are two small helpers there to get you going, and you can add your own.
-
-Why there and not in the notebook? Because `train.py` and `predict.py` both call this one
-function. If you clean your data in the notebook only, your model will be trained on clean data
-and later asked to predict on messy data, and the results will be quietly wrong. This is one of
-the most common ways capstone projects go sideways.
-
-**3. Your model.** In `src/train.py`, change `build_model` to the model you want (a random
-forest, a classifier, whatever suits your question), and change `evaluate` to metrics that fit.
-The example uses RMSE and R2, which only make sense for predicting a number. If you are
-predicting a category, you want accuracy, precision, recall or F1 instead.
-
-**4. Your tests.** Add a test to `tests/` for each function you write in `src/features.py`. Copy
-the style of the examples that are already there.
-
-**5. This README.** Delete this section and describe your own project: the question, the data,
-what you found.
-
-## Working as a team
-
-- Work on a branch, open a pull request, have a teammate look at it before merging.
-- Use notebooks to explore. As soon as a piece of code is worth running twice, move it into
-  `src/` and import it back into the notebook.
-- If you add a package with `uv add <name>`, commit both `pyproject.toml` and `uv.lock` so
-  everyone gets the same versions.
-- Notebooks cause ugly merge conflicts. [TOOLS.md](TOOLS.md#nbdime-for-notebook-merge-conflicts)
-  explains the tool that fixes that.
-
-## Where to look when something breaks
-
-- Setup and package problems: [UV_SETUP.md](UV_SETUP.md#7-troubleshooting)
-- "What even is this tool": [TOOLS.md](TOOLS.md)
-- [scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html) for the modeling
-- [pandas documentation](https://pandas.pydata.org/docs/) for the data wrangling
-
-## The guided learning app
-
-The app lives in `app/`, with its launcher `start.py` and its tests in `tests/app/`. They are
-developed in a separate workspace and arrive here as a whole with every update (a "train", not to confuse with model train), so don't edit them here: a fix comes with a later train. The course data the app reads
-(`data/topics.json`, `data/course/`, `data/images/`, `data/jupyter/`) comes the same way, and like
-the state it writes to `data/state/` it is ignored by Git.
-
-Start it with:
+The learner's page: one card at a time with what a learner sees of the models, in a slides look, landscape only, in plain HTML. It fits the course model with T1, D1 and P1 on the course table at the start, and the same models on deck 00 for its Demo, reads the results files next to `evaluate.py`, and keeps its own state file.
 
 ```bash
 uv run start.py
 ```
 
-Refresh the app with:
+- **The card,** the right column: the front the question, a click on the card or Enter turns it to the answer; a quiz's front the question with its options and Confirm under it, Confirm disabled while nothing is checked and enabled by the first check; Confirm or Enter turns it to its back, "Correct answer" with the card's feedback, or "Wrong answer" with every checked option's own feedback (right only when exactly the correct options are checked); Enter on the back turns it to the front with the checks cleared. The turn marks the card read, a quiz once judged. A quiz too tall for the card's frame scrolls inside it. The title row names the deck and the topic in full, over as many lines as they need; nothing of the models stands on the card: no level, no margin, no score. With no card shown the card's place says how to begin.
+- **The request box,** in the top bar at all times, the one way in: a request in the learner's words, Go or Enter; P1's answer shows the topic's card where it navigates (the selected card, else the topic's nearest), or "No match in the course." with up to three entries under the box, the nearest topics' cards named by the deck, the topic and the question, each a click that shows the card and closes the answer; an empty request does nothing.
+- **Related,** a button in the card's title row, lists the shown card's five related cards of the index, the next card first and marked, and again in its place; each the card's question shortened and where it lies (this topic, this deck, another deck by name); every entry a click that shows the card. The next card is the first in the order a learner should take them: the unread cards first, the quizzes D1 predicted in D1's order among them, the other unread ones in the neighbours' order, the read ones after them. Nothing is explored when the list is drawn.
+- **Back,** in the top bar, returns to the card shown before (the trail of the cards shown), disabled on an empty trail.
+- **The diagram,** the left column: decks → topics → cards, three rows in plain HTML, each item a dot with its name (the deck's name, the topic's name, the question shortened): the explored decks, the open deck's topics that hold an explored card, the open topic's explored cards; nothing unexplored. The open deck and topic are the shown card's, framed in gold, with the shown card's deck, topic and card highlighted. A click on a card shows it; on a topic the cards row lists that topic's cards; on a deck the topics row lists its topics and the cards row empties; a click on a deck or a topic leaves the card as it is, and any selection opens the shown card's deck and topic again. A row too full scrolls inside itself. A fresh start shows it empty, and it fills as the learner explores.
+- **The slide row,** along the bottom: five tiles, S, C, T, D and P, each the model's headline and its two numbers with their verdict words from the results files, for the generation the app runs (S2 with the encoder, else S1; C1, T1, D1, P1); one line where a results file is missing. A click on a tile opens the model's panel over the two columns, opaque, the tiles staying visible under it: on its left the headline and the two numbers one under the other, each with its label, its contrast, its sentence, its verdict word and its explanation; on its right the model's figure, the whole course's whatever card is shown: S where the related cards lie, seen from their card (this topic, this deck, another deck, with the share outside the card's topic), C the decks on the sphere with the connections below the preset and the shown card's deck gold and turned to the front, T the margins with the threshold and the line of the 25 % most confident, D D1's confusion matrix on the rated quizzes, P P1's judged requests on and off the course by where it took them (the counts `evaluate.py --part prompt` writes; a line until then). A panel too low folds: the sentences and the hint go first, then the explanations. Another tile shows that model in its place, a second click on the open tile closes it; Enter does nothing while it is open.
+- **What explores a card:** a selection in any way, Go's answer that shows a card, a click on a Related entry, on one of Go's entries or on a card in the diagram, Back; nothing else and nothing ahead. Where a card lies is T1's topic, the model's, in every deck.
+- **The state file** `data/state/dashboard_state.json`: the read and explored flags per card, the shown card and the trail, saved at every change; the closed start: a fresh start shows nothing, a restart shows the explored cards and the shown card again. The flip, Related drawn, the last request, the open tile and the diagram's open deck and topic live in the browser alone. The backup question covers the file; a file of another version is refused, and y at the question starts fresh.
+- **The Demo,** in the top bar after Back: it puts the course aside and shows deck 00, "How to use" (`data/demo/dashboard/`, 32 cards in six topics on the page's parts, a quarter of them rated quizzes), from its first card; the button reads "End demo", filled gold, while it runs. Deck 00 has its own board (`DemoBoard`), fitted at the start and kept in memory: the course model over its cards with its topics as written (T1 moves no card), P1 on its own floors, no D1, the app's kind of vectoriser on the encoder already loaded and without the embeddings' cache. While the demo runs the request box, Related, Back and the diagram answer from deck 00 alone; the tiles and their panels stay the course's. End demo, a reload or a restart drops the demo's state and brings back the course's card, trail and explored cards; nothing of the demo is saved.
+- **Without course data,** as in a clone of this repository: the dashboard starts with deck 00 alone. Outside the demo the request box says "No data loaded", the box and Go are disabled, the diagram is empty and the card's place points to Demo; the tiles show the results files' newest runs, and the panels' figures but P's say they are drawn from the course. The state file is neither read nor written.
+- **Large type:** the panel's numbers 3rem, headings and the tiles' numbers 1.5rem, the card's text between 1.35 and 2rem, nothing below 16 px; under 1400 px (a projector) a step smaller. Landscape only, no stacked layout.
+
+## The launcher: start.py
+
+It needs no arguments; the folders and the commands are written in it:
 
 ```bash
-uv sync --all-groups
+uv run start.py
 ```
 
-Code in `src/` and the notebooks may use `app.models`, `app.course_table` and `app.figures`.
-`app.glue` needs the viewer.
+- **It starts the dashboard,** with no question but the backup question.
+- **The port is checked before anything serves** (`launch.choose_port`): a port is held when a server answers on it. The dashboard takes the next free port from Dash's default (8050) and prints the URL it serves on; `--port N` names the port and stops when it is held, naming the process that holds it: "Port 8060 is already in use (PID …, command line …). Stop it or use --port N".
+- **The backup question,** after the port check: with `dashboard_state.json` in `data/state/`, it asks whether to back it up (`dashboard_state.json_01.bak`, `_02.bak`, …) and start fresh; `n` or no input keeps it (`launch.prepare_state`).
+- **The dashboard** runs on the course table in `data/course/`, the results next to `evaluate.py` and its state file in `data/state/`, with its Demo on deck 00's table in `data/demo/dashboard/`, without the reloader and with no process next to it (`run_dashboard`). Without the course table it starts empty, with the Demo, and says so; without deck 00's table either it stops.
+- **The data folder** is `data/` next to `start.py`, or the one in the folder above it where there is none (`launch.data_dir`). `evaluate.py` and `model_support.py` take it by the same rule.
+- **It stops with what fixes it:** the command when a library is missing (`uv sync --all-groups`), the data hint when neither table is there.
+- **S2's encoder is optional:** an extra `embeddings` of `pyproject.toml` with `sentence-transformers` (`uv sync --all-groups --extra embeddings`; it brings torch and transformers; on Linux torch comes from the CPU index, `https://download.pytorch.org/whl/cpu`, since the Linux wheel pulls the CUDA libraries). The models are fetched once from the Hugging Face hub into its cache (`HF_HOME`), D2's NLI models with them (`app/models/zero_shot.py`, `NLI_MODELS`: the base and the large model, both read by `evaluate.py`, the large one by the app, `NLI_MODEL`; `evaluate.py` prints the fetching command for a missing one and skips its rows); set `HF_HUB_OFFLINE=1` afterwards. Without the extra the dashboard and `evaluate.py` run on TF-IDF, the S2 and D2 rows are skipped with one line each and the encoder and tagger tests skip. **On an NVIDIA GPU** the extra `embeddings-gpu` takes torch from the CUDA index instead (`uv sync --all-groups --extra embeddings-gpu`; 3 GB instead of 0.5 GB, a driver for CUDA 13.0 or newer; the two extras conflict, so every sync names one): the encoder and D2's model run on the GPU where torch sees one, else on the CPU. `APP_DEVICE` (`auto`, the default, `cpu` or `cuda`) chooses; the S panel names the device next to the encoding time and the evaluation's S2 rows carry it in `params`. fp32 on the GPU gives the CPU's vectors, so the cache serves both.
+- Until the models are needed it imports only the standard library and `launch.py`, so it starts on any interpreter.
 
-**Licences.** `app/` and `start.py` are Artjom Adamow's code under the MIT licence in
-[LICENSE](LICENSE).
+## The offline evaluation: evaluate.py
+
+It measures the models on the course table and appends one row per model and variant to the results folder:
+
+```bash
+uv run evaluate.py [--part similarity|difficulty|topics|prompt] [--table data/course] [--results results]
+```
+
+Every row carries its date and the run's start time to the minute (`run`), and the dashboard's tiles read each file's newest run. A results file whose columns grew is written again with its rows kept; `--part` runs one part only. What every column measures and its range: `results/columns.md`.
+
+- **`results.csv`:** B0, the random floor (the same-deck precision@5 of the five nearest cards at random positions on the sphere, over several seeds); S1's vectoriser variants, and S2's encoders with their hybrids where `sentence-transformers` is installed (the same-deck precision@5, the precision over the kept neighbours, the coverage and the number of distinct recommended cards, without and with the variant's own minimum score); C1, the chosen model's map (the trustworthiness and the overlap of the deck positions and of the card positions per topic, each against the SVD start and random positions, and the time the whole model takes to build).
+- **`difficulty.csv`:** D1 out of fold on the rated quizzes, every feature set with the deck shares and with the most likely class, the two baselines, and the predicted levels of the unrated quizzes; on the quizzes labelled by hand the predictions' accuracy, macro-F1 and weighted kappa and the share of a deck's pairs the score orders as the hand levels do, with every row's paired difference to D1's chosen row and its bootstrap interval, over the course and per deck; D2 per model and template, judged the same way without folds.
+- **`topics.csv`:** T1's agreement with the scripted topics, next to the neighbour rule (the nearest other card of the deck), a logistic regression per deck (leave-one-out) and chance by the topic sizes, by stack and per deck; T1's margin table, the coherence per topic, the moved cards and the emptied topics.
+- **`prompt.csv`:** P1's five route sets on S1's TF-IDF and on the app's vectoriser, and the card route on character n-grams: over the self set (every card's question with the card held out) the topic@1 and @3, the share navigated and the floors; over the judged requests the share served right, wrong and missed with their counts on and off the course (the dashboard's P panel), the ranking alone, and the paired difference of the share right to the card route with its bootstrap interval; the time of a request.
+
+**The hand side,** three files in `results/`: `hand_marks.csv`, which of a card's listed neighbours are relevant (the similarity part); `hand_labels.csv`, the level of every unrated quiz and, blind, of the rated quizzes of two decks (D1 and D2); `prompt_requests.csv`, requests on and off the course with their acceptable targets (P1). `evaluate.py` reads them for the hand columns. Their judging forms hold card text and are not in the repository, so the hand columns are computed from the files alone and nothing is written back; without a file that side's columns stay empty and one line says so.
+
+## The tests
+
+The model tests (`test_similar.py`, `test_layout.py`, `test_clustering.py`, `test_topic_model.py`, `test_course_model.py`, `test_difficulty_model.py`, `test_embeddings.py`, `test_zero_shot.py`, `test_prompt_model.py`) are plain `unittest.TestCase` classes. They import `tests/app/model_support.py` only: the package on the path, the test course as a table of card records (three decks, 13 cards in seven scripted topics, one of them empty and one the rest topic; T1 keeps its scripted topics, so `moving_cards()` adds a card that makes T1 move another), a course for the difficulty model (`difficulty_course()`, three decks of 12 rated quizzes with their unrated quizzes' options, and `difficulty_report()`), and the stand-ins for S2's encoder and D2's pipeline (`FakeEncoder`, `FakeClassifier`), so the tests of both run without torch; the real models' tests skip without the library or the cached model.
+
+The tests of the dashboard's shared parts import `model_support.py` too: `test_figures.py` (the figures, the connections, T1's margins), `test_results.py` (the results files, the tables, the glossary; it writes the small results files the dashboard's tests read), `test_headlines.py` (the verdict rule, each generation's two numbers) and `test_panels.py` (the panels' names, the cut labels, the slot's helpers, the variant labels).
+
+The dashboard's tests (`test_dashboard.py`): the closed start and a restart from its state file, what explores a card, the card's two sides and a quiz's judgement with Confirm's own callback, Related's order and places, Back on the trail, a request's answer and "no match" with its entries, the diagram's names and clicks, the tiles on the results fixtures and their panel with its figure, the Demo beside the course (deck 00 from card 001, End demo and a reload bringing back the course as it was, Related and the request box from deck 00 alone, the state file and the embeddings' cache untouched) and without course data, the layout's regions, the judgement's functions, and a request on the real course table when it is there. `model_support.py` holds a deck 00 of twelve cards as a table for them (`write_demo_table`).
+
+The launcher's tests import `model_support.py` too: `test_launch.py` the launcher's part (`launch.py`): the option reader and the port argument, the port check (a socket the test binds, the scan upwards, the holder from faked `netstat` and `lsof` output, the hint), the data folder and the backup question on a temporary folder with the state files; `test_start.py` the launcher with its run and the backup question mocked: the start after the backup question, the port check before it (the next free port with the printed URL, a held `--port` stopping it), the backup question over the dashboard's state file alone, the folders by the data folder's rule, the stops with their commands, and a process without the models' libraries in which it loads and stops.
+
+The evaluation's tests (`test_evaluate.py`) import `model_support.py` and `evaluate.py` next to the package: the results files, the hand marks and labels with their forms on the fixtures, the measures on a hand-made layout, the rows of the similarity part, D2's rows per model and template with their deck rows with the fake pipeline, and a run on the test course's table, with and without the hand files, in a process of its own.
+
+`model_support.py` finds the package from where it lies (the nearest folder above it that holds `app/`) and the real course table in `data/course/` next to it. None of the tests needs the course data. Run them under either runner:
+
+```bash
+uv run python -m pytest tests/app
+uv run python -m unittest discover -s tests/app
+```
+
+## Licence
+
+MIT, in [LICENSE](LICENSE): `app/`, `start.py`, `evaluate.py` and their tests are Artjom Adamow's code; the template the repository started from is neuefische GmbH's.

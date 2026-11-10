@@ -1,14 +1,14 @@
 """The offline evaluation (evaluate.py, next to the package) and its measures (app.models.evaluation), on the
-fixtures and nothing of the viewer: a results file whose columns grew; the hand labels of D1 (the labels file, the
+fixtures: a results file whose columns grew; the hand labels of D1 (the labels file, the
 judging form, the merge of its marks) and the hand columns of D1's rows and the `hand` row; the hand marks of the
 similarity part (the marks file, the judging form, the merge, a rewrite with a variant removed); the measures (the
 random draw, the hand precision per card, the paired bootstrap, the fixed-k overlap and the lift on a hand-made
 layout); the rows of the similarity part; D2's rows per model and template with the deck rows; P1's part (every
 variant's rows, the request file read against T1's membership and protected, the review form and its marks, the file
 alone, the paired difference to the card route); and a run on the test course's table, with and without the hand
-files, in a process where the viewer cannot be imported, the demo's deck 00 next to it never read."""
+files, in a process of its own, the demo's deck 00 next to it never read."""
 
-import model_support  # noqa: F401  (the helper's package on the path, and the folder next to it with evaluate.py)
+import model_support  # noqa: F401  (the package on the path, and the folder next to it with evaluate.py)
 
 import contextlib
 import csv
@@ -669,7 +669,7 @@ class TagsTest(unittest.TestCase):
             module_dir.mkdir(parents=True)
             (module_dir.parent / "data").mkdir()
             with mock.patch.object(evaluate, "MODULE_DIR", module_dir):
-                # data/ in the folder above the package's (the flashcards workspace)
+                # data/ in the folder above the package's, where there is none next to it
                 self.assertEqual(evaluate.default_cache_dir(), module_dir.parent / "data" / "cache")
                 self.assertEqual(evaluate.default_table_dir(), module_dir.parent / "data" / "course")
                 (module_dir / "data").mkdir()  # data/ next to the package (the capstone) comes first
@@ -762,11 +762,11 @@ class PromptPartTest(unittest.TestCase):
         self.assertIn(f"- [x] {candidate} ", self.files.prompt_form.read_text(encoding="utf-8"))
 
     def test_with_the_file_alone_the_hand_columns_are_computed_and_nothing_is_written_back(self):
-        """The capstone: the requests travel without their notes, the form stays behind."""
+        """The capstone: the requests without their notes, and no form."""
         self.results.mkdir()
         rows = list(csv.DictReader(io.StringIO(REQUESTS)))
         columns = [column for column in evaluate.REQUEST_COLUMNS if column != "note"]
-        evaluate.write_requests(columns, rows, self.files.prompt_requests)  # as the train copies it, without the notes
+        evaluate.write_requests(columns, rows, self.files.prompt_requests)  # as the capstone holds it, without the notes
         without_notes = self.files.prompt_requests.read_text(encoding="utf-8")
         self.assertNotIn("no deck teaches it", without_notes)
         output = self.run_prompt()
@@ -882,7 +882,6 @@ class RequestTest(unittest.TestCase):
 
 PROBE = """
 import sys
-sys.modules["project"] = None  # `import project` raises ImportError from here on
 sys.path.insert(0, {tests!r})
 import model_support
 from pathlib import Path
@@ -891,8 +890,6 @@ evaluate.embeddings.encoder_available = lambda *arguments, **options: False  # t
 evaluate.zero_shot.tagger_available = lambda *arguments, **options: False
 folder = Path({folder!r})
 evaluate.run(model_support.write_test_table(folder / "course"), folder / "results", "similarity", "", "2026-11-01")
-loaded = sorted(name for name, module in sys.modules.items() if module is not None and name.split(".")[0] == "project")
-assert not loaded, loaded
 print("ok")
 """
 
@@ -959,7 +956,7 @@ class RunTest(unittest.TestCase):
         topics = read_csv(self.files.topics)
         self.assertEqual(topics[0]["model"], "T1")
         self.assertEqual({row["scope"] for row in topics if row["scope"].startswith("deck ")}, {"deck 01", "deck 02", "deck 03"})  # by id
-        focus = [row for row in topics if row["scope"].startswith("focus ")]  # the margin slider's marks (step 28)
+        focus = [row for row in topics if row["scope"].startswith("focus ")]  # the share scale's marks
         self.assertEqual([row["scope"] for row in focus], ["focus 100 %", "focus 75 %", "focus 50 %", "focus 25 %", "focus 1 %"])
         self.assertEqual((focus[0]["margin"], focus[0]["kept_share"], focus[0]["cards"]), ("0.000", "1.000", "13"))
         self.assertEqual(focus[-1]["cards"], "0")  # 1 % of 13 cards rounds to none
@@ -969,7 +966,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(sorted(path.name for path in self.results.iterdir()), ["difficulty.csv", "results.csv", "topics.csv"])
 
     def test_with_the_marks_alone_the_hand_columns_are_computed_and_nothing_is_written_back(self):
-        """The capstone: the marks and the labels travel without their notes, the forms stay behind."""
+        """The capstone: the marks and the labels without their notes, and no forms."""
         self.results.mkdir()
         marks = "card,candidate,relevant,judged,judge\n101001,201002,x,2026-10-30,Y\n101001,101004,,2026-10-30,Y\n"
         labels = "card,level,judged,judge\n201002,medium,2026-10-31,Y\n"
@@ -997,7 +994,7 @@ class RunTest(unittest.TestCase):
             candidate = next(match.group(2) for match in map(evaluate.CANDIDATE.match, text.split("\n## 101001 (")[1].splitlines()) if match)
             self.files.hand_check.write_text(mark_candidate(text, "101001", candidate), encoding="utf-8")
             form = self.files.hand_labels_form.read_text(encoding="utf-8")
-            self.assertIn("- (correct) list[start:stop]  —  ", form)  # the table's options, no viewer needed
+            self.assertIn("- (correct) list[start:stop]  —  ", form)  # the table's options
             self.files.hand_labels_form.write_text(mark(form, "201002", "medium"), encoding="utf-8")
             evaluate.run(self.table, self.results, "all", "Y", TODAY)
         marks = read_csv(self.files.hand_marks)
@@ -1010,7 +1007,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(rows[-1]["hand_diff"], "0.000")
         self.assertIn(f"- [x] {candidate} (", self.files.hand_check.read_text(encoding="utf-8"))
 
-    def test_the_evaluation_runs_where_the_viewer_cannot_be_imported(self):
+    def test_the_evaluation_runs_in_a_process_of_its_own(self):
         result = subprocess.run(
             [sys.executable, "-B", "-c", PROBE.format(tests=str(TESTS_DIR), folder=str(self.folder / "probe"))],
             capture_output=True, text=True, cwd=str(model_support.MODULE_DIR), timeout=300,

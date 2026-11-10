@@ -1,7 +1,7 @@
 """A quiz's judgement on the dashboard, as plain functions over the card record (app.cards: the options, their
-feedback and the indices of the correct ones); nothing of the viewer's Quiz is imported.
+feedback and the indices of the correct ones).
 
-The rule is the viewer's: an answer is right only when exactly the correct options are checked, so a missing
+The rule: an answer is right only when exactly the correct options are checked, so a missing
 correct option and an extra wrong one both make it wrong, and nothing checked is no answer (Confirm is disabled,
 and the server checks it too). The back of a right answer is the card's feedback (its answer text, which names the
 correct options) under "Correct answer"; the back of a wrong one lists every checked option in file order with its

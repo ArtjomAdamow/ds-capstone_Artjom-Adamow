@@ -1,4 +1,4 @@
-"""The layout step (no Dash, no state, nothing of the viewer): points of a vector space onto the unit sphere in 3D.
+"""The layout step (no Dash, no state): points of a vector space onto the unit sphere in 3D.
 
 * Start: the first three principal directions of the centred vectors (an SVD), every row scaled to length 1, so
   the points lie on the unit sphere. Rows that end up at the origin, and rows that coincide, are told apart by a

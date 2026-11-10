@@ -1,5 +1,5 @@
 """S2: a sentence encoder as a vectoriser of the similarity pipeline, the hybrid with TF-IDF, and the cache of the
-embeddings (docs/models/similarity.md, "S2").
+embeddings.
 
     card text ──┬→ TF-IDF → unit rows · √(1/(1 − m₁)) ─┐
                 │                                       ├→ the blocks side by side → SimilarityIndex (unit rows, cosine)
@@ -42,8 +42,8 @@ TFIDF = "tfidf"
 # The names app_vectoriser knows: TF-IDF, an encoder alone, the hybrid of TF-IDF's chosen settings and an encoder
 ENCODERS = {"minilm": MINILM, "mpnet": MPNET}
 VECTORISERS = (TFIDF,) + tuple(ENCODERS) + tuple(f"hybrid-{name}" for name in ENCODERS)
-# The vectoriser the app runs, set by the verdict of the hand check (similarity.md, "S2", "The verdict rule" and "The
-# numbers"): the hybrid of TF-IDF's chosen settings and MiniLM, +0.07 of hand p@5 over S1 on decks 17 and 24 with an
+# The vectoriser the app runs, set by the verdict of the hand check:
+# the hybrid of TF-IDF's chosen settings and MiniLM, +0.07 of hand p@5 over S1 on decks 17 and 24 with an
 # interval that excludes zero, the first neighbour kept, deck 18 not reversing it
 APP_VECTORISER = "hybrid-minilm"
 BATCH_SIZE = 64
@@ -268,7 +268,7 @@ def app_vectoriser(cache_dir: Optional[Path] = None, name: Optional[str] = None,
 
 def uncached_copy(vectoriser):
     """A vectoriser of the same kind and settings, not fitted and without the embeddings' cache, an encoder's model the
-    same (loaded once): the demo's deck 00 beside the course (docs/demo/architecture.md), so the course's index keeps
+    same (loaded once): the demo's deck 00 beside the course, so the course's index keeps
     its fitted vectoriser and the cache the course's file. None stays None (TF-IDF)."""
     if vectoriser is None:
         return None

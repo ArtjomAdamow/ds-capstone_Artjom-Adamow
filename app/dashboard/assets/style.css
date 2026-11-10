@@ -1,10 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-/* The dashboard (app.dashboard): the one theme, its tokens written anew here (no file of the viewer is copied), by
+/* The dashboard (app.dashboard): the one theme with its tokens, by
    the space rule: the top bar, under it two columns at the screen's height less the slide row (the diagram left, the
    card right), the slide row along the bottom at the full width, a model's panel over the two columns while a tile is
    open; no scroll bar at the top level, one inside the card's frame for a quiz too tall for it and one inside a
    diagram's row too full for it; nothing shrinks. The
-   type scale is the models view's: the panel's numbers --size-number, the headings and the tiles' numbers
+   type scale: the panel's numbers --size-number, the headings and the tiles' numbers
    --size-heading, the body --size-body, the labels 1rem; the card's text --size-card; nothing below 16 px. Under
    1400 px (a projector's 1280 x 720) the scale is a step smaller. Landscape only: no stacked layout. */
 
@@ -135,9 +135,9 @@ h1 { margin: 2px 0 0; font-size: clamp(1.5rem, 2.6vw, 2.4rem); line-height: 1; f
 .verdict-words { color: var(--muted); }
 
 /* A model's panel over the two columns, the tiles under it, opaque (nothing of the card shows through the figure);
-   its body a grid: on the left the headline and the two numbers one under the other at the models view's sizes, on
-   the right the model's figure at the panel's full height. The fold, a container query on the panel's height as the
-   models view's: under 600 px the numbers' sentences and the hint go and the two halves share the width; under 420 px
+   its body a grid: on the left the headline and the two numbers one under the other at the number size, on
+   the right the model's figure at the panel's full height. The fold, a container query on the panel's height:
+   under 600 px the numbers' sentences and the hint go and the two halves share the width; under 420 px
    (a projector's 1280 x 720) the verdicts' explanations go too, the verdict words stay */
 .model-panel { position: absolute; inset: 0; z-index: 5; padding: 24px 32px; background: var(--navy-deep); border: 1px solid var(--gold); overflow: hidden; container: panel / size; }
 .model-panel.hidden { display: none; }

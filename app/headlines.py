@@ -1,4 +1,4 @@
-"""The section's numbers of the dashboard and the models view (nothing of Dash, as results.py): each
+"""The section's numbers of the dashboard (nothing of Dash, as results.py): each
 generation's two headline numbers from the results rows of its newest run, each with its contrast (the random
 floor, a baseline, or the generation before), one plain sentence on what it measures, and a verdict with its
 explanation in words.
@@ -35,7 +35,7 @@ the decks against the random row, floors); T1's row of scope all in topics.csv (
 of difficulty.csv by the deck shares (the within-deck order on Claude's levels against a coin, the floor; weighted
 kappa against the baseline always easy); D2's app row (both against D1's chosen row: an interval and a kappa);
 P1's app row of prompt.csv (the share served right, a hit rate, and the share landed wrong, lower better, against
-the TF-IDF card route; none where the page runs on TF-IDF).
+the TF-IDF card route; none where the app runs on TF-IDF).
 """
 
 from dataclasses import dataclass

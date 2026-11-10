@@ -1,27 +1,25 @@
-"""The models' test fixtures, with nothing of the viewer: the helper's package on the path, the test course as a
-table of card records with its deck ids and scripted topics (the same 13 cards the viewer's parser reads from
-helper_support.COURSE; test_course.py checks that the two agree), the moving course, the demo's deck 00 as a course
-table, and a course for the difficulty model D1. The model tests (test_similar, test_layout, test_clustering, test_topic_model,
-test_course_model, test_difficulty_model) import this file only, so they run in an env without the viewer.
+"""The models' test fixtures: the package on the path, the test course as a
+table of card records with its deck ids and scripted topics (13 cards in three decks), the moving course, the demo's
+deck 00 as a course table, and a course for the difficulty model D1. The model tests (test_similar, test_layout,
+test_clustering, test_topic_model, test_course_model, test_difficulty_model) import this file only.
 """
 
 import sys
 from pathlib import Path
 
-# The folder that holds the package app/ and start.py, the root in the capstone, where these files are exported to
-# tests/app/; the nearest one above this file
+# The folder that holds the package app/ and start.py, the capstone's root: the nearest one above this file
 MODULE_DIR = next(folder for folder in Path(__file__).resolve().parents if (folder / "app" / "__init__.py").is_file())
 sys.dont_write_bytecode = True
 if not any(Path(entry or ".").resolve() == MODULE_DIR for entry in sys.path):
-    sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
+    sys.path.insert(0, str(MODULE_DIR))  # the package app, as the launcher puts it on the path
 
 from app.cards import STACK_DIFFICULTY, STACK_PLAIN, STACK_QUIZ, STACK_SOURCE, CardRecord  # noqa: E402
 from app.models.course_model import CourseModel  # noqa: E402
 from app.models.topic_model import TopicSeed  # noqa: E402
 
-# The real course table (git-ignored data, the tests that read it skip without it), in the launchers' data folder
-# (app.launch.data_dir, not imported: sputnik's release, where the plugin's tests read this file, ships the models'
-# part of the package alone): data/ next to the package (the capstone), or in the folder above it (the workspace)
+# The real course table (git-ignored data, the tests that read it skip without it), in the launcher's data folder
+# (app.launch.data_dir's rule, written out here: the fixtures import the models' part of the package alone): data/
+# next to the package, or in the folder above it where there is none
 COURSE_TABLE_DIR = next((folder / "data" for folder in (MODULE_DIR, MODULE_DIR.parent) if (folder / "data").is_dir()),
                         MODULE_DIR / "data") / "course"
 
@@ -96,7 +94,7 @@ NAME_OF = {deck_id: name for name, deck_id in DECK_IDS.items()}
 
 
 def seeds_of(scripted: dict) -> list[TopicSeed]:
-    """The scripted topics as the model's input, in deck name order and file order (as the glue reads them)."""
+    """The scripted topics as the model's input, in deck name order and file order."""
     return [
         TopicSeed(
             NAME_OF[deck_id], topic_id, *TOPIC_NAMES[(deck_id, topic_id)], tuple(scripted[(deck_id, topic_id)]),
@@ -134,8 +132,8 @@ DESCRIPTIONS = {"01": "Alpha's description.", "02": "Beta's description.", "03":
 
 
 def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
-    """The test course as a course table in `folder`, as export_course.py writes it from the course file (the
-    models view's, the dashboard's and the evaluation's input); or another course with its scripted topics (the moving course:
+    """The test course as a course table in `folder`, written with course_table.write_table (the
+    dashboard's and the evaluation's input); or another course with its scripted topics (the moving course:
     `moving_cards()` with MOVING_SCRIPTED)."""
     from app.course_table import encode_list, flag, join_texts, write_table
 
@@ -209,8 +207,8 @@ DEMO_START = "100001"
 
 
 def write_demo_table(folder: Path) -> Path:
-    """Deck 00 of the tests as a course table in `folder`, as export_course.py writes data/demo/dashboard/ from its
-    file: one deck, three topics with headings of their own, twelve cards, card 001 first."""
+    """Deck 00 of the tests as a course table in `folder`, as data/demo/dashboard/ holds the real
+    one: one deck, three topics with headings of their own, twelve cards, card 001 first."""
     from app.course_table import encode_list, join_texts, write_table
 
     deck_id, deck = DEMO_DECK

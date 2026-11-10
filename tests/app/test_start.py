@@ -1,10 +1,10 @@
-"""The launcher (start.py, exported next to the package): it starts the dashboard alone, with no mode question, no
-`--mode` and no viewer check; the port check comes before anything serves or asks (the dashboard moves to the next
+"""The launcher (start.py, next to the package): it starts the dashboard; the port check comes before anything
+serves or asks (the dashboard moves to the next
 free port and says so, a held `--port` stops it), then the backup question over the dashboard's state file alone; a
 missing library or a missing data file stops the start with the command that fixes it (the dashboard starts with deck
 00 alone without the course table, and stops without either); its folders follow the data folder's rule; it loads
 and stops without the models' libraries (a subprocess with them blocked). The run, the backup question and the ports
-are mocked, so nothing is served, no state is touched and nothing of the viewer is imported."""
+are mocked, so nothing is served and no state is touched."""
 
 import model_support  # noqa: F401  (the package and start.py on the path)
 
@@ -42,7 +42,7 @@ class StartTest(unittest.TestCase):
                 self.printed = printed.getvalue().splitlines()
         return ask
 
-    def test_the_dashboard_starts_after_the_backup_question_with_no_mode_question(self):
+    def test_the_dashboard_starts_after_the_backup_question_and_asks_nothing_else(self):
         ask = self.start("n")
         self.dashboard.assert_called_once_with(port=8050)
         self.prepare_state.assert_called_once_with(start.STATE_DIR, ask)  # data/state/, over launch.STATE_NAMES
@@ -50,11 +50,8 @@ class StartTest(unittest.TestCase):
         self.start("n", ["--port", "8053"])
         self.dashboard.assert_called_once_with(port=8053)
 
-    def test_the_modes_and_the_viewer_check_are_gone(self):
-        for name in ("run_full", "run_standalone", "viewer_too_old", "viewer_available", "viewer_here", "choose_mode",
-                     "INSTALL_VIEWER", "VIEWER_RELEASE", "COMPOSITION_ROOT", "COURSE_FILE", "STATE_FILE"):
-            self.assertFalse(hasattr(start, name), name)
-        self.start("n", ["--mode", "full"])  # an argument it does not know changes nothing
+    def test_an_argument_it_does_not_know_changes_nothing(self):
+        self.start("n", ["--mode", "full"])
         self.dashboard.assert_called_once_with(port=8050)
 
     def test_the_dashboard_moves_to_the_next_free_port_and_says_so(self):
@@ -96,7 +93,6 @@ class StartTest(unittest.TestCase):
         message = str(stop.exception.code)
         for part in ("scipy", start.INSTALL, start.START):
             self.assertIn(part, message)
-        self.assertNotIn("viewer", message)
         dashboard.assert_not_called()
 
     def test_missing_libraries_names_the_ones_not_found(self):
@@ -142,11 +138,11 @@ class StartDataTest(unittest.TestCase):
         self.assertEqual(start.RESULTS_DIR, start.ROOT / "results")  # next to evaluate.py
 
 
-# A process without the models' libraries and the viewer: start.py loads (the standard library and app.launch only)
+# A process without the models' libraries: start.py loads (the standard library and app.launch only)
 # and stops with the command
 NO_LIBRARIES = """
 import sys
-for name in ("numpy", "scipy", "sklearn", "dash", "plotly", "project"):
+for name in ("numpy", "scipy", "sklearn", "dash", "plotly"):
     sys.modules[name] = None  # `import <name>` raises ImportError from here on
 sys.path.insert(0, {module_dir!r})
 import start

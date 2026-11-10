@@ -1,7 +1,6 @@
 """Start the guided learning app: the dashboard, one card at a time with its related cards, a request box as the way
-in and the models' numbers in a row of tiles. The capstone's launcher, developed with the package app/ in the
-flashcards workspace and exported next to it into the capstone's root, where only the export changes it. It needs no
-arguments: the folders and the commands are written below. From the capstone's root:
+in and the models' numbers in a row of tiles. The capstone's launcher, next to the package app/ in the capstone's
+root. It needs no arguments: the folders and the commands are written below. From the capstone's root:
 
     uv run start.py
 
@@ -21,9 +20,9 @@ The app's vectoriser runs the models (app.models.embeddings.app_vectoriser): S2'
 embeddings cached in data/cache/embeddings/ where sentence-transformers is installed (the embeddings extra), TF-IDF
 otherwise, with one line that says so.
 
-data/ lies next to this file, or, in the flashcards workspace, in the folder above it (app.launch.data_dir). In the
-capstone it is git-ignored but for deck 00: the course data comes from the flashcards workspace with a train, as the
-package and this file do. A missing library or a missing data file stops the start with the command that fixes it.
+data/ lies next to this file, or in the folder above it where there is none (app.launch.data_dir). It is
+git-ignored but for deck 00: the course data is not in the repository. A missing library stops the start with the
+command that fixes it, both tables missing with the data hint.
 Until then it imports only the standard library and app.launch, so it starts on any interpreter.
 """
 
@@ -37,7 +36,7 @@ from typing import Callable, Optional, Sequence
 from app.launch import CACHE_FOLDER, STATE_FOLDER, choose_port, data_dir, prepare_state, requested_port
 
 ROOT = Path(__file__).resolve().parent  # start.py sits next to the package: the capstone's root
-DATA_DIR = data_dir(ROOT)  # data/ next to it, or in the folder above it (the flashcards workspace's root)
+DATA_DIR = data_dir(ROOT)  # data/ next to it, or in the folder above it where there is none
 TABLE_DIR = DATA_DIR / "course"  # the course table: the dashboard's input
 DEMO_TABLE_DIR = DATA_DIR / "demo" / "dashboard"  # deck 00's table, 00-deck-dashboard: the dashboard's Demo
 RESULTS_DIR = ROOT / "results"  # the offline evaluation's rows, next to evaluate.py: the dashboard's tiles read them
@@ -48,7 +47,7 @@ CACHE_DIR = DATA_DIR / CACHE_FOLDER  # the embeddings' cache of S2 (app.models.e
 INSTALL = "uv sync --all-groups"
 START = "uv run start.py"
 DATA_HINT = (
-    "The course data is not in the repository: it comes into data/ with a train from the flashcards workspace."
+    "The course data is not in the repository: its table belongs in data/course/, deck 00's in data/demo/dashboard/."
 )
 
 LIBRARIES = ("numpy", "scipy", "sklearn", "dash", "plotly")  # what the models and the dashboard import

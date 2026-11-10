@@ -2,7 +2,7 @@
    Enter goes to the page's callback through the hidden input #key-enter (app.dashboard.layout.KEY_INPUT), which the
    server reads as the turn of the card or a quiz's Confirm (app.dashboard.app.Dashboard.step). A focused checkbox
    counts as outside: the browser does nothing with Enter on it, so it confirms the quiz. The value counts up, so
-   every press is a new value. The transport is the viewer's: dash_clientside.set_props, else the native setter and
+   every press is a new value. The transport: dash_clientside.set_props, else the native setter and
    an input event. Dash serves this with the dashboard's assets. */
 (function () {
   "use strict";

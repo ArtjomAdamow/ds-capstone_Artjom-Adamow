@@ -1,8 +1,7 @@
-"""The dashboard: the capstone's app once the viewer leaves it, one card at a time with what a learner sees of
-the models, in place of sputnik; the models view is no part of the package. It reads the
+"""The dashboard: the capstone's app, one card at a time with what a learner sees of the models. It reads the
 course table (app.course_table) and the results files of the offline evaluation, fits the course model, D1 and P1
-at the start, and keeps its own state file in `data/state/`; it imports nothing of the viewer and nothing of the
-glue. Beside the course it reads deck 00's table (data/demo/dashboard/, docs/demo/) for its Demo; without the course
+at the start, and keeps its own state file in `data/state/`. Beside the course it reads deck 00's table
+(data/demo/dashboard/) for its Demo; without the course
 table it runs on deck 00 alone, empty outside the demo.
 
 * `app`: `Dashboard`, the fitted models, the state and what the regions show; `DemoBoard`, deck 00's; `Boards`, the
@@ -13,10 +12,10 @@ table it runs on deck 00 alone, empty outside the demo.
   Related list, the slide row and the model's panel, its numbers on the left and its figure on the right.
 * `panel_figures`: the panels' figures drawn here, each the whole course's: where the related cards lie (S), the
   decks on the sphere with the shown card's deck in gold (C), P1's judged requests on and off the course (P); T's
-  histogram and D's matrix are the models view's.
+  histogram and D's matrix are app.figures'.
 * `state`: the state file `dashboard_state.json`: the read and explored flags, the shown card, the trail.
 * `quiz`: a quiz's judgement as plain functions.
-* `assets/style.css`: the theme's tokens and the type scale, written anew; `assets/keys.js`: Enter into the hidden
+* `assets/style.css`: the theme's tokens and the type scale; `assets/keys.js`: Enter into the hidden
   input the callback reads; `assets/diagram.js`: a click in the diagram into another.
 
 The launcher starts it with `main` (start.py, after the port check and the backup question; on Dash's default port

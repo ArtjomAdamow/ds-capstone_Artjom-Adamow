@@ -1,7 +1,6 @@
-"""Connections from the clustering: one per merge between the closest members, in merge order (nothing of the
-viewer; the proof that the viewer's dendrogram replays them to scipy's tree is in test_cutoff.py)."""
+"""Connections from the clustering: one per merge between the closest members, in merge order."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import unittest
 

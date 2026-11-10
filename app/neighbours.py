@@ -1,5 +1,4 @@
-"""The related cards' order and labels, shared by the plugin's card section (plugin.related, on the viewer) and the
-dashboard (app.dashboard, without it); nothing of the viewer is imported here.
+"""The related cards' order and labels of the dashboard (app.dashboard).
 
 * `rank_by_confidence`: the neighbours in the order the learner should take them: the unread cards first, among
   them the quizzes D1 predicted in D1's score order, the easiest first, in the places they hold, the other unread

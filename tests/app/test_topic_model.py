@@ -1,10 +1,9 @@
 """The topic model T1: the centroids of the scripted topics, the leave-one-out scoring, the margin, the coherence,
 the edge cases (a two-card topic, an empty topic, a one-card topic, a single centroid, a deck with one topic),
 determinism, the agreement measure, the membership as written (the demo's deck 00: no card moved), and the judges of the measurement (the neighbour rule, logistic regression,
-chance). Nothing of the viewer: the scripted topics read from the course file and the derived course file are the
-glue's (test_course.py, test_derived.py)."""
+chance)."""
 
-import model_support  # noqa: F401  (the helper's package on the path)
+import model_support  # noqa: F401  (the package on the path)
 
 import math
 import unittest

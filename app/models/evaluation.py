@@ -1,7 +1,7 @@
-"""Offline measures of the models (no Dash, no state, nothing of the viewer): how good the neighbours are, judged by
+"""Offline measures of the models (no Dash, no state): how good the neighbours are, judged by
 an independent label (the deck a card belongs to) and by hand marks, the random floor the map shows without a
-model, what a layout keeps of the neighbourhoods against that floor, and the judges of the topic model T1
-(docs/models/topic.md). All of it for evaluate.py.
+model, what a layout keeps of the neighbourhoods against that floor, and the judges of the topic model T1.
+All of it for evaluate.py.
 
 * same_deck_precision: of a card's top-5 neighbours, how many come from the card's own deck, over all cards.
   Empty slots (fewer than 5 neighbours above the minimum score) count as misses. Random neighbours score about 2 %.
@@ -12,13 +12,13 @@ model, what a layout keeps of the neighbourhoods against that floor, and the jud
   paired_bootstrap: the mean of per-card differences (a variant against the chosen one) with the percentile interval
   of the mean over resamples of the cards, so two variants are compared on the same cards, not by their two means.
 * random_directions: points drawn uniformly on the unit sphere, the models' own draw for the random floor and the
-  random layouts (the same distribution as the viewer's random positions on the surface, other digits).
+  random layouts.
 * random_floor (B0): the same-deck precision of the k nearest cards at given random positions.
 * mean_overlap and lift: the within-topic neighbour overlap at a fixed small k over the topics large enough for it,
   and how far a layout's overlap lies above the random floor on the way to 1.
 * The topic judges, each on one deck's rows and scripted labels: agreement (the share of predicted labels that are
   the scripted ones, one minus the lessons' Hamming loss), nearest_labels (the label of the most similar other card,
-  the helper's neighbour rule), leave_one_out_logistic (logistic regression per deck, every card predicted by a
+  the neighbour rule), leave_one_out_logistic (logistic regression per deck, every card predicted by a
   model fitted on the others) and chance_by_sizes (an assignment by the topic sizes).
 """
 
@@ -93,7 +93,7 @@ def paired_bootstrap(
 
 def random_directions(count: int, seed: int = 42) -> np.ndarray:
     """`count` points drawn uniformly on the unit sphere, one (x, y, z) row each, by the seed: normalised Gaussian
-    vectors, the same distribution as the viewer's random positions on the surface (other digits)."""
+    vectors."""
     generator = np.random.default_rng(seed)
     points = generator.standard_normal((count, DIMENSIONS))
     lengths = np.linalg.norm(points, axis=1, keepdims=True)

@@ -1,6 +1,5 @@
-"""The navigation prompt P1 (no Dash, no state, nothing of the viewer): a request typed by the learner, scored
-against the topics by three routes over the index's vectors and answered with a target or "no match"
-(docs/models/prompt.md, "P1: the navigation prompt").
+"""The navigation prompt P1 (no Dash, no state): a request typed by the learner, scored
+against the topics by three routes over the index's vectors and answered with a target or "no match".
 
     request ──→ the index's vectoriser (SimilarityIndex.queries, one transform) ──→ one unit row
                 │
@@ -15,7 +14,7 @@ against the topics by three routes over the index's vectors and answered with a 
                 top card, the request's nearest card, is selected when it lies in that topic; else "no match"
 
 * The topics are T1's membership (TopicModel.members, every deck of the index), the targets as the decks have
-  them after the Helper ran: a topic's full centroid is the mean of its members' unit rows at unit length, its text
+  them under the model: a topic's full centroid is the mean of its members' unit rows at unit length, its text
   its headings joined (TopicSeed.headings, the course file's), one transform at the fit. A topic without members
   scores 0 on the card and the centroid route and has no card; a topic without headings scores 0 on the text route.
 * The floors come from the self set before any request: each card's question alone, its `Source:` line
@@ -23,12 +22,12 @@ against the topics by three routes over the index's vectors and answered with a 
   centroid for the centroid route; the text route has nothing to mask), its truth T1's topic. The card route's
   floor is the 10th percentile of a question's first neighbour's cosine among the other cards, the centroid
   route's floor the 10th percentile of a question's cosine to its own topic's leave-one-out
-  centroid, the text route's the 10th percentile of a question's cosine to its own topic's text (prompt.md,
-  "Hard decisions", 3). A score clears a floor when it lies above it: a request with no term in common never
+  centroid, the text route's the 10th percentile of a question's cosine to its own topic's text.
+  A score clears a floor when it lies above it: a request with no term in common never
   clears the text route's floor of 0 under TF-IDF. No card bar: the nearest card is selected whenever it lies in the
-  entered topic (the a priori median withheld a right card more often than not; "Hard decisions", 3).
+  entered topic (the a priori median withheld a right card more often than not).
 * ROUTES are the evaluation's five variants; DEFAULT_ROUTES the card route, which the choice rule keeps until
-  another variant wins on the judged requests (prompt.md, "4. Zero-shot and few-shot"); a variant's label names the
+  another variant wins on the judged requests; a variant's label names the
   vectoriser and the routes (variant_label, the rows of prompt.csv). The model takes any index:
   the evaluation fits one on character n-grams for the card route's eleventh row.
 * Deterministic: the same index, membership and request give the same answer; ties go to the topic first in the
@@ -48,7 +47,7 @@ from .zero_shot import SOURCE_LINE
 
 CARD, CENTROID, TEXT = "card", "centroid", "text"
 ROUTE_NAMES = (CARD, CENTROID, TEXT)
-# The variants: card, centroid, text, card + text and all three (prompt.md, "4. Zero-shot and few-shot")
+# The variants: card, centroid, text, card + text and all three
 ROUTES: dict[str, tuple[str, ...]] = {
     "card": (CARD,), "centroid": (CENTROID,), "text": (TEXT,), "card+text": (CARD, TEXT), "all": (CARD, CENTROID, TEXT),
 }

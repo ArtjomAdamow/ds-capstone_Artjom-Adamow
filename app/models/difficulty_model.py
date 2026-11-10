@@ -1,5 +1,5 @@
-"""The difficulty model D1 (no Dash, no state, nothing of the viewer): the course's difficulty (easy, medium, hard) of
-the flattened quizzes that have none, learned from the quizzes that have one (docs/models/difficulty.md).
+"""The difficulty model D1 (no Dash, no state): the course's difficulty (easy, medium, hard) of
+the flattened quizzes that have none, learned from the quizzes that have one.
 
     rated quizzes (stack 3) ───┐
                                ├→ features → logistic regression → score 0..2 ─┬→ cross-validation: deck shares → metrics ± sd
@@ -8,8 +8,8 @@ the flattened quizzes that have none, learned from the quizzes that have one (do
     rated differently later)
 
 * Features come from a card's own text, its answer options and the fitted similarity index only: text statistics
-  (the chosen set), and as variants its centrality and neighbour scores, its TF-IDF row (the hand-labelled sample of
-  docs/models/difficulty.md found no gain in them) and the option statistics (`text+options`:
+  (the chosen set), and as variants its centrality and neighbour scores, its TF-IDF row (the hand-labelled sample
+  found no gain in them) and the option statistics (`text+options`:
   code and digits in the options, the spread of their lengths and the closest distractor's cosine
   on the index's vectoriser; never the number of options or of correct ones, which every rated quiz shares, nor a
   feedback length, which tells the rated quizzes from the unrated ones). Never the card order, the ids, the deck
@@ -58,7 +58,7 @@ N_REPEATS = 3
 SEED = 42
 NEAREST = 10  # the similarity baseline: the rated cards it votes with
 FEATURE_SETS = ("text", "text+course", "text+course+tfidf", "text+options")
-DEFAULT_FEATURES = "text"  # the course and the option features add nothing on the hand labels (difficulty.md)
+DEFAULT_FEATURES = "text"  # the course and the option features add nothing on the hand labels
 TEXT_FEATURES = (
     "question words (log)", "answer words (log)", "explanation words (log)", "code in the question",
     "digits in the question", "scenario words", "commas in the question",
@@ -87,7 +87,7 @@ def _words(text: Optional[str]) -> int:
 
 def text_statistics(card: Card) -> list[float]:
     """The card's text statistics (TEXT_FEATURES): word counts (log), code, digits and scenario words in the question,
-    and its commas. Longer, scenario-like questions are the harder ones (docs/models/difficulty.md)."""
+    and its commas. Longer, scenario-like questions are the harder ones."""
     question = card.question
     return [
         float(np.log1p(_words(question))),

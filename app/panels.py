@@ -1,4 +1,4 @@
-"""The model panels' parts the dashboard and the models view share (Dash; nothing of the viewer): the model
+"""The model panels' parts of the dashboard (Dash): the model
 letters with their names, the views with the cut labels of the connections' preset, the two helpers of a figure
 slot (a graph without plotly's bar, a line instead of a figure) and the labels the results rows are read by (the
 decks view's preset, S2's and D2's variant labels of the models the app runs).
@@ -17,7 +17,7 @@ DECKS_VIEW = "decks"
 PANEL_NAMES = {"S": "Similarity", "C": "Course model", "T": "Topics", "D": "Difficulty", "P": "Prompt"}
 PANEL_LETTERS = tuple(PANEL_NAMES)
 CUT_LABELS = {DECKS_VIEW: "groups of ≤ {size} decks", CARDS_VIEW: "groups of ≤ {size} cards", TOPICS_VIEW: "the full tree"}
-DECK_PART = 5  # the decks view's preset: parts of at most five decks (as the viewer's Helper presets them)
+DECK_PART = 5  # the decks view's preset: parts of at most five decks
 ENCODER_SHORT = {embeddings.MINILM: "MiniLM", embeddings.MPNET: "mpnet"}  # as evaluate.py names S2's rows
 
 

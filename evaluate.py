@@ -1,17 +1,14 @@
-"""Offline evaluation of the helper's models (app.models) on the course table. It is developed with the package app/
-in the flashcards workspace and exported next to it into the capstone's root, where only the export changes it. From
-the capstone's root:
+"""Offline evaluation of the models (app.models) on the course table, next to the package app/ in the capstone's
+root. From the capstone's root:
 
     uv run evaluate.py [--part <part>] [--table data/course] [--results results]
 
-and in the flashcards workspace the same way on the modules' env.
-
-It reads the course table (app.course_table: cards.csv, decks.csv and topics.csv, by default in the launchers' data
-folder, app.launch.data_dir: data/ next to this file, or in the folder above it in the flashcards workspace) and
-nothing of the viewer; the random positions of B0 and the random layouts are the
+It reads the course table (app.course_table: cards.csv, decks.csv and topics.csv, by default in the launcher's data
+folder, app.launch.data_dir: data/ next to this file, or in the folder above it where there is none);
+the random positions of B0 and the random layouts are the
 models' own draw (app.models.evaluation.random_directions, uniform on the sphere).
 
-What it measures (docs/models/, each model's file):
+What it measures:
   * B0, the random floor: the same-deck precision@5 of the 5 nearest cards at random positions on the sphere, over
     several seeds;
   * S1, the vectoriser variants (each a factory of anything with fit_transform): same-deck precision@5 (empty slots
@@ -23,7 +20,7 @@ What it measures (docs/models/, each model's file):
     model topic the within-topic overlap at k = min(5, n - 1), at the fixed k = 2 and k = 3 (over the topics with
     k + 2 cards or more) with the lift over random positions, and the trustworthiness at the layout's k; each
     against the SVD start and random positions; and the time the whole model takes to build;
-  * D1, the difficulty model (models/difficulty.md): out of fold on the rated quizzes, every feature set with the
+  * D1, the difficulty model: out of fold on the rated quizzes, every feature set with the
     deck shares and with the most likely class, the two baselines, and the predicted levels of the unrated quizzes
     by the deck shares and by the cut points of the rated cards; and, on the quizzes labelled by hand, the
     predictions' accuracy, macro-F1 and weighted kappa, the score's Spearman against the hand levels and the share
@@ -35,12 +32,12 @@ What it measures (docs/models/, each model's file):
     tags cached in `--cache`): D2 alone per model and template, judged the same way without folds (model D2, the
     variant naming the template and the model's size, the model in `params`), built on D1's frame and supplying
     no feature to it;
-  * T1, the topic model (models/topic.md): the agreement with the scripted topics of the nearest centroid rule, of
+  * T1, the topic model: the agreement with the scripted topics of the nearest centroid rule, of
     the neighbour rule (the nearest other card of the deck) and of a logistic regression per deck, leave-one-out,
     next to chance by the topic sizes; by stack and per deck; T1's margin table (the cards kept at a threshold and
-    the margin slider's marks, the share scale of the viewer's focus, and
+    at the share scale's marks, and
     their agreement), the coherence per topic, the moved cards and the emptied topics;
-  * P1, the navigation prompt (models/prompt.md, "5. Evaluation in standalone mode"): the five route sets on S1's
+  * P1, the navigation prompt: the five route sets on S1's
     TF-IDF and on the app's vectoriser, and the card route on character n-grams, every one on T1's membership of the
     app's vectoriser: over the self set (every card's question with the card held out) the topic@1 and @3 and the
     share navigated, the floors; over the judged requests of decks 17 and 24 the share served right,
@@ -53,25 +50,25 @@ this file): results.csv (B0, S1, C1), difficulty.csv (D1, D2), topics.csv (T1) a
 whose columns grew is written again with its rows kept. `--part similarity`, `--part difficulty`, `--part topics` or
 `--part prompt` runs one part only.
 
-The hand side is judged in the flashcards workspace, since its forms hold card text: the hand marks of the
+The hand side, each file with a judging form that holds card text: the hand marks of the
 similarity part in hand_marks.csv (card, candidate, relevant, judged, judge, note) with their judging form
 hand_check.md (about 20 cards of decks 17 and 24 with the top-5 neighbours of every variant combined, each to be
 marked relevant or not), and the hand labels of D1 in hand_labels.csv (card, level, judged, judge, note) with their
 form hand_labels.md (every unrated quiz and, blind, the rated quizzes of two decks, each to be labelled easy, medium
-or hard by the rule of models/difficulty.md, "The hand-labelled sample"), and P1's requests in prompt_requests.csv
-(request, kind, deck_id, topic_id, card, also, judged, judge, note; written by hand, models/prompt.md, "The request
-rule") with their review form prompt_requests.md (every variant's nearest three under each request, pooled, a further
+or hard), and P1's requests in prompt_requests.csv
+(request, kind, deck_id, topic_id, card, also, judged, judge, note; written by hand)
+with their review form prompt_requests.md (every variant's nearest three under each request, pooled, a further
 acceptable target marked into `also`). Each file is read before its form is written again and written after it, so a
 changed form, a removed variant or a changed sample loses no judgement; the request file is written only when the
 form changed a request; `--judge` names who marked. With the marks, every variant's row carries its hand-judged precision@1, @3 and @5 over
 the judged cards and the paired difference of its precision@5 to the chosen variant, bootstrapped over the cards.
-The marks, the labels and the requests travel to the capstone without their notes, the forms do not: where a results
+The capstone holds the marks, the labels and the requests without their notes, and no form: where a results
 folder holds a file without its form, the hand columns are computed from the file alone and nothing is written back;
 where it holds neither, that side's columns stay empty, the form is not written and one line says so. The form lists a quiz's
 options with their feedback from the course table (the record's options), the answer for a quiz without them.
 
-Every row of a run carries the run's start time to the minute (`run`), next to its date, so the models view
-reads the newest run of each file (app/results.py; what the columns mean: app/docs/columns.md).
+Every row of a run carries the run's start time to the minute (`run`), next to its date, so the dashboard
+reads the newest run of each file (app/results.py; what the columns mean: results/columns.md).
 """
 
 from __future__ import annotations
@@ -94,7 +91,7 @@ sys.dont_write_bytecode = True  # as in the launcher: no __pycache__ next to the
 
 MODULE_DIR = Path(__file__).resolve().parent  # the folder of the package app/: the capstone's root
 if str(MODULE_DIR) not in sys.path:
-    sys.path.insert(0, str(MODULE_DIR))  # the helper's package, app, as the launcher puts it on the path
+    sys.path.insert(0, str(MODULE_DIR))  # the package app, as the launcher puts it on the path
 
 from app import course_table  # noqa: E402
 from app.launch import CACHE_FOLDER, data_dir  # noqa: E402
@@ -115,7 +112,7 @@ FIXED_K = (2, 3)  # the fixed small k of the card layouts' overlap
 # The hand check's sample, deck -> every n-th card: every card of the two NLP decks and of the transfer deck 18
 HAND_CHECK_DECKS = {"NLP Fundamentals": 1, "LLM Foundations & Embeddings": 1, "AI Agents & RAG Systems": 1}
 TRANSFER_DECK = "AI Agents & RAG Systems"  # judged with the others, read once after the choice
-# The tags of the marks' note column (similarity.md, "S2", "How it is judged"): three on an irrelevant candidate,
+# The tags of the marks' note column: three on an irrelevant candidate,
 # two on a relevant one; the evaluation counts per variant how many tagged pairs it lists
 TAGS = ("lexical trap", "shared dataset", "generic term", "paraphrase", "code name")
 COLUMNS = [
@@ -148,8 +145,8 @@ TOPICS_COLUMNS = [
     "coherence_at_one", "moved", "emptied", "seconds", "notes",
 ]
 RUN_FORMAT = "%Y-%m-%dT%H:%M"  # the run column: the run's start time to the minute
-MARGINS = (0.0, 0.02, 0.05, 0.10, 0.15)  # the margin table of models/topic.md
-FOCUS_SHARES = (100, 75, 50, 25, 1)  # the margin slider's marks (glue.focus.MARKS): the share of the cards in focus
+MARGINS = (0.0, 0.02, 0.05, 0.10, 0.15)  # the margin table's thresholds
+FOCUS_SHARES = (100, 75, 50, 25, 1)  # the share scale's marks: the share of the cards in focus
 CANDIDATE = re.compile(r"^- \[([xX ])\] (\S+) \(")
 NONE_RELEVANT = re.compile(r"^- \[[xX]\] none\b")  # judged: no candidate of this card is relevant
 HEADING = re.compile(r"^## (\S+) \(")
@@ -248,7 +245,7 @@ S2_SKIPPED = "S2 skipped: sentence-transformers is not installed (the embeddings
 
 
 def s2_variants(cache_dir: Optional[Path] = None, loader: Optional[Callable] = None) -> list[Variant]:
-    """S2's variants (similarity.md, "S2"): each encoder alone and the hybrid of S1's chosen settings with it, every
+    """S2's variants: each encoder alone and the hybrid of S1's chosen settings with it, every
     one on S1's document (with the explanation); the embeddings cached in `cache_dir`. Empty without the library
     (`loader` stands in for the models in the tests)."""
     if loader is None and not embeddings.encoder_available():
@@ -580,7 +577,7 @@ def topic_row(today: str, model: str, scope: str, cards: int, agreement: float, 
 
 def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: str, vectoriser=None) -> list[dict]:
     """T1 against the scripted topics, with the neighbour rule, the per-deck logistic regression and chance: by
-    course, by stack and per deck; T1's margin table, coherence, moved cards and emptied topics (models/topic.md)."""
+    course, by stack and per deck; T1's margin table, coherence, moved cards and emptied topics."""
     started = time.perf_counter()
     index = similar.SimilarityIndex.fit(cards, vectoriser, min_score=None)  # the app's vectoriser, as the launchers fit it
     model = TopicModel(index, seeds)
@@ -637,7 +634,7 @@ def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: st
     for deck in deck_order:
         ids = [card_id for card_id in all_ids if by_id[card_id].deck == deck]
         topics = len([seed for seed in seeds if seed.deck == deck])
-        scope = f"deck {deck_ids.get(deck, deck)}"  # by id: the rows travel and the models view shows them
+        scope = f"deck {deck_ids.get(deck, deck)}"  # by id, not by name
         values = (model.agreement_of(ids), agree(nearest, ids), agree(logistic, ids), chance_of(ids))
         for name, value in zip(("T1", "1-NN", "LR", "chance"), values):
             rows.append(topic_row(today, name, scope, len(ids), value, note, topics=topics))
@@ -648,8 +645,8 @@ def evaluate_topics(cards, seeds, deck_ids: dict[str, str], today: str, note: st
         rows.append(topic_row(today, "T1", f"margin >= {threshold:.2f}", round(share * len(all_ids)), agreement, note,
                               kept_share=fmt(share), margin=fmt(threshold)))
         print(f"   | {threshold:.2f} | {share:.0%} | {agreement:.3f} |")
-    print("   | Slider mark | Margin | Cards in focus | Agreement among them |")
-    for mark in FOCUS_SHARES:  # the slider's share scale (models/topic.md, "The margin on a share scale")
+    print("   | Share mark | Margin | Cards in focus | Agreement among them |")
+    for mark in FOCUS_SHARES:  # the share scale
         threshold = model.threshold_for_share(mark / 100)
         share, agreement = model.kept(threshold)
         rows.append(topic_row(today, "T1", f"focus {mark} %", round(share * len(all_ids)), agreement, note,
@@ -682,7 +679,7 @@ class Request:
 
 
 def read_requests(path: Path) -> tuple[list[str], list[dict]]:
-    """The request file: its columns (REQUEST_COLUMNS, without the note where the train left it out) and its rows in
+    """The request file: its columns (REQUEST_COLUMNS, without the note where the file has none) and its rows in
     file order; REQUEST_COLUMNS and no rows without the file."""
     if not path.exists():
         return list(REQUEST_COLUMNS), []
@@ -701,7 +698,7 @@ def write_requests(columns: list[str], rows: list[dict], path: Path) -> None:
 
 
 def request_of(row: dict, by_id: Mapping, deck_name: Mapping[str, str], topic_of: Mapping[str, str]) -> Request:
-    """A row of the request file read against the course and T1's membership (prompt.md, "Hard decisions", 2): a
+    """A row of the request file read against the course and T1's membership: a
     card names its topic under the membership in force, a topic-only target its deck and topic id; `also` holds card
     ids and `deck:topic` keys. A request without a target that is not off-course is not judged."""
     topics, cards = set(), set()
@@ -761,7 +758,7 @@ def prompt_membership(cards, seeds, vectoriser=None) -> tuple[similar.Similarity
 
 def evaluate_prompt(cards, deck_ids: dict[str, str], today: str, note: str, request_rows: list[dict],
                     app_index: similar.SimilarityIndex, t1: TopicModel) -> tuple[list[dict], dict[str, list[Answer]]]:
-    """P1's variants (prompt.md, "5. Evaluation in standalone mode"): the five route sets on S1's TF-IDF and on the
+    """P1's variants: the five route sets on S1's TF-IDF and on the
     app's vectoriser where it is another, and the card route on character n-grams, every one on T1's membership of
     the app's vectoriser (the membership in force, the requests' truth). Every row carries the self-set columns and
     its floors; with judged requests the hand columns over those of decks 17 and 24 (the transfer deck's apart) and
@@ -936,7 +933,7 @@ def merge_requests(rows: list[dict], form: dict[str, dict], today: str, judge: s
 
 def write_prompt_form(rows: list[dict], answers: dict[str, list[Answer]], t1: TopicModel, by_id: Mapping,
                       deck_ids: Mapping[str, str], today: str, note: str, path: Path) -> int:
-    """The review form (prompt.md, "The request rule"): under every request, the topics and cards every variant
+    """The review form: under every request, the topics and cards every variant
     lists among its nearest three, pooled, with the variants' scores (a topic's mean, a card's cosine), a topic with
     nothing in common with the request left out; the intended target, the topics its cards imply and the `also`
     targets ticked. Returns the number of requests listed."""
@@ -1239,7 +1236,7 @@ def write_hand_labels_form(cards, labels: dict[str, dict], today: str, note: str
         "from one rule. Hard is analyse: several steps or concepts held together, nested or chained code, a "
         "calculation over a given table, a scenario whose condition flips the answer, or a distractor that is right "
         "in a nearby case. The count and the length of the options are not the criterion, the demand per option is. "
-        "The rule in full: docs/models/difficulty.md, \"The hand-labelled sample\". Later runs keep the "
+        "Later runs keep the "
         "marks in hand_labels.csv and score D1's predictions on the judged quizzes.",
         "",
         f"## The unrated quizzes ({len(unrated)})",

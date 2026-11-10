@@ -1,10 +1,8 @@
-"""The card record the models read: the seven fields of the viewer's Flashcard (project.models) and a
-quiz's answer options (the option texts, one feedback per option, the indices of the correct
-ones), which the viewer's parser keeps apart from the card (its Quiz). The glue builds the records from the viewer's
-cards with their quiz (glue.course.load_course), the course table carries the options in three columns
-(course_table), so the models read one record in both modes and need no import of the viewer.
+"""The card record the models read: a card's seven fields (the id, the deck, the question, the answer, the stack,
+the authored difficulty and the explanation) and a quiz's answer options (the option texts, one feedback per
+option, the indices of the correct ones). The course table carries the options in three columns (course_table).
 
-The stacks are the parser's: 1 a flashcard of Q_and_A.json, 2 an unrated quiz, 3 a rated quiz (with a
+The stacks: 1 a flashcard of Q_and_A.json, 2 an unrated quiz, 3 a rated quiz (with a
 difficulty), 4 a flashcard of the quiz file. The id is the comb_id: the stack, the deck id and the card id.
 """
 
@@ -18,7 +16,7 @@ STACK_SOURCE = 4
 
 
 class Card(Protocol):
-    """What the models read of a card: CardRecord, in both modes."""
+    """What the models read of a card: CardRecord."""
 
     deck: str
     question: str
@@ -36,7 +34,7 @@ class Card(Protocol):
 
 @dataclass(frozen=True)
 class CardRecord:
-    """A card of the helper's own, in the order of the viewer's Flashcard fields, with the quiz's options after them."""
+    """A card as the models read it: its seven fields, with the quiz's options after them."""
 
     comb_id: str
     deck: str

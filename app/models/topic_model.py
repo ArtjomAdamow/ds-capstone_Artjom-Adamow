@@ -1,9 +1,9 @@
-"""The topic model T1 (no Dash, no state, nothing of the viewer): nearest centroid on the similarity index, seeded by
-the scripted topics of the course file (docs/models/topic.md).
+"""The topic model T1 (no Dash, no state): nearest centroid on the similarity index, seeded by
+the scripted topics of the course file.
 
-The topics of the course file are scripted (scripts/generate_topics.py groups the cards by the headings and sources
-of the lectures), so they are the model's input, not the truth: the model takes them in and decides every card's topic
-for the state. The raw scripted topics stay in the course file, so nothing is ever removed.
+The topics of the course file are scripted (a script groups the cards by the headings and sources
+of the lectures), so they are the model's input, not the truth: the model takes them in and decides every card's
+topic. The raw scripted topics stay in the course file, so nothing is ever removed.
 
     unit rows of the cards (models.similar) ─────┐   per deck: a centroid per scripted topic (the mean of its cards'
                                                  ├→  unit rows, normalised) → every card's cosine to the deck's centroids,
@@ -11,23 +11,19 @@ for the state. The raw scripted topics stay in the course file, so nothing is ev
                                                      centroid is the card's topic, the best cosine minus the second
                                                      best its margin
 
-* The decision for the state: the membership is the nearest centroid, for every card (the app shows them all); a
+* The decision: the membership is the nearest centroid, for every card (the app shows them all); a
   topic is never removed, and an emptied one keeps its dot. The margin is kept as a measure: a card below
   FOCUS_MARGIN sits between two topics (`hidden`, for the evaluation), and the runner-up topic next to it
-  (`second_of`, for the models view's card panel). The models view's margin table (and, until step 33, the viewer's
-  margin slider, the glue's focus of step 28) runs on
+  (`second_of`). The margin table runs on
   a share scale: `share_threshold` gives the margin that keeps a share of the cards, the highest margins first, so
-  100 % keeps every card and 1 % the eleven with the highest margins on the course (models/topic.md, "The margin on
-  a share scale").
-* The derived course file the viewer reads (the raw file with the cards' "topic" set by the model) is the plugin's
-  (plugin.derived.write_derived_course): it is written in the viewer's format with the viewer's parser.
+  100 % keeps every card and 1 % the eleven with the highest margins on the course.
 * The measures: the agreement with the scripted topics (the share of cards whose nearest centroid is their scripted
   topic, one minus the lessons' Hamming loss), the coherence per topic (the share of its scripted cards nearest to
   itself), the margin table (the cards kept at a threshold and their agreement), the moved cards and the emptied
   topics; evaluate.py --part topics records them.
-* T1 is deterministic (the vectoriser and the means): the derived file and the viewer's dot ids are the same at
-  every start; a changed course or vectoriser changes them, and the state starts fresh (the viewer's rule).
-* As written (`moves=False`, the demo's deck 00, docs/demo/architecture.md): every card keeps its scripted topic,
+* T1 is deterministic (the vectoriser and the means): the same course and vectoriser give the same topics at
+  every start.
+* As written (`moves=False`, the demo's deck 00): every card keeps its scripted topic,
   no card is moved; the margins and the runner-ups are measured as above.
 
 Edge cases: a topic with one scripted card has no centroid under leave-one-out, so its card
@@ -46,7 +42,7 @@ from . import similar
 from .layout import as_dense
 
 # A card whose margin (the best cosine minus the second best) is below this sits between two topics: at 0.05, 70 %
-# of the cards are above it at 0.77 agreement with the scripted topics (models/topic.md). A measure; the app hides none
+# of the cards are above it at 0.77 agreement with the scripted topics. A measure; the app hides none
 FOCUS_MARGIN = 0.05
 FULL_MARGIN = 1.0  # the margin of a card with nothing to compare its topic with: it is kept
 MODEL_NAME = "T1 nearest centroid"

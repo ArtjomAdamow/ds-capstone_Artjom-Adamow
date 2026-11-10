@@ -1,12 +1,12 @@
-"""The helper's plotly figures (plotly only: no Dash, nothing of the viewer), drawn by the dashboard and the models
-page:
+"""The models' plotly figures (plotly only: no Dash); the dashboard's panels draw T1's margins and D1's confusion
+matrix of them:
 
 * the difficulty models D1 and D2 (models.difficulty_model.DifficultyReport): the line that says what was measured
   (metrics_subtitle), the score table's rows (score_header, score_rows), the confusion matrix (confusion_figure) and
   the shares of the levels (shares_figure);
 * the sphere: its surface (sphere_surface), the great-circle arcs along it (surface_arc), the cards view's
   connections, and the connections as one trace, straight or along the surface (links_trace); the map's colours and
-  sizes the dashboard's decks sphere shares with the page's map (GREY, DECK_COLOR, DOT_SIZE, SELECTED_SIZE,
+  sizes of the dashboard's decks sphere (GREY, DECK_COLOR, DOT_SIZE, SELECTED_SIZE,
   DEFAULT_CAMERA, HOVER_FONT);
 * T1's margins in bins with the threshold, and the dashboard's focus line (margin_histogram), on the margins' teal
   scale (margin_color);
@@ -20,7 +20,7 @@ Every figure takes the size of its slot (no fixed height: the page's figure slot
 FONT_SIZE (16 px): a page's type scale (its assets/style.css) reaches no plotly figure, so the sizes are
 set here. Colours: the sequential ramp and the two series colours are the dataviz reference steps for a dark
 surface, validated against the panel's background; the levels are named on the axes, so no colour carries them
-alone. The theme's tokens (INK, MUTED, GOLD) are the viewer's values, written here anew.
+alone. The theme's tokens (INK, MUTED, GOLD) are the stylesheet's values, written here anew.
 """
 
 import math
@@ -40,7 +40,7 @@ DARK_INK = "#071827"  # the numbers on the light cells of the matrix
 SEQUENTIAL = [[0.0, "#0d366b"], [0.5, "#3987e5"], [1.0, "#cde2fb"]]  # blue, from near the surface to light
 RATED_COLOR = "#3987e5"  # blue: the rated quizzes (training)
 PREDICTED_COLOR = "#c98500"  # yellow: the predicted unrated quizzes (test)
-CUT_COLOR = "#e06c75"  # the cut-off line, as the viewer draws it
+CUT_COLOR = "#e06c75"  # the cut-off line
 FONT_SIZE = 16  # the least font of every figure
 LABEL_SIZE = 18  # the axes' titles, the matrix's cells, the labels on the plots
 FONT = {"color": INK, "family": "DM Mono, monospace", "size": FONT_SIZE}
@@ -58,7 +58,7 @@ TRANSPARENT = "rgba(0, 0, 0, 0)"
 # Where a neighbour lies, and its bar's colour: the entered topic, the entered deck, another deck
 HERE, THIS_DECK, ELSEWHERE = "this topic", "this deck", "another deck"
 PLACE_COLORS = {HERE: "#cde2fb", THIS_DECK: "#3987e5", ELSEWHERE: "#0d366b"}
-GREY = "#7c8b99"  # the viewer's colour of a dot in no group: a flashcard, the cards' sphere
+GREY = "#7c8b99"  # the colour of a dot in no group: a flashcard, the cards' sphere
 DECK_COLOR = MUTED  # the decks in one colour
 LINK_WIDTH = 4
 DOT_SIZE = 13  # every view's dots
@@ -248,7 +248,7 @@ def links_trace(points: Mapping, pairs, along_surface: bool, name: str = "Connec
                 dash: str = "dash", width: float = LINK_WIDTH, opacity: float = 1.0, legend: bool = False,
                 group: Optional[Mapping] = None) -> Optional[go.Scatter3d]:
     """Pairs of drawn dots as one trace (None between two lines), straight or along the sphere's surface: by default
-    the model's connections, gold and dashed; the page's S's neighbour pairs solid on the blue ramp, an entry of the
+    the model's connections, gold and dashed; S's neighbour pairs solid on the blue ramp, an entry of the
     legend by their name in the layer's group (`group`: plotly's legendgroup keys). None without a pair of two drawn
     dots."""
     xs: list = []
