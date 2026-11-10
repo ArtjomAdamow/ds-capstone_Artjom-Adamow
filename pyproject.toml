@@ -47,7 +47,7 @@ explicit = true
 [tool.ruff]
 line-length = 100
 # The app keeps its own style (its lines run past 100), so it is never linted or formatted.
-extend-exclude = [".claude", "app", "start.py", "tests/app", "evaluate.py"]
+extend-exclude = [".claude", "app", "models", "start.py", "tests", "evaluate.py"]
 
 [tool.ruff.lint]
 # E/W: style, F: likely bugs, I: import sorting, UP: modern syntax.
