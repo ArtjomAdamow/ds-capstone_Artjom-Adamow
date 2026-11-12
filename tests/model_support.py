@@ -1,7 +1,8 @@
 """The models' test fixtures: the package on the path, the test course as a
 table of card records with its deck ids and scripted topics (13 cards in three decks), the moving course, the demo's
-deck 00 as a course table, and a course for the difficulty model D1. The model tests (test_similar, test_layout,
-test_clustering, test_topic_model, test_course_model, test_difficulty_model) import this file only.
+deck 00 as a course table (the tables written here, write_table), a request's vector and a card's row in an index, and
+a course for the difficulty model D1. The model tests (test_similar, test_layout, test_clustering, test_topic_model,
+test_course_model, test_difficulty_model) import this file only.
 """
 
 import sys
@@ -125,18 +126,65 @@ def course_model(cards=None, seeds=None, deck_ids=DECK_IDS, vectoriser=None) -> 
     return CourseModel(CARDS if cards is None else cards, deck_ids, SEEDS if seeds is None else seeds, vectoriser)
 
 
+def query(index, text: str):
+    """A request's unit vector in the index's space, dense (zero when the vectoriser finds nothing in it): its row of
+    SimilarityIndex.queries, so its cosine to every card is `vectors @ query(index, text)`."""
+    import numpy as np
+
+    return np.asarray(index.queries([text]).todense(), dtype=float)[0]
+
+
+def row_of(index, card_id: str) -> int:
+    """A card's row in the index."""
+    return index.ids.index(card_id)
+
+
 # --- the test course as a course table ----------------------------------------------------------------------
 
 TOPIC_OF = {card_id: key for key, ids in SCRIPTED.items() for card_id in ids}  # card id -> (deck id, topic id)
 DESCRIPTIONS = {"01": "Alpha's description.", "02": "Beta's description.", "03": "Gamma's description."}
 
 
-def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
-    """The test course as a course table in `folder`, written with course_table.write_table (the
-    dashboard's and the evaluation's input); or another course with its scripted topics (the moving course:
-    `moving_cards()` with MOVING_SCRIPTED)."""
-    from app.course_table import encode_list, flag, join_texts, write_table
+def list_cell(values) -> str:
+    """A list cell of the table: the values as a JSON list, empty for none (course_table.decode_list reads it)."""
+    import json
 
+    values = list(values or ())
+    return json.dumps(values, ensure_ascii=False) if values else ""
+
+
+def flag_cell(value: bool) -> str:
+    """A rest flag as the table holds it."""
+    return "true" if value else "false"
+
+
+def texts_cell(values) -> str:
+    """A text cell of the table: the headings or the sources joined (course_table.split_texts reads it)."""
+    from app.course_table import TEXT_SEPARATOR
+
+    return TEXT_SEPARATOR.join(values or ())
+
+
+def write_table(folder: Path, cards, decks, topics) -> None:
+    """The three files of a course table in `folder`, the rows by column name (None as empty): the fixtures' own
+    writer, with the csv module, so the table the tests read is made without the package."""
+    import csv
+
+    from app.course_table import CARD_COLUMNS, DECK_COLUMNS, TOPIC_COLUMNS, table_files
+
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    for path, columns, rows in zip(table_files(folder), (CARD_COLUMNS, DECK_COLUMNS, TOPIC_COLUMNS), (cards, decks, topics)):
+        with path.open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=columns, lineterminator="\n")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({column: "" if row.get(column) is None else row[column] for column in columns})
+
+
+def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
+    """The test course as a course table in `folder` (the dashboard's and the evaluation's input); or another course
+    with its scripted topics (the moving course: `moving_cards()` with MOVING_SCRIPTED)."""
     records = CARDS if cards is None else cards
     topic_of = TOPIC_OF if scripted is None else {card_id: key for key, ids in scripted.items() for card_id in ids}
     cards = []
@@ -145,16 +193,16 @@ def write_test_table(folder: Path, cards=None, scripted=None) -> Path:
         name, rest = TOPIC_NAMES[(deck_id, topic_id)]
         cards.append({
             "comb_id": card.id, "deck_id": deck_id, "deck": card.deck, "topic_id": topic_id, "topic_name": name,
-            "rest": flag(rest), "stack": card.stack, "difficulty": card.difficulty, "question": card.question,
-            "answer": card.answer, "explain": card.explain, "options": encode_list(card.options),
-            "answers": encode_list(card.answers), "correct": encode_list(card.correct),
+            "rest": flag_cell(rest), "stack": card.stack, "difficulty": card.difficulty, "question": card.question,
+            "answer": card.answer, "explain": card.explain, "options": list_cell(card.options),
+            "answers": list_cell(card.answers), "correct": list_cell(card.correct),
         })
     decks = [{"deck_id": deck_id, "name": name, "description": DESCRIPTIONS[deck_id]} for name, deck_id in DECK_IDS.items()]
     topics = [
         {
-            "deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": flag(rest),
-            "headings": join_texts(TOPIC_TEXTS[(deck_id, topic_id)][0]),
-            "sources": join_texts(TOPIC_TEXTS[(deck_id, topic_id)][1]),
+            "deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": flag_cell(rest),
+            "headings": texts_cell(TOPIC_TEXTS[(deck_id, topic_id)][0]),
+            "sources": texts_cell(TOPIC_TEXTS[(deck_id, topic_id)][1]),
         }
         for (deck_id, topic_id), (name, rest) in TOPIC_NAMES.items()
     ]
@@ -209,20 +257,18 @@ DEMO_START = "100001"
 def write_demo_table(folder: Path) -> Path:
     """Deck 00 of the tests as a course table in `folder`, as data/demo/dashboard/ holds the real
     one: one deck, three topics with headings of their own, twelve cards, card 001 first."""
-    from app.course_table import encode_list, join_texts, write_table
-
     deck_id, deck = DEMO_DECK
     cards = [
         {
             "comb_id": card.id, "deck_id": deck_id, "deck": deck, "topic_id": topic_id, "topic_name": name, "rest": "false",
             "stack": card.stack, "difficulty": card.difficulty, "question": card.question, "answer": card.answer,
-            "explain": card.explain, "options": encode_list(card.options), "answers": encode_list(card.answers),
-            "correct": encode_list(card.correct),
+            "explain": card.explain, "options": list_cell(card.options), "answers": list_cell(card.answers),
+            "correct": list_cell(card.correct),
         }
         for (topic_id, name, _headings), members in DEMO_TOPICS.items() for card in members
     ]
     topics = [
-        {"deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": "false", "headings": join_texts(headings), "sources": ""}
+        {"deck_id": deck_id, "topic_id": topic_id, "name": name, "rest": "false", "headings": texts_cell(headings), "sources": ""}
         for topic_id, name, headings in DEMO_TOPICS
     ]
     write_table(folder, cards, [{"deck_id": deck_id, "name": deck, "description": "12 cards: 3 quiz cards."}], topics)

@@ -74,7 +74,7 @@ from models.course_model import CourseModel, TopicLayout
 from models.difficulty_model import DifficultyReport, fit_difficulty
 from models.prompt_model import PromptModel, variant_label
 from ..neighbours import rank_by_confidence, shorten
-from ..panels import CUT_LABELS, DECK_PART, DECKS_VIEW, d2_label, empty_slot, graph, s2_label
+from ..panels import DECK_CUT, DECK_PART, empty_slot, graph, s2_label
 from ..results import LEVEL_FILES, Results, course_note
 from . import quiz
 from .layout import (
@@ -96,18 +96,6 @@ HOME = {"back": False, "related": False, "request": None, "panel": None, "open":
 TURN_TRIGGERS = ("card-face", KEY_INPUT)  # a click on the card, Enter
 PROMPT_TRIGGERS = ("prompt-go", "prompt-text")  # Go, and Enter in the request box (its n_submit)
 RELATED_PREFIX, GO_PREFIX, TILE_PREFIX = "related-", "go-", "tile-"
-# The callback's outputs by name, in order (OUT gives each one's place in the result)
-OUTPUT_NAMES = (
-    ["view", "where", "face", "face_class", "quiz_class", "options", "checks", "related_class", "related_disabled"]
-    + [name for index in range(RELATED_SLOTS) for name in (f"related_{index}", f"related_{index}_class")]
-    + ["message", "answer_class"]
-    + [name for index in range(GO_SLOTS) for name in (f"go_{index}", f"go_{index}_class")]
-    + ["diagram", "back_disabled"]
-    + [f"tile_{letter}" for letter in PANEL_LETTERS]
-    + ["panel", "panel_class"]
-    + ["demo_label", "demo_class", "demo_disabled", "placeholder", "box_disabled", "go_disabled"]
-)
-OUT = {name: index for index, name in enumerate(OUTPUT_NAMES)}
 # The callback's inputs, in order: the card's click, Enter, Confirm, Related, its slots, Back, Demo, Go, Enter in the
 # box, Go's slots, the tiles, a click in the diagram; then the states: the checks, the box's text, the view
 INPUT_IDS = (
@@ -115,7 +103,6 @@ INPUT_IDS = (
     + ["back", DEMO_BUTTON, "prompt-go", "prompt-text"] + [f"{GO_PREFIX}{index}" for index in range(GO_SLOTS)] + [f"{TILE_PREFIX}{letter}" for letter in PANEL_LETTERS]
     + [DIAGRAM_INPUT]
 )
-INPUTS = len(INPUT_IDS)
 VALUE_INPUTS = (KEY_INPUT, DIAGRAM_INPUT)  # the hidden inputs, read by their value
 FOCUS_SHARE = 0.25  # T's figure: the most confident quarter, the share its tile's second number is over
 NO_RELATED = "No related card above the minimum score."
@@ -185,7 +172,7 @@ class Dashboard:
         index = self.model.index
         encoded = isinstance(index.vectoriser, (embeddings.HybridVectoriser, embeddings.SentenceEncoder))
         self.levels = {"S": "S2" if encoded else "S1", "C": "C1", "T": "T1", "D": "D1", "P": "P1"}  # the generation the app runs
-        chosen = {"P1": variant_label(index.vectoriser), "D2": d2_label()}
+        chosen = {"P1": variant_label(index.vectoriser)}
         if s2_label() is not None:
             chosen["S2"] = s2_label()
         self.results = Results(results_dir, self.results_note(), chosen=chosen)
@@ -371,7 +358,7 @@ class Dashboard:
         shown = shown if shown is not None else self.state.shown
         shown = shown if shown in self.card_by_id else None
         current = self.model.deck_of.get(shown) if shown else None
-        figure = deck_sphere(self.model.deck_points, names, self.deck_links(), current, CUT_LABELS[DECKS_VIEW].format(size=DECK_PART))
+        figure = deck_sphere(self.model.deck_points, names, self.deck_links(), current, DECK_CUT.format(size=DECK_PART))
         return graph(figure, "panel-graph")
 
     def static_figure(self, letter: str):
@@ -492,8 +479,9 @@ class Dashboard:
         return view, checks
 
     def render(self, view: dict, checks: Sequence, slide: Optional["Dashboard"] = None, hint: str = BEGIN_HINT) -> tuple:
-        """Every region from the state and the view, in OUTPUT_NAMES' order up to the model's panel: the tiles' classes
-        and the panel from `slide` (this board by default; the course's in the demo), `hint` with no card shown."""
+        """Every region from the state and the view, in the order of the callback's outputs up to the model's panel:
+        the tiles' classes and the panel from `slide` (this board by default; the course's in the demo), `hint` with
+        no card shown."""
         slide = slide if slide is not None else self
         shown = self.state.shown if self.state.shown in self.card_by_id else None
         card = self.card_by_id.get(shown)
@@ -616,8 +604,8 @@ class Boards:
                 board.changed = False
 
     def render(self, view: dict, checks: Sequence) -> tuple:
-        """Every region in OUTPUT_NAMES' order: the board the view names (deck 00's, fresh and empty, without course
-        data outside the demo) with the slide row's tiles and panel, then Demo and the request box."""
+        """Every region in the order of the callback's outputs: the board the view names (deck 00's, fresh and empty,
+        without course data outside the demo) with the slide row's tiles and panel, then Demo and the request box."""
         board = self.board(view)
         drawn = board if board is not None else self.demo
         regions = drawn.render(view, checks, self.slide, BEGIN_HINT if board is not None else NO_DATA_HINT)

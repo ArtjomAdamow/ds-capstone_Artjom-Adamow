@@ -45,7 +45,6 @@ from .layout import as_dense
 # of the cards are above it at 0.77 agreement with the scripted topics. A measure; the app hides none
 FOCUS_MARGIN = 0.05
 FULL_MARGIN = 1.0  # the margin of a card with nothing to compare its topic with: it is kept
-MODEL_NAME = "T1 nearest centroid"
 
 Key = tuple[str, str]  # (deck name, topic id)
 
@@ -163,9 +162,6 @@ class TopicModel:
     def hidden(self) -> set[str]:
         """The cards between two topics: a margin below the threshold (a measure; the app shows them)."""
         return {card_id for card_id, margin in self.margin_of.items() if margin < self.margin}
-
-    def topics_of_deck(self, deck: str) -> list[TopicSeed]:
-        return [seed for seed in self.seeds if seed.deck == deck]
 
     # --- the measures against the scripted topics ----------------------------
 

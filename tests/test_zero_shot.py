@@ -19,8 +19,8 @@ from models import zero_shot
 from models.difficulty_model import LEVELS
 from models.embeddings import CACHE_FOLDER, EmbeddingCache
 from models.zero_shot import (
-    BASE_MODEL, CRITERION, LARGE_MODEL, LEVEL_NAMES, NLI_MODEL, NLI_MODELS, TEMPLATES, Tags, ZeroShotTagger, cached_tags, premise,
-    size_of, tagger_available, tags_of,
+    BASE_MODEL, CRITERION, LARGE_MODEL, LEVEL_NAMES, NLI_MODEL, NLI_MODELS, TEMPLATES, Tags, ZeroShotTagger, premise, size_of,
+    tagger_available, tags_of,
 )
 
 QUIZ = CardRecord(
@@ -72,11 +72,6 @@ class TemplatesTest(unittest.TestCase):
         self.assertIn(NLI_MODEL, NLI_MODELS)
         self.assertTrue(all(name.startswith("MoritzLaurer/ModernBERT-") and name.endswith("-zeroshot-v2.0") for name in NLI_MODELS))
         self.assertEqual((size_of(BASE_MODEL), size_of(LARGE_MODEL), size_of("some/other-model")), ("base", "large", "other-model"))
-
-    def test_the_expected_level_is_on_d1s_scale(self):
-        self.assertAlmostEqual(zero_shot.expected_level((0.2, 0.3, 0.5)), 1.3)
-        self.assertEqual(zero_shot.expected_level((1.0, 0.0, 0.0)), 0.0)
-        self.assertEqual(zero_shot.expected_level((0.0, 0.0, 1.0)), 2.0)
 
     def test_the_library_is_probed_not_imported(self):
         self.assertTrue(tagger_available(lambda name: object()))
@@ -158,9 +153,8 @@ class TagsOfTest(unittest.TestCase):
         self.assertEqual((tags.template, tags.model_name, tags.cached), (CRITERION, NLI_MODEL, False))
         self.assertEqual(set(tags.scores), {card.id for card in self.cards if card.stack in (2, 3)})
         self.assertEqual(len(tags.scores), 42)
-        expected = tags.expected()
-        for card_id, probabilities in tags.scores.items():
-            self.assertAlmostEqual(expected[card_id], probabilities[1] + 2 * probabilities[2], places=6)
+        for probabilities in tags.scores.values():
+            self.assertAlmostEqual(float(probabilities.sum()), 1.0, places=5)  # one softmax over the three hypotheses
         again = tags_of(self.cards, self.folder, loader=model_support.fake_classifier_loader)
         self.assertTrue(again.cached)
         np.testing.assert_array_equal(again.scores["201101"], tags.scores["201101"])
@@ -171,21 +165,6 @@ class TagsOfTest(unittest.TestCase):
         base = tags_of(self.cards, self.folder, model_name=BASE_MODEL, loader=model_support.fake_classifier_loader)
         self.assertEqual((base.model_name, base.template, base.cached), (BASE_MODEL, CRITERION, False))  # another model: its own file
         self.assertEqual(len(list((self.folder / CACHE_FOLDER).glob("*.npy"))), 3)
-        self.assertEqual(cached_tags(self.cards, self.folder, CRITERION, BASE_MODEL).model_name, BASE_MODEL)
-        self.assertIsNone(cached_tags(self.cards, self.folder, LEVEL_NAMES, BASE_MODEL))  # the base model's control: not tagged
-
-    def test_the_cached_tags_need_neither_the_library_nor_the_model(self):
-        self.assertIsNone(cached_tags(self.cards, None))
-        self.assertIsNone(cached_tags(self.cards, self.folder))  # nothing tagged yet
-        tags = tags_of(self.cards, self.folder, loader=model_support.fake_classifier_loader)
-        with mock.patch.object(zero_shot, "tagger_available", return_value=False), \
-                mock.patch.object(ZeroShotTagger, "load", side_effect=AssertionError("no model is loaded")):
-            cached = cached_tags(self.cards, self.folder)
-        self.assertEqual((cached.template, cached.cached, cached.seconds), (CRITERION, True, 0.0))
-        self.assertEqual(set(cached.scores), set(tags.scores))
-        np.testing.assert_array_equal(cached.scores["201101"], tags.scores["201101"])
-        self.assertIsNone(cached_tags(self.cards, self.folder, LEVEL_NAMES))  # another template: its own file, not there
-        self.assertIsNone(cached_tags(self.cards[:-5], self.folder))  # another course: another key
 
     def test_without_the_library_none_with_one_line(self):
         lines = []

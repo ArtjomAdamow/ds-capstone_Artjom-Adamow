@@ -202,23 +202,10 @@ class FitTest(unittest.TestCase):
         mean_accuracy = np.mean([part.metrics["accuracy"][0] for part in report.decks.values()])
         self.assertAlmostEqual(mean_accuracy, report.metrics["accuracy"][0], places=9)
 
-    def test_a_topics_part_counts_the_topics_quizzes_with_the_decks_metrics(self):
-        deck = self.report.for_deck("Alpha")
+    def test_a_decks_part_holds_its_rated_levels_and_its_unrated_quizzes(self):
+        deck = self.report.decks["Alpha"]
         self.assertEqual(set(deck.levels), {card.id for card in self.cards if card.deck == "Alpha" and card.stack == 3})
         self.assertEqual(set(deck.unrated_ids), {card.id for card in self.cards if card.deck == "Alpha" and card.stack == 2})
-        ids = ["301001", "301009", "301012", "201101", "101200"]  # an easy, a medium and the hard quiz, an unrated one, a flashcard
-        part = deck.for_topic("Some topic", ids)
-        self.assertEqual((part.scope, part.rated_counts, part.unrated), ("Some topic", (1, 1, 1), 1))
-        self.assertEqual(set(part.levels), {"301001", "301009", "301012"})
-        self.assertEqual(set(part.predictions), {"201101"})
-        self.assertEqual(part.predictions["201101"], deck.predictions["201101"])
-        self.assertEqual((part.metrics, part.baselines), (deck.metrics, deck.baselines))  # the deck's numbers
-        np.testing.assert_array_equal(part.confusion, deck.confusion)
-        self.assertIs(part.parent, deck)
-        self.assertEqual(part.decks, {})
-        empty = deck.for_topic("Nothing", ["101201"])
-        self.assertEqual((empty.rated, empty.unrated, empty.predictions), (0, 0, {}))
-        self.assertTrue(empty.measured)  # the deck's metrics still show
 
     def test_a_deck_without_rated_quizzes_has_predictions_but_no_metrics(self):
         cards = course() + [
@@ -226,13 +213,11 @@ class FitTest(unittest.TestCase):
             CardRecord("204102", "Delta", *model_support.quiz("Alpha", 31, "hard"), stack=2),
         ]
         report = fit_difficulty(cards, similar.SimilarityIndex.fit(cards))
-        part = report.for_deck("Delta")
+        part = report.decks["Delta"]
         self.assertFalse(part.measured)
         self.assertTrue(part.note)
         self.assertEqual(sorted(part.predictions.values()), ["easy", "medium"])  # the course's shares, 2 quizzes
-        empty = report.for_deck("Nowhere")
-        self.assertEqual((empty.rated, empty.unrated, empty.predictions), (0, 0, {}))
-        self.assertTrue(empty.note)
+        self.assertNotIn("Nowhere", report.decks)  # a deck without quizzes has no part
 
     def test_too_few_rated_quizzes_give_no_model(self):
         cards = model_support.CARDS  # one rated card
@@ -279,14 +264,13 @@ class JudgeTagsTest(unittest.TestCase):
         report = self.report
         self.assertEqual(set(report.decks), set(TOPICS))
         for deck in TOPICS:
-            part = report.for_deck(deck)
+            part = report.decks[deck]
             self.assertEqual((part.model, part.scope, part.rated_counts, part.unrated, part.folds), ("D2", deck, (8, 3, 1), 2, 0))
             self.assertTrue(part.measured)
             self.assertEqual(set(part.baselines), {"always easy"})  # no similarity baseline: nothing of the index
             self.assertAlmostEqual(part.baselines["always easy"]["accuracy"][0], 8 / 12)
             self.assertEqual(part.confusion.shape, (3, 3))
             self.assertEqual(set(part.predictions), {card.id for card in self.cards if card.deck == deck and card.stack == 2})
-        self.assertEqual(report.for_deck("nowhere").model, "D2")  # a deck without quizzes says so under D2's name
 
     def test_every_unrated_quiz_gets_a_level_by_its_decks_shares_and_its_score_is_the_expected_level(self):
         report = self.report

@@ -3,9 +3,9 @@ generation's two headline numbers from the results rows of its newest run, each 
 floor, a baseline, or the generation before), one plain sentence on what it measures, and a verdict with its
 explanation in words.
 
-* `headlines(results, level)`: the generation's two `Headline`s from the same newest run as its tables
-  (results.Results.run); None without the file or the rows, the section then saying so. `outcomes(results)`: P1's
-  outcomes counted on and off the course in its app row, the dashboard's grid.
+* `headlines(results, level)`: the generation's two `Headline`s from its newest run (results.Results.run); None
+  without the file or the rows, the section then saying so. `outcomes(results)`: P1's outcomes counted on and off
+  the course in its app row, the dashboard's grid.
 * The judged measures name Claude as the judge ("judged precision@5", "Claude's levels"), never a hand.
 * The verdict comes from a rule, never a hand-written word, by the number's kind (`Headline.verdict`):
   - INTERVAL: a paired difference by whether its interval holds 0: "better", "within noise", "worse";
@@ -24,8 +24,8 @@ explanation in words.
   below 0 "below random positions (4 %)". A hit rate, an interval and a kappa need none beyond the sentence and
   the contrast: the number is its own plain reading.
 * The format: shares as percentages, a difference in points; the newer generation's numbers as its gain over the
-  one before (`Headline.gain`). `PLAIN` gives the chosen variant's plain words by its label in the file; a label
-  without them shows as it is (`plain_words`).
+  one before (`Headline.gain`).
+* The makers read the rows through `first_row`, `number_of`, `interval_of` and `d1_chosen`.
 
 The sources, per generation: S1's chosen row of results.csv (same-deck precision@5 against B0's mean, the floor;
 judged precision@1, a hit rate); S2's app row (judged precision@5 with its paired difference to S1's chosen row, an
@@ -33,10 +33,9 @@ interval; judged precision@1 against S1's, a hit rate); C1's model row (the trus
 the decks against the random row, floors); T1's row of scope all in topics.csv (agreement against chance, the floor,
 1-NN beside it) and its row of the 25 % most confident (against all cards, in the floor's place); D1's chosen row
 of difficulty.csv by the deck shares (the within-deck order on Claude's levels against a coin, the floor, with its
-paired difference to the coin and the interval; weighted kappa against the baseline always easy); D2's app row (both
-against D1's chosen row: an interval and a kappa); P1's app row of prompt.csv (the share served right, a hit rate,
-and the share landed wrong, lower better, each against the TF-IDF card route with its paired difference and the
-interval; none where the app runs on TF-IDF).
+paired difference to the coin and the interval; weighted kappa against the baseline always easy); P1's app row of
+prompt.csv (the share served right, a hit rate, and the share landed wrong, lower better, each against the TF-IDF
+card route with its paired difference and the interval; none where the app runs on TF-IDF).
 """
 
 from dataclasses import dataclass
@@ -71,43 +70,15 @@ SHARES = (
 )
 AT_FLOOR = 0.05
 ALL = 0.95
-# What the five models do, at most twelve words each: the section's headline
+# What the models do, at most twelve words each: the section's headline, by the generation the app runs
 WHAT = {
     "S1": "Finds each card's five nearest cards by their words.",
     "S2": "Finds each card's five nearest cards by their meaning and their words.",
     "C1": "Places the decks, and each topic's cards, on the sphere.",
     "T1": "Sorts each card into the nearest of its deck's topics.",
     "D1": "Predicts the level of the unrated quizzes from the question's statistics.",
-    "D2": "Reads the level off each quiz with a language model, nothing fitted.",
     "P1": "Takes a request in the learner's words to the nearest topic.",
 }
-NO_TAB = "Five models: S finds similar cards, C places them, T sorts them into topics, D rates the quizzes, P answers a request."
-# The chosen variant's plain words by its label in the file
-PLAIN = {
-    "chosen: uni+bigrams, min_df=2, sublinear, explain": "words and word pairs, the explanation read too",
-    "hybrid: chosen + MiniLM": "the sentence encoder MiniLM next to the words",
-    "hybrid: chosen + mpnet": "the sentence encoder mpnet next to the words",
-    "MiniLM": "the sentence encoder MiniLM alone",
-    "mpnet": "the sentence encoder mpnet alone",
-    "model": "the fitted layout",
-    "T1": "the nearest topic centroid, leave-one-out",
-    "text (chosen)": "the question's text statistics, labelled by the deck shares",
-    "criterion, large": "the written criterion's three demands, read by the large model",
-    "criterion, base": "the written criterion's three demands, read by the base model",
-    "level names, large": "the level names, read by the large model",
-    "level names, base": "the level names, read by the base model",
-    "hybrid-minilm: card": "the nearest card on the encoder's vectors",
-    "hybrid-mpnet: card": "the nearest card on the encoder's vectors",
-    "TF-IDF: card": "the nearest card on the words",
-    "char n-grams: card": "the nearest card on character n-grams",
-}
-
-
-def plain_words(label: str) -> str:
-    """The variant's plain words, or its label as it is."""
-    return PLAIN.get(label, label)
-
-
 # --- the verdict rule -------------------------------------------------------------------------------------------
 
 
@@ -255,7 +226,7 @@ class Headline:
 # --- the sources ----------------------------------------------------------------------------------------------
 
 
-def _number(row: Optional[Mapping[str, str]], column: str) -> Optional[float]:
+def number_of(row: Optional[Mapping[str, str]], column: str) -> Optional[float]:
     """A row's value as a number; None without the row, the column or a value."""
     if row is None:
         return None
@@ -266,88 +237,88 @@ def _number(row: Optional[Mapping[str, str]], column: str) -> Optional[float]:
         return None
 
 
-def _first(run: Sequence[Mapping[str, str]], test: Callable[[Mapping[str, str]], bool]) -> Optional[Mapping[str, str]]:
+def first_row(run: Sequence[Mapping[str, str]], test: Callable[[Mapping[str, str]], bool]) -> Optional[Mapping[str, str]]:
     return next((row for row in run if test(row)), None)
 
 
-def _interval(row: Mapping[str, str], column: str = "hand_diff") -> tuple[Optional[float], Optional[float], Optional[float]]:
+def interval_of(row: Mapping[str, str], column: str = "hand_diff") -> tuple[Optional[float], Optional[float], Optional[float]]:
     """A paired difference with its interval: the column and its `_low` and `_high` columns."""
-    return _number(row, column), _number(row, f"{column}_low"), _number(row, f"{column}_high")
+    return number_of(row, column), number_of(row, f"{column}_low"), number_of(row, f"{column}_high")
 
 
 def _s1(run, chosen) -> list[Headline]:
-    row = _first(run, lambda row: row.get("model") == "S1" and CHOSEN in (row.get("variant") or ""))
-    floors = [_number(row, "precision_at_5") for row in run if row.get("model") == "B0"]
+    row = first_row(run, lambda row: row.get("model") == "S1" and CHOSEN in (row.get("variant") or ""))
+    floors = [number_of(row, "precision_at_5") for row in run if row.get("model") == "B0"]
     floors = [value for value in floors if value is not None]
     found = []
-    precision = _number(row, "precision_at_5")
+    precision = number_of(row, "precision_at_5")
     if precision is not None:
         found.append(Headline(
             "same-deck precision@5", precision, FLOOR, "Of each card's five nearest cards, the share from the card's own deck.",
             "random positions", sum(floors) / len(floors) if floors else None, floor_name="random positions",
             top_name="all five nearest in the card's deck", columns=("precision_at_5",),
         ))
-    p1 = _number(row, "hand_p1")
+    p1 = number_of(row, "hand_p1")
     if p1 is not None:
         found.append(Headline("judged precision@1", p1, RATE, JUDGED_P1, columns=("hand_p1",)))
     return found
 
 
 def _s2(run, chosen) -> list[Headline]:
-    row = _first(run, lambda row: row.get("model") == "S2" and row.get("variant") == chosen.get("S2"))
-    reference = _first(run, lambda row: row.get("model") == "S1" and CHOSEN in (row.get("variant") or ""))
+    row = first_row(run, lambda row: row.get("model") == "S2" and row.get("variant") == chosen.get("S2"))
+    reference = first_row(run, lambda row: row.get("model") == "S1" and CHOSEN in (row.get("variant") or ""))
     found = []
-    precision = _number(row, "hand_precision")
+    precision = number_of(row, "hand_precision")
     if precision is not None:
-        diff, low, high = _interval(row)
+        diff, low, high = interval_of(row)
         found.append(Headline(
             "judged precision@5", precision, INTERVAL, "Of the five nearest, the share Claude judged related; its gain over S1, paired over the judged cards.",
-            "S1", _number(reference, "hand_precision"), diff, low, high, columns=("hand_precision", "hand_diff", "hand_diff_low", "hand_diff_high"),
+            "S1", number_of(reference, "hand_precision"), diff, low, high, columns=("hand_precision", "hand_diff", "hand_diff_low", "hand_diff_high"),
         ))
-    p1 = _number(row, "hand_p1")
+    p1 = number_of(row, "hand_p1")
     if p1 is not None:
-        found.append(Headline("judged precision@1", p1, RATE, JUDGED_P1, "S1", _number(reference, "hand_p1"), columns=("hand_p1",)))
+        found.append(Headline("judged precision@1", p1, RATE, JUDGED_P1, "S1", number_of(reference, "hand_p1"), columns=("hand_p1",)))
     return found
 
 
 def _c1(run, chosen) -> list[Headline]:
-    row = _first(run, lambda row: row.get("model") == "C1" and row.get("variant") == "model")
-    random = _first(run, lambda row: row.get("model") == "C1" and row.get("variant") == "random")
+    row = first_row(run, lambda row: row.get("model") == "C1" and row.get("variant") == "model")
+    random = first_row(run, lambda row: row.get("model") == "C1" and row.get("variant") == "random")
     found = []
-    cards = _number(row, "trust_cards")
+    cards = number_of(row, "trust_cards")
     if cards is not None:
         found.append(Headline(
             "trustworthiness of the card layouts", cards, FLOOR, "Whether a card's nearest on its topic's sphere are its nearest by text.",
-            "a random layout", _number(random, "trust_cards"), percent=False, floor_name="a random layout",
+            "a random layout", number_of(random, "trust_cards"), percent=False, floor_name="a random layout",
             top_name="no stranger by text among a card's nearest on the map", columns=("trust_cards",),
         ))
-    decks = _number(row, "trust_decks")
+    decks = number_of(row, "trust_decks")
     if decks is not None:
         found.append(Headline(
             "trustworthiness of the decks", decks, FLOOR, "Whether a deck's three nearest on the map are its nearest by text.",
-            "a random layout", _number(random, "trust_decks"), percent=False, floor_name="a random layout",
+            "a random layout", number_of(random, "trust_decks"), percent=False, floor_name="a random layout",
             top_name="no stranger by text among a deck's three nearest on the map", columns=("trust_decks",),
         ))
     return found
 
 
 def _t1(run, chosen) -> list[Headline]:
-    course = _first(run, lambda row: row.get("model") == "T1" and row.get("scope") == COURSE_SCOPE)
-    chance = _first(run, lambda row: row.get("model") == "chance" and row.get("scope") == COURSE_SCOPE)
-    nearest = _first(run, lambda row: row.get("model") == "1-NN" and row.get("scope") == COURSE_SCOPE)
-    focus = _first(run, lambda row: row.get("model") == "T1" and row.get("scope") == FOCUS_25)
+    course = first_row(run, lambda row: row.get("model") == "T1" and row.get("scope") == COURSE_SCOPE)
+    chance = first_row(run, lambda row: row.get("model") == "chance" and row.get("scope") == COURSE_SCOPE)
+    nearest = first_row(run, lambda row: row.get("model") == "1-NN" and row.get("scope") == COURSE_SCOPE)
+    focus = first_row(run, lambda row: row.get("model") == "T1" and row.get("scope") == FOCUS_25)
     found = []
-    agreement = _number(course, "agreement")
+    agreement = number_of(course, "agreement")
     if agreement is not None:
-        beside = _number(nearest, "agreement")
+        beside = number_of(nearest, "agreement")
         sentence = "The share of cards T1 puts into their scripted topic; the rest are its suggestions, not errors."
         if beside is not None:
             sentence += f" The nearest-card rule 1-NN gets {shown(beside, True)}."
         found.append(Headline(
-            "agreement with the script", agreement, FLOOR, sentence, "chance", _number(chance, "agreement"),
+            "agreement with the script", agreement, FLOOR, sentence, "chance", number_of(chance, "agreement"),
             floor_name="chance by the topic sizes", top_name="every card in its scripted topic", columns=("agreement",),
         ))
-    confident = _number(focus, "agreement")
+    confident = number_of(focus, "agreement")
     if confident is not None:
         found.append(Headline(
             "agreement of the 25 % most confident", confident, FLOOR,
@@ -358,91 +329,67 @@ def _t1(run, chosen) -> list[Headline]:
     return found
 
 
-def _d1_chosen(run) -> Optional[Mapping[str, str]]:
-    return _first(run, lambda row: row.get("model") == "D1" and CHOSEN in (row.get("variant") or "")
+def d1_chosen(run) -> Optional[Mapping[str, str]]:
+    return first_row(run, lambda row: row.get("model") == "D1" and CHOSEN in (row.get("variant") or "")
                   and row.get("label_rule") == "deck shares" and course_row(row))
 
 
 def _d1(run, chosen) -> list[Headline]:
-    row = _d1_chosen(run)
-    easy = _first(run, lambda row: row.get("model") == "baseline" and row.get("variant") == "always easy" and course_row(row))
+    row = d1_chosen(run)
+    easy = first_row(run, lambda row: row.get("model") == "baseline" and row.get("variant") == "always easy" and course_row(row))
     found = []
-    order = _number(row, "hand_within_deck")
+    order = number_of(row, "hand_within_deck")
     if order is not None:
-        pairs = _number(row, "hand_within_pairs")
-        diff, low, high = _interval(row, "hand_coin_diff")
+        pairs = number_of(row, "hand_within_pairs")
+        diff, low, high = interval_of(row, "hand_coin_diff")
         found.append(Headline(
             ORDER_LABEL, order, FLOOR,
             "Of the pairs of quizzes in a deck that Claude put at different levels, the share D1 puts in the same order.", "a coin", COIN,
             diff, low, high, floor_name="a coin", top_name="every pair in order", count=int(pairs) if pairs else None,
             columns=("hand_within_deck", "hand_within_pairs", "hand_coin_diff", "hand_coin_diff_low", "hand_coin_diff_high"),
         ))
-    kappa = _number(row, "kappa")
+    kappa = number_of(row, "kappa")
     if kappa is not None:
         found.append(Headline(
             "weighted kappa", kappa, KAPPA, "Agreement with the levels the rated quizzes came with, beyond chance, a near miss counted half; never accuracy, which always easy beats.",
-            "always easy", _number(easy, "kappa"), percent=False, columns=("kappa",),
-        ))
-    return found
-
-
-def _d2(run, chosen) -> list[Headline]:
-    row = _first(run, lambda row: row.get("model") == "D2" and row.get("variant") == chosen.get("D2")
-                 and row.get("label_rule") == "deck shares" and course_row(row))
-    reference = _d1_chosen(run)
-    found = []
-    order = _number(row, "hand_within_deck")
-    if order is not None:
-        diff, low, high = _interval(row)
-        pairs = _number(row, "hand_within_pairs")
-        found.append(Headline(
-            ORDER_LABEL, order, INTERVAL,
-            "The share of the pairs Claude put at different levels in the same order; its gain over D1, paired over the pairs.", "D1",
-            _number(reference, "hand_within_deck"), diff, low, high, count=int(pairs) if pairs else None,
-            columns=("hand_within_deck", "hand_within_pairs", "hand_diff", "hand_diff_low", "hand_diff_high"),
-        ))
-    kappa = _number(row, "kappa")
-    if kappa is not None:
-        found.append(Headline(
-            "weighted kappa on the rated quizzes", kappa, KAPPA, "Agreement with the levels the rated quizzes came with, beyond chance, next to D1's.",
-            "D1", _number(reference, "kappa"), percent=False, columns=("kappa",),
+            "always easy", number_of(easy, "kappa"), percent=False, columns=("kappa",),
         ))
     return found
 
 
 def _p1(run, chosen) -> list[Headline]:
     app = chosen.get("P1")
-    row = _first(run, lambda row: row.get("model") == "P1" and row.get("variant") == app)
-    tfidf = _first(run, lambda row: row.get("model") == "P1" and row.get("variant") == TFIDF_CARD) if app != TFIDF_CARD else None
+    row = first_row(run, lambda row: row.get("model") == "P1" and row.get("variant") == app)
+    tfidf = first_row(run, lambda row: row.get("model") == "P1" and row.get("variant") == TFIDF_CARD) if app != TFIDF_CARD else None
     found = []
-    right = _number(row, "hand_right")
+    right = number_of(row, "hand_right")
     if right is not None:
-        diff, low, high = _interval(row, "hand_tfidf_diff") if tfidf is not None else (None, None, None)
+        diff, low, high = interval_of(row, "hand_tfidf_diff") if tfidf is not None else (None, None, None)
         found.append(Headline(
             "share served right", right, RATE,
             "Of the judged requests, the share taken into an acceptable topic, or told no match on an off-course request.",
-            "TF-IDF", _number(tfidf, "hand_right"), diff, low, high,
+            "TF-IDF", number_of(tfidf, "hand_right"), diff, low, high,
             columns=("hand_right", "hand_tfidf_diff", "hand_tfidf_diff_low", "hand_tfidf_diff_high"),
         ))
-    wrong = _number(row, "hand_wrong")
+    wrong = number_of(row, "hand_wrong")
     if wrong is not None:
-        missed = _number(row, "hand_missed")
+        missed = number_of(row, "hand_missed")
         sentence = "The share taken into a wrong topic, where lower is better"
         sentence += f"; the rest ({shown(missed, True)}) got no match." if missed is not None else "; the rest got no match."
-        diff, low, high = _interval(row, "hand_tfidf_wrong_diff") if tfidf is not None else (None, None, None)
+        diff, low, high = interval_of(row, "hand_tfidf_wrong_diff") if tfidf is not None else (None, None, None)
         found.append(Headline(
-            "share landed wrong", wrong, RATE_LOW, sentence, "TF-IDF", _number(tfidf, "hand_wrong"), diff, low, high,
+            "share landed wrong", wrong, RATE_LOW, sentence, "TF-IDF", number_of(tfidf, "hand_wrong"), diff, low, high,
             columns=("hand_wrong", "hand_tfidf_wrong_diff", "hand_tfidf_wrong_diff_low", "hand_tfidf_wrong_diff_high"),
         ))
     return found
 
 
-MAKERS = {"S1": _s1, "S2": _s2, "C1": _c1, "T1": _t1, "D1": _d1, "D2": _d2, "P1": _p1}
+MAKERS = {"S1": _s1, "S2": _s2, "C1": _c1, "T1": _t1, "D1": _d1, "P1": _p1}
 
 
 def headlines(results, level: str) -> Optional[list[Headline]]:
-    """The generation's two numbers from its newest run (results.Results.run, the run its tables show); None without
-    the file or the rows."""
+    """The generation's two numbers from its newest run (results.Results.run); None without the file or the
+    rows."""
     run = results.run(level)
     if not run:
         return None
@@ -452,23 +399,8 @@ def headlines(results, level: str) -> Optional[list[Headline]]:
 def outcomes(results) -> Optional[dict[str, int]]:
     """P1's outcomes counted on and off the course (OUTCOME_COLUMNS) in its app row of the newest run; None without
     the row or without the counts (a run before evaluate.py wrote them)."""
-    row = _first(results.run("P1") or [], lambda row: row.get("model") == "P1" and row.get("variant") == results.chosen.get("P1"))
-    counts = {column: _number(row, column) for column in OUTCOME_COLUMNS}
+    row = first_row(results.run("P1") or [], lambda row: row.get("model") == "P1" and row.get("variant") == results.chosen.get("P1"))
+    counts = {column: number_of(row, column) for column in OUTCOME_COLUMNS}
     if any(value is None for value in counts.values()):
         return None
     return {column: int(value) for column, value in counts.items()}
-
-
-def chosen_label(results, level: str) -> str:
-    """The chosen variant's label of the generation's newest run: the app's pick where `Results.chosen` names it
-    (S2, D2, P1), the row marked chosen (S1, D1), C1's model row, T1 itself; "" without the rows."""
-    run = results.run(level) or []
-    if level in results.chosen:
-        return results.chosen[level]
-    if level == "C1":
-        return "model" if any(row.get("variant") == "model" for row in run) else ""
-    if level == "T1":
-        return "T1" if run else ""
-    row = _first(run, lambda row: row.get("model") == level and CHOSEN in (row.get("variant") or ""))
-    return (row.get("variant") or "") if row else ""
-

@@ -3,7 +3,7 @@ course's, whatever card is shown, but C's mark of the shown card's deck. T's his
 app.figures' (figures.margin_histogram, figures.confusion_figure); the three drawn here:
 
 * S, where the related cards lie (places_figure): one bar split into this topic, this deck and another deck, seen
-  from each card, in the neighbours figure's colours (figures.PLACE_COLORS), each part with its share, a bracket over
+  from each card, in the places' colours (figures.PLACE_COLORS), each part with its share, a bracket over
   the two parts outside the card's topic with their share together, the counts under the bar;
 * C, the decks on the sphere (deck_sphere): the faint surface, the decks muted at C1's positions, the connections
   below the preset gold and dashed, straight between decks, the shown
@@ -118,7 +118,7 @@ def deck_sphere(points: Mapping[str, Point], names: Mapping[str, str], links: Se
     if current in points:
         figure.add_trace(_marker_trace([current], points, names, "ring", {"size": SELECTED_SIZE * 1.6, "color": GOLD}, False, RING_ALPHA))
         figure.add_trace(_marker_trace([current], points, names, CURRENT_DECK, {"size": SELECTED_SIZE, "color": GOLD}))
-    line = links_trace(points, links, along_surface=False, name=f"connections: {cut}", legend=True)
+    line = links_trace(points, links, name=f"connections: {cut}", legend=True)
     if line is not None:
         figure.add_trace(line)
     figure.update_layout(plain_layout(

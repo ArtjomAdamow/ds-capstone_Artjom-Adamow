@@ -149,10 +149,6 @@ class SentenceEncoder:
         self.cached = False  # whether the last fit_transform came from the cache
         self.dimensions: Optional[int] = None
 
-    @property
-    def name(self) -> str:
-        return self.model_name
-
     def load(self):
         """The model, loaded once (the library imported here, so the package imports without torch)."""
         if self._model is None:
@@ -205,10 +201,6 @@ class HybridVectoriser:
         self.percentile = percentile
         self.minima: tuple[float, float] = (0.0, 0.0)
         self.weights: tuple[float, float] = (1.0, 1.0)
-
-    @property
-    def halves(self):
-        return (self.first, self.second)
 
     @property
     def vocabulary_(self):

@@ -18,8 +18,7 @@ learner read off the quiz with its resolution by natural language inference, not
   card (one softmax over the three hypotheses), from the cache where it holds them (the embeddings' cache class,
   the file named by the model and the template, keyed by the premises in order).
 * `tags_of`: the tags of a course's quizzes (the rated and the unrated ones; flashcards are not tagged) for the
-  evaluation and the app, as `Tags`; None with one printed line without the library or the model. `cached_tags`:
-  the same from the cache alone, with no model loaded.
+  evaluation, as `Tags`; None with one printed line without the library or the model.
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ from .embeddings import CACHE_FOLDER, EmbeddingCache, resolve_device
 # is cut: the base model (299 MB) and the large one of the same family
 # (792 MB), both measured by the evaluation. NLI_MODEL is the app's D2: the large one, with
 # which alone the criterion template reads above chance on the hand labels (53 against 41 of 77 pairs; a choice
-# between two on the labels, declared as one); cached_tags reads its tags from the cache
+# between two on the labels, declared as one)
 BASE_MODEL = "MoritzLaurer/ModernBERT-base-zeroshot-v2.0"
 LARGE_MODEL = "MoritzLaurer/ModernBERT-large-zeroshot-v2.0"
 NLI_MODELS = (BASE_MODEL, LARGE_MODEL)
@@ -91,11 +90,6 @@ def premise(card) -> str:
 def size_of(model_name: str) -> str:
     """The model's short name in the evaluation's rows: base, large, or the name's last part."""
     return MODEL_SIZES.get(model_name, model_name.rsplit("/", 1)[-1])
-
-
-def expected_level(probabilities: Sequence[float]) -> float:
-    """D2's score on D1's scale: P(apply) + 2 · P(analyse), 0 to 2."""
-    return float(probabilities[1] + 2.0 * probabilities[2])
 
 
 def tagger_available(find_spec: Callable = importlib.util.find_spec) -> bool:
@@ -184,10 +178,6 @@ class Tags:
     cached: bool
     device: str = ""  # the device that classified them, "" for a cache hit
 
-    def expected(self) -> dict[str, float]:
-        """Every quiz's score, the expected level."""
-        return {card_id: expected_level(probabilities) for card_id, probabilities in self.scores.items()}
-
 
 def tags_of(cards: Sequence, cache_dir: Optional[Path] = None, template: Template = CRITERION, model_name: str = NLI_MODEL,
             output: Callable = print, loader: Optional[Callable] = None) -> Optional[Tags]:
@@ -209,18 +199,3 @@ def tags_of(cards: Sequence, cache_dir: Optional[Path] = None, template: Templat
         return None
     return Tags(template, model_name, {card.id: scores[position] for position, card in enumerate(quizzes)}, tagger.seconds, tagger.cached,
                 tagger.device or "")
-
-
-def cached_tags(cards: Sequence, cache_dir: Optional[Path], template: Template = CRITERION,
-                model_name: str = NLI_MODEL) -> Optional[Tags]:
-    """The tags of the course's quizzes from the cache alone, as `tags_of` wrote them: no model is loaded and no
-    library is needed. None without the folder or where the cache does not hold them."""
-    if cache_dir is None:
-        return None
-    rated, unrated = split(cards)
-    quizzes = rated + unrated
-    tagger = ZeroShotTagger(model_name, template, cache=EmbeddingCache(Path(cache_dir) / CACHE_FOLDER))
-    scores = tagger.cache.read(tagger.cache_name, [premise(card) for card in quizzes]) if quizzes else None
-    if scores is None:
-        return None
-    return Tags(template, model_name, {card.id: scores[position] for position, card in enumerate(quizzes)}, 0.0, True)

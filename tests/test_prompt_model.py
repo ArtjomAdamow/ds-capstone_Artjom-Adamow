@@ -6,7 +6,7 @@ the card held out and its Source: line cut, the demo's deck 00 alone with its ow
 (the nearest three topics by its centroid against the headings, their names within the target length), and the same
 code on S2's hybrid (a stand-in encoder, no torch)."""
 
-import model_support  # noqa: F401  (the package on the path, the test course as card records)
+import model_support
 
 import dataclasses
 import tempfile
@@ -62,12 +62,12 @@ class FloorsTest(unittest.TestCase):
         own_centroid, own_text = [], []
         for number, card in enumerate(CARDS):
             key = topic_of[card.id]
-            others = [index.row(card_id) for card_id in members[key] if card_id != card.id]
+            others = [model_support.row_of(index, card_id) for card_id in members[key] if card_id != card.id]
             loo = unit(np.asarray(index.vectors[others].sum(axis=0)).ravel()) if others else np.zeros(index.vectors.shape[1])
             question = np.asarray(questions[number].todense()).ravel()
             own_centroid.append(float(question @ loo))
             seed = next(seed for seed in model_support.SEEDS if seed.key == key)
-            own_text.append(float(question @ index.query(" | ".join(seed.headings))))
+            own_text.append(float(question @ model_support.query(index, " | ".join(seed.headings))))
         self.assertAlmostEqual(model.floors.centroid, float(np.percentile(own_centroid, 10)))
         self.assertAlmostEqual(model.floors.text, float(np.percentile(own_text, 10)))
         self.assertEqual(model.floors.of(CARD), model.floors.card)
@@ -76,22 +76,22 @@ class FloorsTest(unittest.TestCase):
     def test_the_routes_score_every_topic_by_its_best_member_its_full_centroid_and_its_headings(self):
         model, index = self.model, self.index
         request = "git merge a branch"
-        vector = index.query(request)
+        vector = model_support.query(index, request)
         cosines = index.vectors @ vector
-        by_key = {target.key: target for target in model.score(request)}
+        by_key = {target.key: target for target in model.find(request).ranking}
         self.assertEqual(set(by_key), {seed.key for seed in model_support.SEEDS})
         for key, members in model.topic_model.members.items():
             scores = by_key[key].scores
             self.assertEqual(set(scores), {CARD, CENTROID, TEXT})
             if members:
-                rows = [index.row(card_id) for card_id in members]
+                rows = [model_support.row_of(index, card_id) for card_id in members]
                 self.assertAlmostEqual(scores[CARD], float(cosines[rows].max()))
                 self.assertEqual(by_key[key].card, members[int(np.argmax(cosines[rows]))])
                 self.assertAlmostEqual(scores[CENTROID], float(unit(np.asarray(index.vectors[rows].sum(axis=0)).ravel()) @ vector))
             else:  # the emptied topic: no example, no card
                 self.assertEqual((scores[CARD], scores[CENTROID], by_key[key].card), (0.0, 0.0, None))
             seed = next(seed for seed in model_support.SEEDS if seed.key == key)
-            self.assertAlmostEqual(scores[TEXT], float(index.query(" | ".join(seed.headings)) @ vector))
+            self.assertAlmostEqual(scores[TEXT], float(model_support.query(index, " | ".join(seed.headings)) @ vector))
         self.assertGreater(by_key[BRANCHES].scores[CARD], by_key[COMMITS].scores[CARD])
 
     def test_the_variants_and_their_gates(self):
@@ -116,7 +116,6 @@ class DecisionTest(unittest.TestCase):
         answer = self.model.find("how do I slice a list")
         self.assertEqual((answer.decision, answer.topic, answer.card), (SELECTED, LISTS, "201002"))
         self.assertTrue(answer.navigate)
-        self.assertEqual(answer.message, "card selected")
         self.assertEqual(answer.targets[0].key, LISTS)
         self.assertEqual(len(answer.targets), NEAREST)
 
@@ -136,7 +135,6 @@ class DecisionTest(unittest.TestCase):
             answer = self.model.find("how to bake bread", routes)
             self.assertEqual((answer.decision, answer.topic, answer.card), (NO_MATCH, None, None), routes)
             self.assertFalse(answer.navigate)
-            self.assertEqual(answer.message, "no match, the three nearest below the floor")
             self.assertEqual([target.key for target in answer.targets], [LISTS, DICTIONARIES, EMPTY])  # ties in file order
         self.assertEqual(self.model.find("").decision, NO_MATCH)
 
@@ -162,8 +160,7 @@ class DecisionTest(unittest.TestCase):
         model = model_of(self.index, with_headings(DICTIONARIES, ("list",)))
         answer = model.find("list", ROUTES["card+text"])
         self.assertEqual((answer.decision, answer.topic, answer.card), (ENTERED, DICTIONARIES, None))
-        self.assertEqual(answer.message, "topic entered")
-        cosines = self.index.vectors @ self.index.query("list")
+        cosines = self.index.vectors @ model_support.query(self.index, "list")
         top = self.index.ids[int(np.argmax(cosines))]
         self.assertEqual(top, "201002")  # in Lists
         self.assertEqual(model.find("list", ROUTES["card"]).card, "201002")
@@ -177,7 +174,6 @@ class DecisionTest(unittest.TestCase):
         for name in ("centroid", "text"):
             answer = self.model.find("null hypothesis", ROUTES[name])
             self.assertEqual((answer.decision, answer.topic, answer.card), (ENTERED, TESTS, None), name)
-            self.assertEqual(answer.message, "topic entered")
 
     def test_the_mean_ranks_and_the_answer_is_the_same_on_every_call(self):
         answer = self.model.find("git merge", ROUTES["all"])
@@ -266,9 +262,9 @@ class LabelTest(unittest.TestCase):
         label = self.model.label(model_support.ALL_CARDS)
         self.assertEqual(len(label.keys), NEAREST)
         self.assertEqual(len(set(label.keys)), NEAREST)
-        rows = [self.index.row(card_id) for card_id in model_support.ALL_CARDS]
+        rows = [model_support.row_of(self.index, card_id) for card_id in model_support.ALL_CARDS]
         centroid = unit(np.asarray(self.index.vectors[rows].sum(axis=0)).ravel())
-        texts = {seed.key: unit(self.index.query(" | ".join(seed.headings))) for seed in model_support.SEEDS if seed.headings}
+        texts = {seed.key: unit(model_support.query(self.index, " | ".join(seed.headings))) for seed in model_support.SEEDS if seed.headings}
         scores = {key: float(centroid @ vector) for key, vector in texts.items()}
         self.assertEqual(list(label.keys), sorted(scores, key=lambda key: -scores[key])[:NEAREST])  # the nearest three
         self.assertEqual(label.text, LABEL_SEPARATOR.join(first_heading(self.name(key)) for key in label.keys))

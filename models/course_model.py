@@ -5,24 +5,19 @@ topics, positions and connections of the whole course.
   decks on the unit sphere at once. The points are keyed by deck id. The
   clustering of the deck vectors (models.clustering) gives the deck connections.
 * Topics: the topic model T1 (models.topic_model) takes the scripted topics of the course file as its input and
-  decides every card's topic and margin, in every deck (the model places no topic). A
-  deck's topic vectors (topic_vectors: per topic the mean of its members' unit rows, normalised, as a deck's vector
-  is made of its cards) and their clustering give the topic connections
-  (topic_links: one per merge in merge order, n - 1 for a deck's n topics with cards, none for an emptied topic), for
-  the model's membership or any other (a deck with scripted topics).
+  decides every card's topic and margin, in every deck (the model places no topic).
 * Cards view, for each topic of the model: the layout step on the topic's card vectors, centred on the topic's mean
   (the start's own centring), with the neighbours within the topic (k = min(5, n - 1)), gives one unit direction per
   card, and that direction is the position: every card sits on the surface of its topic's sphere (radius 1).
   The clustering of the topic's card vectors gives its connections (n - 1). A topic
-  with fewer than two cards gets no layout and no connections. A scripted topic (in a deck without the model's
-  topics) is laid out the same way on request (layout_of).
+  with fewer than two cards gets no layout and no connections.
 * The points are plain (x, y, z) tuples, deterministic. The model has no point for a card of a one-card topic, a
   card of a deck left out or an id that is not in the course it was fitted on.
 """
 
 import math
 from dataclasses import dataclass
-from typing import Collection, Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 import numpy as np
 
@@ -102,7 +97,6 @@ class CourseModel:
         self.card_points: dict[str, Point] = {
             card_id: point for placed in self.topics.values() for card_id, point in placed.positions.items()
         }
-        self._laid_out: dict[tuple, TopicLayout] = {}  # layout_of's other memberships, by deck, topic and cards
 
     def _lay_out(self, deck: str, deck_id: str, topic_id: str, name: str, card_ids: Sequence[str]) -> TopicLayout:
         ids = [card_id for card_id in card_ids if card_id in self._row_of]
@@ -124,16 +118,7 @@ class CourseModel:
             trustworthiness=layout.trustworthiness_score(vectors, directions, k),
         )
 
-    # --- the points ------------------------------------------------------------
-
-    def card_points_of(self, decks: Optional[Collection[str]] = None) -> dict[str, Point]:
-        """The model's card points (unit directions on the topic's sphere) of the cards of these decks (deck ids;
-        None for every deck). A card of a one-card topic has none."""
-        if decks is None:
-            return dict(self.card_points)
-        return {card_id: point for card_id, point in self.card_points.items() if self.deck_of.get(card_id) in decks}
-
-    # --- the topics, connections and neighbours ------------------------------
+    # --- the topics and the neighbours ---------------------------------------
 
     @property
     def hidden(self) -> set[str]:
@@ -144,50 +129,6 @@ class CourseModel:
         """The deck's topics in file order."""
         return [placed for placed in self.topics.values() if placed.deck_id == deck_id]
 
-    def card_links(self, deck_id: str, topic_id: str) -> list[tuple[str, str]]:
-        """The topic's connections in merge order; empty for an unknown topic or one with fewer than two cards."""
-        placed = self.topics.get((deck_id, topic_id))
-        return list(placed.links) if placed else []
-
-    def layout_of(self, deck_id: str, topic_id: str, card_ids: Sequence[str], name: str = "") -> TopicLayout:
-        """The layout of a topic with these cards: the model's own when the membership is the model's (a deck with
-        the model's topics), else the layout step and the clustering on these cards (a scripted topic), kept for
-        the next call. Cards the model was not fitted on are left out."""
-        placed = self.topics.get((deck_id, topic_id))
-        if placed is not None and set(placed.ids) == {card_id for card_id in card_ids if card_id in self._row_of}:
-            return placed
-        key = (deck_id, topic_id, tuple(card_ids))
-        if key not in self._laid_out:
-            deck = next((deck for deck, known in self.deck_ids.items() if known == deck_id), deck_id)
-            self._laid_out[key] = self._lay_out(deck, deck_id, topic_id, name, card_ids)
-        return self._laid_out[key]
-
     def related(self, card_id: str) -> list[tuple[str, float]]:
         """The neighbours of a card across the whole course, best first."""
         return self.index.related(card_id)
-
-    # --- the topic vectors and connections ---------------------------------------
-
-    def topic_vectors(self, deck_id: str, members=None) -> tuple[list[str], np.ndarray]:
-        """(the topic ids with cards, one unit vector each): per topic the mean of its members' unit rows,
-        normalised, in the membership's order; `members` is the membership, (topic id, card ids) pairs (a deck with
-        scripted topics: those), by default the model's own; a topic without cards the model was fitted on
-        gets no vector."""
-        if members is None:
-            members = [(placed.topic_id, placed.ids) for placed in self.topics_of_deck(deck_id)]
-        labels: list[str] = []
-        rows: list[int] = []
-        for topic_id, card_ids in members:
-            for card_id in card_ids:
-                if card_id in self._row_of:
-                    labels.append(topic_id)
-                    rows.append(self._row_of[card_id])
-        if not rows:
-            return [], np.zeros((0, self.index.vectors.shape[1]))
-        return similar.deck_vectors(labels, self.index.vectors[rows])
-
-    def topic_links(self, deck_id: str, members=None) -> list[tuple[str, str]]:
-        """The deck's topic connections: the clustering of its topic vectors (topic_vectors), one connection per
-        merge in merge order, between topic ids; n - 1 for n topics with cards, none below two."""
-        names, vectors = self.topic_vectors(deck_id, members)
-        return clustering.merge_links(names, vectors)

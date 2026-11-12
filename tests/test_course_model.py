@@ -1,5 +1,5 @@
 """The course model: deck points on the unit sphere, the cards of every model topic on the surface of the topic's
-sphere, the points by deck, and the connections of decks and topics."""
+sphere, and the connections of the decks and of every topic's cards."""
 
 import model_support  # noqa: F401  (the package on the path, the test course as card records)
 
@@ -25,6 +25,7 @@ class CourseModelTest(unittest.TestCase):
         self.assertEqual(self.model.deck_names, ["Alpha", "Beta", "Gamma"])
         for point in self.model.deck_points.values():
             self.assertAlmostEqual(float(np.linalg.norm(point)), 1.0)
+        self.assertEqual((self.model.deck_of["101001"], self.model.deck_of["103004"]), ("01", "03"))  # a card's deck, by id
 
     def test_the_topics_are_the_models_membership_and_every_card_of_a_topic_with_two_cards_or_more_sits_on_the_surface(self):
         model = self.model
@@ -53,68 +54,21 @@ class CourseModelTest(unittest.TestCase):
         self.assertTrue(math.isnan(placed.overlap))
         (alone,) = placed.ids
         self.assertNotIn(alone, model.card_points)
-        self.assertNotIn(alone, model.card_points_of({"01"}))
-
-    def test_the_card_points_by_deck(self):
-        self.assertEqual(self.model.card_points_of(None), self.model.card_points)
-        self.assertEqual(set(self.model.card_points_of({"01"})), set(model_support.ALPHA_CARDS))
-        self.assertEqual(set(self.model.card_points_of({"02", "03"})), set(model_support.BETA_CARDS + model_support.GAMMA_CARDS))
-        self.assertEqual(self.model.card_points_of(set()), {})
-        self.assertEqual(self.model.card_points_of({"01"})["101001"], self.model.card_points["101001"])
-        self.assertEqual(self.model.deck_of["101001"], "01")
-        self.assertEqual(self.model.deck_of["103004"], "03")
-
-    def test_layout_of_gives_the_models_layout_for_its_membership_and_lays_out_any_other(self):
-        lists = SCRIPTED[("01", "01")]
-        self.assertIs(self.model.layout_of("01", "01", list(reversed(lists))), self.model.topics[("01", "01")])
-        other = ["103001", "103002", "103004"]  # not a topic of the model
-        placed = self.model.layout_of("03", "01", other, "Intervals")
-        self.assertEqual((placed.deck, placed.name, placed.ids), ("Gamma", "Intervals", other))
-        self.assertEqual(len(placed.links), 2)
-        self.assertTrue(all(source in other and target in other for source, target in placed.links))
-        for point in placed.positions.values():
-            self.assertAlmostEqual(float(np.linalg.norm(point)), 1.0, delta=1e-9)
-        self.assertIs(self.model.layout_of("03", "01", other), placed)  # kept for the next call
-        self.assertEqual(self.model.layout_of("03", "01", ["103001", "unknown"]).ids, ["103001"])  # unknown ids left out
 
     def test_each_topic_gets_one_connection_per_merge_within_the_topic_and_none_below_two_cards(self):
         for (deck_id, topic_id), expected in SCRIPTED.items():
-            pairs = self.model.card_links(deck_id, topic_id)
+            pairs = self.model.topics[(deck_id, topic_id)].links
             self.assertEqual(len(pairs), max(0, len(expected) - 1), (deck_id, topic_id))
             self.assertTrue(all(source in expected and target in expected for source, target in pairs), (deck_id, topic_id))
             self.assertEqual(len({frozenset(pair) for pair in pairs}), len(pairs))
-        self.assertEqual([frozenset(pair) for pair in self.model.card_links("01", "02")], [frozenset(("301003", "401005"))])
-        self.assertEqual(self.model.card_links("01", "03"), [])  # the empty topic
-        self.assertEqual(self.model.card_links("01", "99"), [])
-        self.assertEqual(self.model.card_links("Delta", "01"), [])
+        self.assertEqual([frozenset(pair) for pair in self.model.topics[("01", "02")].links], [frozenset(("301003", "401005"))])
+        self.assertEqual(self.model.topics[("01", "03")].links, [])  # the empty topic
 
     def test_the_decks_are_connected_by_deck_id(self):
         self.assertEqual(len(self.model.deck_links), 2)
         for source, target in self.model.deck_links:
             self.assertIn(source, {"01", "02", "03"})
             self.assertIn(target, {"01", "02", "03"})
-
-    def test_a_decks_topics_are_connected_by_their_vectors_one_merge_per_pair_none_for_an_emptied_topic(self):
-        from models import clustering
-
-        names, vectors = self.model.topic_vectors("01")
-        self.assertEqual(names, ["01", "02"])  # Lists and Dictionaries; the empty topic has no vector
-        self.assertEqual(vectors.shape[0], 2)
-        for row in vectors:
-            self.assertAlmostEqual(float(np.linalg.norm(row)), 1.0)
-        self.assertEqual(self.model.topic_links("01"), [("01", "02")])  # n - 1 for two topics with cards
-        self.assertEqual(self.model.topic_links("02"), [("01", "02")])
-        self.assertEqual(self.model.topic_links("03"), [("01", "02")])
-        self.assertEqual(self.model.topic_links("99"), [])
-        self.assertEqual(self.model.topic_links("01", [("01", ["101001", "201002"])]), [])  # one topic: no merge
-        # Another membership (a scripted deck): the same rule on the given cards, in merge order of the clustering
-        members = [("a", ["103001", "103004"]), ("b", ["103002"]), ("c", ["103003"]), ("d", [])]
-        pairs = self.model.topic_links("03", members)
-        self.assertEqual(len(pairs), 2)  # three topics with cards, none for the empty one
-        self.assertTrue(all({source, target} <= {"a", "b", "c"} for source, target in pairs))
-        names, vectors = self.model.topic_vectors("03", members)
-        self.assertEqual(pairs, clustering.merge_links(names, vectors))
-        self.assertEqual(pairs[0], ("b", "c"))  # the two p value cards are the closest pair
 
     def test_related_cards_come_from_the_index(self):
         related = self.model.related("102001")  # git commit
@@ -136,7 +90,7 @@ class CourseModelTest(unittest.TestCase):
         model = CourseModel(self.cards, {"Alpha": "01"}, model_support.SEEDS)
         self.assertEqual(sorted(model.deck_points), ["01", "Beta", "Gamma"])
         self.assertIn(("Beta", "01"), model.topics)
-        self.assertEqual(model.card_links("Beta", "01"), self.model.card_links("02", "01"))
+        self.assertEqual(model.topics[("Beta", "01")].links, self.model.topics[("02", "01")].links)
 
     def test_the_model_is_the_same_at_every_fit(self):
         again = model_support.course_model()

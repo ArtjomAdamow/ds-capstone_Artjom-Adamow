@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from app import headlines as hl
-from app.panels import d2_label, s2_label
+from app.panels import s2_label
 from app.results import Results, course_note
 from test_results import PROMPT_ROWS, write_results
 
@@ -68,9 +68,8 @@ class VerdictRuleTest(unittest.TestCase):
         self.assertEqual(hl.Headline("x", 0.75, hl.FLOOR, "s", "a coin", 0.5).gain, "")  # a floor is no gain
         self.assertEqual(hl.Headline("x", 0.75, hl.FLOOR, "s").verdict, hl.NO_CONTRAST)
         self.assertEqual(hl.Headline("x", 0.75, hl.RATE, "s").explanation, "")  # a hit rate needs none
-        self.assertEqual(hl.plain_words("hybrid: chosen + MiniLM"), "the sentence encoder MiniLM next to the words")
-        self.assertEqual(hl.plain_words("unknown"), "unknown")
         self.assertTrue(all(len(text.split()) <= 12 for text in hl.WHAT.values()))  # at most twelve words
+        self.assertEqual(set(hl.WHAT), set(hl.MAKERS))  # a headline for every generation with numbers
 
 
 class HeadlinesTest(unittest.TestCase):
@@ -80,7 +79,7 @@ class HeadlinesTest(unittest.TestCase):
         cls.folder = Path(cls._tmp.name)
         cls.note = course_note(model_support.DECK_IDS)
         write_results(cls.folder / "results", cls.note)
-        cls.results = Results(cls.folder / "results", cls.note, chosen={"D2": d2_label(), "S2": s2_label()})
+        cls.results = Results(cls.folder / "results", cls.note, chosen={"S2": s2_label()})
 
     @classmethod
     def tearDownClass(cls):
@@ -92,7 +91,6 @@ class HeadlinesTest(unittest.TestCase):
         self.assertEqual(precision.verdict, "above the floor by generic criteria")  # (0.6 − 0.3) / 0.7 = 0.43
         self.assertEqual(precision.explanation, "about half of the way from random positions (30 %) to all five nearest in the card's deck")  # 0.43: nearer half
         self.assertEqual((p1.label, p1.shown, p1.contrast, p1.verdict), ("judged precision@1", "92 %", None, "very good by generic criteria"))
-        self.assertEqual(hl.chosen_label(self.results, "S1"), "chosen: uni+bigrams")
 
     def test_c1s_numbers_are_the_two_trustworthinesses_against_the_random_layout(self):
         cards, decks = hl.headlines(self.results, "C1")
@@ -100,7 +98,6 @@ class HeadlinesTest(unittest.TestCase):
         self.assertEqual(cards.verdict, "far above the floor by generic criteria")  # 0.8 of the way
         self.assertEqual(cards.explanation, "about four fifths of the way from a random layout (0.50) to no stranger by text among a card's nearest on the map")
         self.assertEqual((decks.shown, decks.contrast_shown, decks.verdict), ("0.80", "a random layout 0.40", "well above the floor by generic criteria"))
-        self.assertEqual(hl.chosen_label(self.results, "C1"), "model")
 
     def test_t1s_numbers_are_the_agreement_against_chance_and_the_most_confident_quarter(self):
         agreement, confident = hl.headlines(self.results, "T1")
@@ -120,25 +117,24 @@ class HeadlinesTest(unittest.TestCase):
         self.assertEqual(order.explanation, "about half of the way from a coin (50 %) to every pair in order")
         self.assertEqual((kappa.label, kappa.shown, kappa.contrast_shown, kappa.verdict), ("weighted kappa", "0.41", "always easy 0.00", "moderate"))
         self.assertIn("never accuracy", kappa.sentence)
-        self.assertEqual(hl.chosen_label(self.results, "D1"), "text (chosen)")
-
-    def test_d2s_numbers_are_its_gain_over_d1_within_noise_and_its_kappa(self):
-        order, kappa = hl.headlines(self.results, "D2")
-        self.assertEqual((order.shown, order.contrast_shown, order.gain), ("69 %", "D1 75 %", "−6.5 points (−35.8 to +22.4)"))
-        self.assertEqual(order.verdict, "within noise")
-        self.assertEqual((kappa.shown, kappa.contrast_shown, kappa.gain, kappa.verdict), ("0.02", "D1 0.41", "−0.39", "slight"))
-        self.assertEqual(hl.chosen_label(self.results, "D2"), d2_label())
-        self.assertEqual(d2_label(), "criterion, large")  # the app's D2: the criterion template on the large model
+        self.assertEqual(hl.d1_chosen(self.results.run("D1"))["variant"], "text (chosen)")  # the course's row by the deck shares
 
     def test_claude_is_the_judge_never_a_hand(self):
         """The slide brief's rule: the relevance marks, the quizzes' levels and the requests were judged by Claude."""
-        for level in ("S1", "S2", "C1", "T1", "D1", "D2", "P1"):
+        for level in hl.MAKERS:
             for headline in hl.headlines(self.results, level) or []:
                 for words in (headline.label, headline.sentence, headline.explanation):
                     self.assertNotIn("hand", words.lower(), (level, words))
                     self.assertNotIn("authored", words.lower(), (level, words))
         self.assertEqual(hl.headlines(self.results, "D1")[0].label, "within-deck order on Claude's levels")
-        self.assertFalse(any("hand" in words for words in hl.PLAIN.values()))
+
+    def test_the_makers_read_a_row_through_the_helpers(self):
+        run = self.results.run("S1")
+        row = hl.first_row(run, lambda row: row.get("model") == "S1" and "chosen" in row.get("variant", ""))
+        self.assertEqual((hl.number_of(row, "precision_at_5"), hl.number_of(row, "hand_p3"), hl.number_of(None, "x")), (0.6, None, None))
+        self.assertIsNone(hl.first_row(run, lambda row: row.get("model") == "S2"))
+        self.assertEqual(hl.interval_of({"hand_diff": "0.05", "hand_diff_low": "-0.1", "hand_diff_high": "0.2"}), (0.05, -0.1, 0.2))
+        self.assertEqual(hl.interval_of({"hand_coin_diff": "0.25"}, "hand_coin_diff"), (0.25, None, None))
 
 
 class PromptHeadlinesTest(unittest.TestCase):
@@ -160,7 +156,6 @@ class PromptHeadlinesTest(unittest.TestCase):
         self.assertEqual((right.shown, right.contrast_shown, right.gain, right.verdict), ("76 %", "TF-IDF 75 %", "+1.0 points (−9.0 to +11.0)", "good by generic criteria"))
         self.assertEqual((wrong.shown, wrong.contrast_shown, wrong.gain, wrong.verdict),
                          ("6 %", "TF-IDF 20 %", "−14.5 points (−25.0 to −4.0)", "very good by generic criteria"))
-        self.assertEqual(hl.chosen_label(results, "P1"), "hybrid-minilm: card")
 
 
 if __name__ == "__main__":

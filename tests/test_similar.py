@@ -1,7 +1,7 @@
 """The similarity pipeline: card text, neighbours (order, minimum score, top k), a stand-in vectoriser, deck
 vectors and a request's vector (query), on the models' table fixture."""
 
-import model_support  # noqa: F401  (the package on the path, the test course as card records)
+import model_support
 
 import unittest
 
@@ -131,7 +131,7 @@ class QueryTest(unittest.TestCase):
         self.index = similar.SimilarityIndex.fit(model_support.CARDS)
 
     def test_a_request_is_a_unit_vector_in_the_indexs_space(self):
-        vector = self.index.query("null hypothesis")
+        vector = model_support.query(self.index, "null hypothesis")
         self.assertEqual(vector.shape, (self.index.vectors.shape[1],))
         self.assertAlmostEqual(float(np.linalg.norm(vector)), 1.0)
         cosines = self.index.vectors @ vector
@@ -139,26 +139,26 @@ class QueryTest(unittest.TestCase):
 
     def test_a_cards_own_text_is_nearest_to_itself(self):
         for row, card in enumerate(model_support.CARDS):
-            cosines = self.index.vectors @ self.index.query(similar.card_text(card))
+            cosines = self.index.vectors @ model_support.query(self.index, similar.card_text(card))
             self.assertAlmostEqual(float(cosines[row]), 1.0)
             self.assertEqual(int(np.argmax(cosines)), row)
 
     def test_words_outside_the_vocabulary_give_a_zero_vector(self):
-        vector = self.index.query("bake bread")
+        vector = model_support.query(self.index, "bake bread")
         self.assertEqual(float(np.abs(vector).sum()), 0.0)
-        self.assertEqual(self.index.query("").shape, (self.index.vectors.shape[1],))
+        self.assertEqual(model_support.query(self.index, "").shape, (self.index.vectors.shape[1],))
 
     def test_queries_transform_many_requests_at_once_as_query_does_one(self):
         texts = ["git merge", "null hypothesis", "bake bread"]
         rows = self.index.queries(texts)
         self.assertEqual(rows.shape, (3, self.index.vectors.shape[1]))
         for number, text in enumerate(texts):
-            self.assertTrue(np.allclose(np.asarray(rows[number].todense())[0], self.index.query(text)))
+            self.assertTrue(np.allclose(np.asarray(rows[number].todense())[0], model_support.query(self.index, text)))
         self.assertEqual(self.index.queries([]).shape, (0, self.index.vectors.shape[1]))
 
     def test_an_index_without_cards_answers_with_nothing(self):
         empty = similar.SimilarityIndex.fit([])
-        self.assertEqual(empty.query("git merge").size, 0)
+        self.assertEqual(model_support.query(empty, "git merge").size, 0)
         self.assertEqual(empty.queries(["a", "b"]).shape, (2, 0))
 
 

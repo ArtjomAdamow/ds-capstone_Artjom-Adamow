@@ -72,7 +72,6 @@ DEFAULT_ROUTES = ROUTES[DEFAULT_VARIANT]
 FLOOR_PERCENTILE = 10  # every route's floor: this percentile of its own scores over the self set
 NEAREST = 3  # the targets an answer lists, the decision's own first
 HEADING_SEPARATOR = " | "  # a topic's text: its headings joined, as the course table's cell holds them
-MODEL_NAME = "P1 navigation prompt"
 LABEL_TARGET = 70  # the label's length at most, in characters: the three names cut until they fit
 LABEL_SEPARATOR = " · "  # between the label's names
 CUT_MARK = "…"  # the end of a cut name
@@ -81,7 +80,6 @@ NAME_PARTS = ";"  # between the headings of a topic's name
 SELECTED = "card selected"
 ENTERED = "topic entered"
 NO_MATCH = "no match"
-MESSAGES = {SELECTED: SELECTED, ENTERED: ENTERED, NO_MATCH: "no match, the three nearest below the floor"}
 
 
 def family_of(vectoriser) -> str:
@@ -203,10 +201,6 @@ class Answer:
     @property
     def targets(self) -> tuple[TopicScore, ...]:
         return self.ranking[:NEAREST]
-
-    @property
-    def message(self) -> str:
-        return MESSAGES[self.decision]
 
 
 @dataclass(frozen=True)
@@ -344,10 +338,6 @@ class PromptModel:
         if not np.isfinite(values).any():
             return None
         return self.index.ids[rows[int(np.argmax(values))]]
-
-    def score(self, text: str, routes: Sequence[str] = DEFAULT_ROUTES) -> list[TopicScore]:
-        """Every topic for the request, by the variant's mean (ties in file order), with every route's cosine."""
-        return list(self.find(text, routes).ranking)
 
     def find(self, text: str, routes: Sequence[str] = DEFAULT_ROUTES) -> Answer:
         """The answer to a request: the ranking, the decision (the first topic entered where the variant's

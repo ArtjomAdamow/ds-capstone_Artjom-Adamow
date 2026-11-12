@@ -1,7 +1,6 @@
 """The results files (app.results; the csv module, nothing of Dash), read as the dashboard
-reads them: the current course's rows, the newest run, the transposed tables with their floor, the chosen
-variant and the app's pick marked, the glossary, and the hints without a file or a folder. The small results files
-the dashboard's tests read are written here too (write_results, PROMPT_ROWS)."""
+reads them: the current course's rows, each level's newest run, and the hints without a file, a folder or the
+level's rows. The small results files the dashboard's tests read are written here too (write_results, PROMPT_ROWS)."""
 
 import model_support
 
@@ -10,8 +9,8 @@ import unittest
 from pathlib import Path
 
 from app.headlines import headlines
-from app.panels import d2_label, s2_label
-from app.results import NO_FOLDER, Results, cell, course_note, read_glossary
+from app.panels import s2_label
+from app.results import NO_FOLDER, Results, course_note, course_row, newest
 
 
 def write_results(folder: Path, note: str) -> None:
@@ -109,7 +108,7 @@ class ResultsTest(unittest.TestCase):
         cls.folder = Path(cls._tmp.name)
         cls.note = course_note(model_support.DECK_IDS)
         write_results(cls.folder / "results", cls.note)
-        cls.results = Results(cls.folder / "results", cls.note, chosen={"D2": d2_label(), "S2": s2_label()})
+        cls.results = Results(cls.folder / "results", cls.note, chosen={"S2": s2_label()})
 
     @classmethod
     def tearDownClass(cls):
@@ -118,67 +117,40 @@ class ResultsTest(unittest.TestCase):
     def test_the_note_marks_the_course(self):
         self.assertEqual(self.note, "decks 01 to 03")
 
-    def test_s1_stands_next_to_b0s_mean_in_the_newest_run_with_the_chosen_variant_marked(self):
-        (table,) = self.results.tables("S1")
-        self.assertEqual(table.heads, ["B0 random positions (mean of 2 seeds)", "unigrams", "chosen: uni+bigrams"])
-        self.assertEqual(table.chosen, [False, False, True])
-        self.assertEqual(table.subtitle, "run 2026-11-01T10:00")
-        rows = dict(table.rows)
-        self.assertEqual(rows["precision_at_5"], ["0.300", "0.5", "0.6"])
-        self.assertEqual(rows["kept_precision"], ["", "0.55", "0.65"])
-        self.assertNotIn("hand_p3", rows)  # a measure the run left empty is no row
-        self.assertNotIn("old", str(table.heads))  # the 48-deck row and the older run stay out
-        self.assertEqual(self.results.run("S1")[0]["run"], "2026-11-01T10:00")
+    def test_a_level_shows_its_newest_run_of_the_course(self):
+        run = self.results.run("S1")
+        self.assertEqual({row["run"] for row in run}, {"2026-11-01T10:00"})  # the newest run, whole
+        self.assertEqual([row["variant"] for row in run if row["model"] == "S1"], ["unigrams", "chosen: uni+bigrams"])
+        self.assertNotIn("chosen: old", [row["variant"] for row in run])  # the 48-deck row and the older run stay out
+        self.assertEqual(len([row for row in run if row["model"] == "B0"]), 2)  # the floor's rows of the same run
         self.assertEqual(self.results.run("S2"), [])  # the file, but no S2 rows
+        self.assertIn("No S2 rows of this course in results.csv", self.results.no_rows("S2"))
         self.assertIsNone(Results(self.folder / "nowhere", self.note).run("S1"))
+        self.assertEqual(self.results.chosen, {"S2": s2_label()})  # the variant the app runs, where the names do not say
 
-    def test_the_app_pick_is_marked_in_d2s_table_next_to_the_reference(self):
-        (tags,) = self.results.tables("D2")
-        self.assertEqual(tags.heads, ["D1 text (chosen) · deck shares", "D2 criterion, base · deck shares", "D2 criterion, large · deck shares", "D2 criterion, base · most likely class"])
-        self.assertEqual(tags.chosen, [True, False, True, False])  # the reference and the app's pick
-        rows = dict(tags.rows)
-        self.assertEqual(rows["hand_within_deck (pairs)"], ["0.75 (77)", "0.80 (77)", "0.688 (77)", ""])
-        self.assertEqual(rows["hand_diff [low, high]"], ["0.000 [0.000, 0.000]", "0.052 [-0.020, 0.120]", "-0.065 [-0.358, 0.224]", ""])
-        _course, deck = self.results.tables("D2", "01")
-        self.assertEqual((deck.heads, deck.chosen), (["D1 text (chosen) · deck shares", "D2 criterion, base · deck shares"], [True, False]))
+    def test_a_run_is_the_run_column_or_the_date_and_a_models_newest_is_the_newest_that_holds_it(self):
+        rows = [{"date": "2026-10-26", "model": "S1"}, {"date": "2026-11-01", "run": "2026-11-01T10:00", "model": "S1"},
+                {"date": "2026-11-02", "run": "2026-11-02T09:00", "model": "C1"}]
+        self.assertEqual([row["model"] for row in newest(rows)], ["C1"])
+        self.assertEqual([row.get("run") for row in newest(rows, "S1")], ["2026-11-01T10:00"])  # a later run without S1 hides none
+        self.assertEqual(newest(rows, "T1"), [])
+        self.assertEqual(newest(rows[:1])[0]["date"], "2026-10-26")  # a row written before the run column: its date
 
-    def test_t1s_tables_are_the_course_or_the_entered_deck_with_the_stacks_the_margins_and_the_focus(self):
-        course, stacks, margins, focus = self.results.tables("T1")
-        self.assertEqual((course.title, course.heads, course.chosen), ("T1 next to the judges, the course", ["T1", "1-NN", "chance"], [True, False, False]))
-        self.assertEqual(dict(course.rows)["agreement"], ["0.640", "0.620", "0.220"])
-        self.assertEqual((stacks.heads, dict(stacks.rows)["cards"]), (["stack 1"], ["6"]))
-        self.assertEqual((margins.heads, dict(margins.rows)["kept_share"]), (["margin >= 0.05"], ["0.923"]))
-        self.assertEqual(focus.heads, ["focus 25 %"])
-        deck, _stacks, _margins, _focus = self.results.tables("T1", "01")
-        self.assertEqual((deck.title, deck.heads), ("T1 next to the judges, deck 01", ["T1", "chance"]))
+    def test_a_rows_scope_is_the_course_or_a_deck(self):
+        self.assertTrue(course_row({"scope": "all"}))
+        self.assertTrue(course_row({}))  # a row written before the column
+        self.assertFalse(course_row({"scope": "deck 01"}))
+        deck_rows = [row for row in self.results.run("D1") if not course_row(row)]
+        self.assertEqual({row["scope"] for row in deck_rows}, {"deck 01"})
 
-    def test_p1s_label_is_one_row_at1_over_at3_the_same_on_every_route_of_a_vectoriser(self):
-        with tempfile.TemporaryDirectory() as folder:
-            (Path(folder) / "prompt.csv").write_text(PROMPT_ROWS, encoding="utf-8")
-            (table,) = Results(Path(folder), self.note, chosen={"P1": "TF-IDF: card"}).tables("P1")
-        self.assertEqual(table.heads, ["TF-IDF: card", "TF-IDF: all", "hybrid-minilm: card"])
-        rows = dict(table.rows)
-        self.assertEqual(rows["label_at1 / at3"], ["0.410 / 0.620", "0.410 / 0.620", "0.450 / 0.660"])  # the newest run's
-        self.assertIn(["label_at1", "label_at3"], table.row_columns)  # its description: label_at1's row of the glossary
-        labels = [label for label, _ in table.rows]
-        self.assertEqual(labels.index("label_at1 / at3"), labels.index("self_topic_at1") + 1)  # after the self set
-        self.assertEqual(cell({"label_at1": "0.4"}, ("label_at1", "label_at3")), "0.4")  # without its second column
-
-    def test_the_glossary_has_a_row_for_every_measure_column_and_none_for_the_bookkeeping(self):
-        glossary = read_glossary()
-        import evaluate  # next to the package, as the tests run
-
-        bookkeeping = {"date", "run", "model", "variant", "scope", "params", "features", "label_rule", "folds", "repeats", "seed", "seconds", "notes"}
-        for columns in (evaluate.COLUMNS, evaluate.TOPICS_COLUMNS, evaluate.DIFFICULTY_COLUMNS, evaluate.PROMPT_COLUMNS):
-            for column in columns:
-                self.assertEqual(column in glossary, column not in bookkeeping, column)
-        self.assertEqual(glossary["lift_k2"], glossary["lift_k3"])  # one row for the columns of one measure
-        table = self.results.tables("D1")[0]
-        self.assertEqual(table.row_columns[0], ["macro_f1", "macro_f1_sd"])  # the columns behind a row, its description's key
+    def test_without_a_note_every_row_counts(self):
+        every = Results(self.folder / "results", None)
+        self.assertEqual(len(every.rows["results.csv"]), 9)  # the 48-deck course's row too
+        self.assertEqual(len(self.results.rows["results.csv"]), 8)
 
     def test_without_a_file_or_a_folder_the_hint_says_how_to_make_one(self):
         results = Results(self.folder / "nowhere", self.note)
-        self.assertIsNone(results.tables("S1"))
+        self.assertIsNone(results.run("S1"))
         self.assertIn("No results.csv in", results.hint("results.csv"))
         self.assertIn("uv run evaluate.py", results.hint("results.csv"))
         self.assertEqual(Results(None, self.note).hint("topics.csv"), NO_FOLDER)

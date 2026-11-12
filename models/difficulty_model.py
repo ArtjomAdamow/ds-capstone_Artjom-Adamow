@@ -26,15 +26,13 @@ the flattened quizzes that have none, learned from the quizzes that have one.
   its midpoint (i - 1/2)/n falls into (hard in the top share, medium in the next, easy below).
 * Metrics are out of fold (repeated stratified k-fold), as mean ± sd over the repeats, next to two baselines: always
   "easy", and the similarity baseline as a classifier (the nearest rated cards by cosine). The same cross-validation
-  also gives every deck's own metrics (its rated quizzes only, under the course-wide model) for the topics view, and
-  a topic's part counts the topic's quizzes with the deck's metrics for the cards view (DifficultyReport.for_topic).
+  also gives every deck's own metrics (its rated quizzes only, under the course-wide model).
 """
 
-import dataclasses
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 import numpy as np
 from scipy import sparse
@@ -309,10 +307,9 @@ class DifficultyReport:
     deck shares, the same with the most likely class, the baselines, the confusion matrix (rows: true level,
     columns: predicted, each row's shares, the mean over the repeats) and the predicted level of each unrated quiz.
 
-    The course's report holds one report of the same kind per deck (`decks`, `for_deck`): the deck's rated quizzes
-    measured out of fold within the same cross-validation (the course-wide model, the deck's own cards only), and
-    its predicted quizzes. A deck's part gives a topic's part (`for_topic`): the topic's rated levels and
-    predictions, counted from its card ids, with the deck's metrics."""
+    The course's report holds one report of the same kind per deck (`decks`): the deck's rated quizzes measured out
+    of fold within the same cross-validation (the course-wide model, the deck's own cards only), and its predicted
+    quizzes."""
 
     feature_set: str
     rated_counts: tuple[int, int, int]
@@ -328,35 +325,11 @@ class DifficultyReport:
     cut_point_predictions: dict[str, str] = field(default_factory=dict)  # the comparison rule
     seconds: float = 0.0
     note: str = ""
-    scope: Optional[str] = None  # None: the whole course; a deck name: that deck's part; a topic name: its part
+    scope: Optional[str] = None  # None: the whole course; a deck name: that deck's part
     decks: dict[str, "DifficultyReport"] = field(default_factory=dict)  # deck name -> its part (the course's report)
     levels: dict[str, str] = field(default_factory=dict)  # card id -> the authored level of the rated quizzes
     unrated_ids: tuple[str, ...] = ()  # the unrated quizzes (predicted or not)
-    parent: Optional["DifficultyReport"] = None  # a topic's part: the deck's part whose metrics it shows
     model: str = "D1"  # the judge the report is of: D1, or D2 (judge_tags)
-
-    def for_deck(self, name: str) -> "DifficultyReport":
-        """The deck's part; a deck without quizzes gets an empty one that says so."""
-        part = self.decks.get(name)
-        if part is None:
-            part = DifficultyReport(self.feature_set, (0, 0, 0), 0, self.folds, self.repeats, scope=name, model=self.model,
-                                    note=self.note or "This deck has no quizzes: nothing to measure or predict.")
-        return part
-
-    def for_topic(self, name: str, card_ids: Iterable[str]) -> "DifficultyReport":
-        """The topic's part (the cards view): its rated levels and its unrated quizzes with their predictions,
-        counted from the topic's card ids, with this report's metrics, baselines and matrix, which stay the deck's
-        (a topic's few rated quizzes are too few to measure). `parent` is this report, for the back's subtitle."""
-        ids = set(card_ids)
-        levels = {card_id: level for card_id, level in self.levels.items() if card_id in ids}
-        unrated_ids = tuple(card_id for card_id in self.unrated_ids if card_id in ids)
-        return dataclasses.replace(
-            self, scope=name, rated_counts=self.counts(levels), unrated=len(unrated_ids), levels=levels, unrated_ids=unrated_ids,
-            predictions={card_id: level for card_id, level in self.predictions.items() if card_id in ids},
-            scores={card_id: score for card_id, score in self.scores.items() if card_id in ids},
-            cut_point_predictions={card_id: level for card_id, level in self.cut_point_predictions.items() if card_id in ids},
-            decks={}, parent=self,
-        )
 
     @property
     def rated(self) -> int:

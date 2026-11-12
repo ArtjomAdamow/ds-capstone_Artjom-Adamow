@@ -33,8 +33,7 @@ from app.course_table import load_table, missing_files
 from app.dashboard import main as dashboard_main
 from app.dashboard import quiz
 from app.dashboard.app import (
-    ASSETS_DIR, HOME, INPUT_IDS, INPUTS, NO_DATA_FIGURE, NO_OUTCOMES, OUT, OUTPUT_NAMES, Boards, Dashboard, DemoBoard, create_app, diagram_click,
-    register_callback,
+    ASSETS_DIR, HOME, INPUT_IDS, NO_DATA_FIGURE, NO_OUTCOMES, Boards, Dashboard, DemoBoard, create_app, diagram_click, register_callback,
 )
 from app.dashboard.layout import (
     BACK_HINT, BEGIN_HINT, DEMO_BUTTON, DEMO_LABEL, DIAGRAM_INPUT, END_DEMO_LABEL, FLASHCARD_HINT, GO_SLOTS, KEY_INPUT, NEXT_MARK, NO_DATA,
@@ -48,6 +47,20 @@ from app.headlines import OUTCOME_COLUMNS, WHAT, outcomes
 from app.panels import DECK_PART
 from app.results import course_note
 
+# The callback's outputs by name, in the order it gives them (OUT: each one's place in its result), and the number of
+# its inputs before the three states
+OUTPUT_NAMES = (
+    ["view", "where", "face", "face_class", "quiz_class", "options", "checks", "related_class", "related_disabled"]
+    + [name for index in range(RELATED_SLOTS) for name in (f"related_{index}", f"related_{index}_class")]
+    + ["message", "answer_class"]
+    + [name for index in range(GO_SLOTS) for name in (f"go_{index}", f"go_{index}_class")]
+    + ["diagram", "back_disabled"]
+    + [f"tile_{letter}" for letter in PANEL_LETTERS]
+    + ["panel", "panel_class"]
+    + ["demo_label", "demo_class", "demo_disabled", "placeholder", "box_disabled", "go_disabled"]
+)
+OUT = {name: index for index, name in enumerate(OUTPUT_NAMES)}
+INPUTS = len(INPUT_IDS)
 SLICING = "201002"  # Alpha's quiz: how do you slice a list, option 0 correct
 COMMIT = "102001"  # Beta's flashcard: what does git commit do
 write_test_table = model_support.write_test_table
